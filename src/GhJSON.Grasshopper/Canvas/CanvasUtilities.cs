@@ -48,9 +48,10 @@ namespace GhJSON.Grasshopper.Canvas
             {
                 foreach (var compProps in document.Components)
                 {
-                    if (compProps.Id.HasValue && guidMapping.TryGetValue(compProps.InstanceGuid, out var instance))
+                    if (compProps.Id > 0 && compProps.InstanceGuid.HasValue && 
+                        guidMapping.TryGetValue(compProps.InstanceGuid.Value, out var instance))
                     {
-                        idToComponent[compProps.Id.Value] = instance;
+                        idToComponent[compProps.Id] = instance;
                     }
                 }
             }

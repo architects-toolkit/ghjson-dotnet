@@ -161,7 +161,8 @@ namespace GhJSON.Grasshopper.Canvas
         {
             foreach (var props in componentProps)
             {
-                if (!props.Pivot.IsEmpty && guidMapping.TryGetValue(props.InstanceGuid, out var instance))
+                if (!props.Pivot.IsEmpty && props.InstanceGuid.HasValue && 
+                    guidMapping.TryGetValue(props.InstanceGuid.Value, out var instance))
                 {
                     var originalPivot = (PointF)props.Pivot;
                     var newPivot = new PointF(originalPivot.X + offset.X, originalPivot.Y + offset.Y);

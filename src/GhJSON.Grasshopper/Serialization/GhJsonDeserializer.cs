@@ -52,9 +52,9 @@ namespace GhJSON.Grasshopper.Serialization
                     if (obj != null)
                     {
                         result.Components.Add(obj);
-                        if (componentProps.Id.HasValue)
+                        if (componentProps.Id > 0)
                         {
-                            idToObject[componentProps.Id.Value] = obj;
+                            idToObject[componentProps.Id] = obj;
                         }
                     }
                 }
@@ -114,9 +114,9 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             // Set instance GUID if specified
-            if (props.InstanceGuid != Guid.Empty && options.PreserveInstanceGuids)
+            if (props.InstanceGuid.HasValue && props.InstanceGuid.Value != Guid.Empty && options.PreserveInstanceGuids)
             {
-                obj.NewInstanceGuid(props.InstanceGuid);
+                obj.NewInstanceGuid(props.InstanceGuid.Value);
             }
 
             // Apply component state

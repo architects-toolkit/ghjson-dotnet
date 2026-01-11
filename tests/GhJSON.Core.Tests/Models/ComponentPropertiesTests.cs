@@ -139,6 +139,7 @@ namespace GhJSON.Core.Tests.Models
             Assert.Equal("Operators", deserialized.Type);
             Assert.Equal("Add", deserialized.NickName);
             Assert.Equal(guid1, deserialized.ComponentGuid);
+            Assert.NotNull(deserialized.InstanceGuid);
             Assert.Equal(guid2, deserialized.InstanceGuid.Value);
             Assert.True(deserialized.Selected);
             Assert.Equal(100.5f, deserialized.Pivot.X);
@@ -151,7 +152,9 @@ namespace GhJSON.Core.Tests.Models
             Assert.Single(deserialized.OutputSettings);
             Assert.NotNull(deserialized.ComponentState);
             Assert.True(deserialized.ComponentState.Locked);
+            Assert.NotNull(deserialized.Warnings);
             Assert.Single(deserialized.Warnings);
+            Assert.NotNull(deserialized.Errors);
             Assert.Single(deserialized.Errors);
         }
 

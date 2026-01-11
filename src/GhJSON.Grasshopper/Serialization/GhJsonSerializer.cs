@@ -115,7 +115,7 @@ namespace GhJSON.Grasshopper.Serialization
                 NickName = component.NickName != component.Name ? component.NickName : null,
                 ComponentGuid = component.ComponentGuid,
                 InstanceGuid = component.InstanceGuid,
-                Id = guidToId.TryGetValue(component.InstanceGuid, out var id) ? id : null,
+                Id = guidToId.TryGetValue(component.InstanceGuid, out var id) ? id : 0,
                 Pivot = new CompactPosition(pivot.X, pivot.Y)
             };
 
@@ -149,7 +149,7 @@ namespace GhJSON.Grasshopper.Serialization
                 NickName = param.NickName != param.Name ? param.NickName : null,
                 ComponentGuid = param.ComponentGuid,
                 InstanceGuid = param.InstanceGuid,
-                Id = guidToId.TryGetValue(param.InstanceGuid, out var id) ? id : null,
+                Id = guidToId.TryGetValue(param.InstanceGuid, out var id) ? id : 0,
                 Pivot = new CompactPosition(pivot.X, pivot.Y)
             };
         }

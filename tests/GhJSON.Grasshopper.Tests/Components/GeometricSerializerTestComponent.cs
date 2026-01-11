@@ -246,6 +246,60 @@ namespace GhJSON.Grasshopper.Tests.Components
                 allPassed = false;
             }
 
+            // Test Arc serialization
+            try
+            {
+                var arc = new Arc(new Point3d(0, 0, 0), new Point3d(5, 5, 0), new Point3d(10, 0, 0));
+                var serializer = new ArcSerializer();
+                var serialized = serializer.Serialize(arc);
+                var deserialized = (Arc)serializer.Deserialize(serialized);
+
+                if (Math.Abs(arc.StartPoint.X - deserialized.StartPoint.X) < 0.001 &&
+                    Math.Abs(arc.MidPoint.X - deserialized.MidPoint.X) < 0.001 &&
+                    Math.Abs(arc.EndPoint.X - deserialized.EndPoint.X) < 0.001)
+                {
+                    results.Add("✓ Arc serialization: PASSED");
+                }
+                else
+                {
+                    results.Add("✗ Arc serialization: FAILED - values don't match");
+                    allPassed = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ Arc serialization: FAILED - {ex.Message}");
+                allPassed = false;
+            }
+
+            // Test Rectangle serialization
+            try
+            {
+                var plane = Plane.WorldXY;
+                var rectangle = new Rectangle3d(plane, new Interval(-2, 8), new Interval(-3, 7));
+                var serializer = new RectangleSerializer();
+                var serialized = serializer.Serialize(rectangle);
+                var deserialized = (Rectangle3d)serializer.Deserialize(serialized);
+
+                if (Math.Abs(rectangle.Center.X - deserialized.Center.X) < 0.001 &&
+                    Math.Abs(rectangle.Center.Y - deserialized.Center.Y) < 0.001 &&
+                    Math.Abs(rectangle.Width - deserialized.Width) < 0.001 &&
+                    Math.Abs(rectangle.Height - deserialized.Height) < 0.001)
+                {
+                    results.Add("✓ Rectangle serialization: PASSED");
+                }
+                else
+                {
+                    results.Add("✗ Rectangle serialization: FAILED - values don't match");
+                    allPassed = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ Rectangle serialization: FAILED - {ex.Message}");
+                allPassed = false;
+            }
+
             // Summary
             results.Add("");
             results.Add(allPassed ? "=== ALL TESTS PASSED ===" : "=== SOME TESTS FAILED ===");
@@ -258,6 +312,6 @@ namespace GhJSON.Grasshopper.Tests.Components
         public override GH_Exposure Exposure => GH_Exposure.primary;
 
         /// <inheritdoc/>
-        public override Guid ComponentGuid => new Guid("A1B2C3D4-E5F6-7890-ABCD-EF1234567890");
+        public override Guid ComponentGuid => new Guid("B7C57824-95EF-4BCA-8284-7B11AC9ECC5F");
     }
 }

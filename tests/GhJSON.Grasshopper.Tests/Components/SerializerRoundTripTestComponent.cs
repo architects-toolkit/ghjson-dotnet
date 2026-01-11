@@ -169,6 +169,6 @@ namespace GhJSON.Grasshopper.Tests.Components
         public override GH_Exposure Exposure => GH_Exposure.primary;
 
         /// <inheritdoc/>
-        public override Guid ComponentGuid => new Guid("B2C3D4E5-F6A7-8901-BCDE-F23456789012");
+        public override Guid ComponentGuid => new Guid("CFBB2D68-846E-4CDE-8E69-FA6A20AA8C6A");
     }
 }

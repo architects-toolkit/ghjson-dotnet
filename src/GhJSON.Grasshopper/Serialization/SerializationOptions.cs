@@ -47,6 +47,19 @@ namespace GhJSON.Grasshopper.Serialization
         };
 
         /// <summary>
+        /// Gets optimized serialization options for AI use.
+        /// Similar to <see cref="Standard"/>, but typically omits bulky fields.
+        /// </summary>
+        public static SerializationOptions Optimized => new SerializationOptions
+        {
+            IncludeConnections = true,
+            IncludeMetadata = true,
+            IncludeComponentState = true,
+            IncludeParameterSettings = true,
+            IncludeGroups = true
+        };
+
+        /// <summary>
         /// Gets or sets a value indicating whether to include connections in the output.
         /// </summary>
         public bool IncludeConnections { get; set; } = true;

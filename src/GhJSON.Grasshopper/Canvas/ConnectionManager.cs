@@ -100,8 +100,8 @@ namespace GhJSON.Grasshopper.Canvas
                 }
                 else
                 {
-                    sourceParam = sourceComp.Params.Output.FirstOrDefault(p => p.NickName == connection.From.ParamName) ??
-                                 sourceComp.Params.Output.FirstOrDefault(p => p.Name == connection.From.ParamName);
+                    sourceParam = sourceComp.Params.Output.FirstOrDefault(p => p.Name == connection.From.ParamName) ??
+                                 sourceComp.Params.Output.FirstOrDefault(p => p.NickName == connection.From.ParamName);
                 }
 
                 if (sourceParam == null)
@@ -134,8 +134,8 @@ namespace GhJSON.Grasshopper.Canvas
                 }
                 else
                 {
-                    targetParam = targetComp.Params.Input.FirstOrDefault(p => p.NickName == connection.To.ParamName) ??
-                                 targetComp.Params.Input.FirstOrDefault(p => p.Name == connection.To.ParamName);
+                    targetParam = targetComp.Params.Input.FirstOrDefault(p => p.Name == connection.To.ParamName) ??
+                                 targetComp.Params.Input.FirstOrDefault(p => p.NickName == connection.To.ParamName);
                 }
 
                 if (targetParam == null)

@@ -33,6 +33,8 @@ using GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
+using Grasshopper.Kernel.Types;
+using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Grasshopper.Serialization
 {
@@ -315,8 +317,8 @@ namespace GhJSON.Grasshopper.Serialization
                             if (guidToId.TryGetValue(source.InstanceGuid, out var fromId) &&
                                 guidToId.TryGetValue(component.InstanceGuid, out var toId))
                             {
-                                var fromParamName = !string.IsNullOrEmpty(source.NickName) ? source.NickName : source.Name;
-                                var toParamName = !string.IsNullOrEmpty(input.NickName) ? input.NickName : input.Name;
+                                var fromParamName = source.Name;
+                                var toParamName = input.Name;
 
                                 connections.Add(new ConnectionPairing
                                 {
@@ -334,8 +336,8 @@ namespace GhJSON.Grasshopper.Serialization
                         if (guidToId.TryGetValue(source.InstanceGuid, out var fromId) &&
                             guidToId.TryGetValue(param.InstanceGuid, out var toId))
                         {
-                            var fromParamName = !string.IsNullOrEmpty(source.NickName) ? source.NickName : source.Name;
-                            var toParamName = !string.IsNullOrEmpty(param.NickName) ? param.NickName : param.Name;
+                            var fromParamName = source.Name;
+                            var toParamName = param.Name;
 
                             connections.Add(new ConnectionPairing
                             {
@@ -348,6 +350,124 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             return connections;
+        }
+
+        public static JObject ExtractRuntimeData(IEnumerable<IGH_ActiveObject> objects)
+        {
+            var result = new JObject();
+
+            foreach (var obj in objects)
+            {
+                var componentData = new JObject();
+
+                if (obj is IGH_Component comp)
+                {
+                    var outputsData = new JObject();
+                    foreach (var output in comp.Params.Output)
+                    {
+                        var paramData = ExtractParameterVolatileData(output);
+                        if (paramData != null)
+                        {
+                            outputsData[output.NickName] = paramData;
+                        }
+                    }
+
+                    if (outputsData.Count > 0)
+                    {
+                        componentData["outputs"] = outputsData;
+                    }
+
+                    var inputsData = new JObject();
+                    foreach (var input in comp.Params.Input)
+                    {
+                        var paramData = ExtractParameterVolatileData(input);
+                        if (paramData != null)
+                        {
+                            inputsData[input.NickName] = paramData;
+                        }
+                    }
+
+                    if (inputsData.Count > 0)
+                    {
+                        componentData["inputs"] = inputsData;
+                    }
+                }
+                else if (obj is IGH_Param param)
+                {
+                    var paramData = ExtractParameterVolatileData(param);
+                    if (paramData != null)
+                    {
+                        componentData["data"] = paramData;
+                    }
+                }
+
+                if (componentData.Count > 0)
+                {
+                    componentData["name"] = obj.Name;
+                    result[obj.InstanceGuid.ToString()] = componentData;
+                }
+            }
+
+            return result;
+        }
+
+        public static JObject? ExtractParameterVolatileData(IGH_Param param)
+        {
+            var volatileData = param.VolatileData;
+            if (volatileData == null || volatileData.IsEmpty)
+            {
+                return null;
+            }
+
+            var paramData = new JObject
+            {
+                ["totalCount"] = volatileData.DataCount,
+                ["branchCount"] = volatileData.PathCount,
+            };
+
+            var branches = new JArray();
+            foreach (var path in volatileData.Paths)
+            {
+                var branch = volatileData.get_Branch(path);
+                var branchInfo = new JObject
+                {
+                    ["path"] = path.ToString(),
+                    ["count"] = branch?.Count ?? 0,
+                };
+
+                if (branch != null && branch.Count > 0)
+                {
+                    var samples = new JArray();
+                    int sampleCount = Math.Min(branch.Count, 3);
+                    for (int i = 0; i < sampleCount; i++)
+                    {
+                        var item = branch[i];
+                        if (item is IGH_Goo goo)
+                        {
+                            samples.Add(goo.ToString());
+                        }
+                        else if (item != null)
+                        {
+                            samples.Add(item.ToString());
+                        }
+                    }
+
+                    if (samples.Count > 0)
+                    {
+                        branchInfo["samples"] = samples;
+                    }
+
+                    if (branch.Count > sampleCount)
+                    {
+                        branchInfo["hasMore"] = true;
+                    }
+                }
+
+                branches.Add(branchInfo);
+            }
+
+            paramData["branches"] = branches;
+            return paramData;
         }
 
         private static ComponentState? ExtractComponentState(IGH_Component component)

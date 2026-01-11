@@ -194,7 +194,7 @@ namespace GhJSON.Core.Serialization.DataTypes
 
             // Map known prefixes to type names
             string? typeName = MapPrefixToTypeName(prefix);
-            if (string.IsNullOrEmpty(typeName))
+            if (typeName is null || typeName.Length == 0)
             {
                 return false;
             }

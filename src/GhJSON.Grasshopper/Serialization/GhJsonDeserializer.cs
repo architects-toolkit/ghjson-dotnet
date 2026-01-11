@@ -24,6 +24,7 @@ using System.Text.RegularExpressions;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Document;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
+using GhJSON.Grasshopper.Serialization.SchemaProperties;
 using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -131,7 +132,26 @@ namespace GhJSON.Grasshopper.Serialization
                 ApplyComponentState(obj, props.ComponentState);
             }
 
+            // Apply schema properties (legacy format)
+            if (options.ApplySchemaProperties && props.SchemaProperties != null && props.SchemaProperties.Count > 0)
+            {
+                ApplySchemaProperties(obj, props.SchemaProperties);
+            }
+
             return obj;
+        }
+
+        private static void ApplySchemaProperties(IGH_DocumentObject obj, Dictionary<string, object> schemaProperties)
+        {
+            try
+            {
+                var manager = new PropertyManagerV2();
+                manager.ApplyProperties(obj, schemaProperties);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error applying schema properties: {ex.Message}");
+            }
         }
 
         private static void ApplyComponentState(IGH_DocumentObject obj, ComponentState state)

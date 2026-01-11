@@ -261,7 +261,7 @@ namespace GhJSON.Core.Validation
             }
 
             var currentSection = "";
-            foreach (var line in message.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            foreach (var line in message!.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var trimmed = line.Trim();
                 if (trimmed == "Errors:")

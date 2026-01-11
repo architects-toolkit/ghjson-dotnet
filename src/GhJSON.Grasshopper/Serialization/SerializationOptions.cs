@@ -32,7 +32,8 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeComponentState = true,
             IncludeParameterSettings = true,
             IncludeGroups = true,
-            IncludePersistentData = true
+            IncludePersistentData = true,
+            IncludeSchemaProperties = true
         };
 
         /// <summary>
@@ -46,7 +47,8 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeComponentState = false,
             IncludeParameterSettings = false,
             IncludeGroups = false,
-            IncludePersistentData = false
+            IncludePersistentData = false,
+            IncludeSchemaProperties = false
         };
 
         /// <summary>
@@ -61,7 +63,8 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeComponentState = true,
             IncludeParameterSettings = true,
             IncludeGroups = true,
-            IncludePersistentData = false
+            IncludePersistentData = false,
+            IncludeSchemaProperties = true
         };
 
         /// <summary>
@@ -95,5 +98,13 @@ namespace GhJSON.Grasshopper.Serialization
         /// Default is true for Standard, false for Optimized and Lite.
         /// </summary>
         public bool IncludePersistentData { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to include schema properties (legacy format)
+        /// in <see cref="GhJSON.Core.Models.Components.ComponentProperties.SchemaProperties"/>.
+        /// These are component/param-specific properties beyond the core GhJSON schema.
+        /// Default is true for Standard and Optimized, false for Lite.
+        /// </summary>
+        public bool IncludeSchemaProperties { get; set; } = true;
     }
 }

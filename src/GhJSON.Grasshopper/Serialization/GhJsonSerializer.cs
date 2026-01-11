@@ -26,6 +26,8 @@ using GhJSON.Core.Models.Connections;
 using GhJSON.Core.Models.Document;
 using GhJSON.Core.Serialization;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
+using GhJSON.Grasshopper.Serialization.SchemaProperties;
+using GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
@@ -137,6 +139,18 @@ namespace GhJSON.Grasshopper.Serialization
                 props.OutputSettings = ExtractParameterSettings(component.Params.Output, options);
             }
 
+            // Extract schema properties (legacy format)
+            if (options.IncludeSchemaProperties)
+            {
+                var ctx = GetSchemaPropertyContext(options);
+                var manager = new PropertyManagerV2(ctx);
+                var schemaProps = manager.ExtractProperties(component);
+                if (schemaProps.Count > 0)
+                {
+                    props.SchemaProperties = schemaProps;
+                }
+            }
+
             return props;
         }
 
@@ -148,7 +162,7 @@ namespace GhJSON.Grasshopper.Serialization
             var attrs = param.Attributes;
             var pivot = attrs?.Pivot ?? new System.Drawing.PointF(0, 0);
 
-            return new ComponentProperties
+            var props = new ComponentProperties
             {
                 Name = param.Name,
                 NickName = param.NickName != param.Name ? param.NickName : null,
@@ -157,6 +171,30 @@ namespace GhJSON.Grasshopper.Serialization
                 Id = guidToId.TryGetValue(param.InstanceGuid, out var id) ? id : 0,
                 Pivot = new CompactPosition(pivot.X, pivot.Y)
             };
+
+            if (options.IncludeSchemaProperties)
+            {
+                var ctx = GetSchemaPropertyContext(options);
+                var manager = new PropertyManagerV2(ctx);
+                var schemaProps = manager.ExtractProperties(param);
+                if (schemaProps.Count > 0)
+                {
+                    props.SchemaProperties = schemaProps;
+                }
+            }
+
+            return props;
+        }
+
+        private static SerializationContext GetSchemaPropertyContext(SerializationOptions options)
+        {
+            if (!options.IncludeComponentState && !options.IncludeParameterSettings)
+                return SerializationContext.Lite;
+
+            if (!options.IncludePersistentData)
+                return SerializationContext.Optimized;
+
+            return SerializationContext.Standard;
         }
 
         private static List<ConnectionPairing> ExtractConnections(

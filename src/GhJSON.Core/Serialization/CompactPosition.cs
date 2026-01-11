@@ -184,8 +184,7 @@ namespace GhJSON.Core.Serialization
         {
             if (reader.TokenType == JsonToken.String)
             {
-                var value = reader.Value?.ToString();
-                if (!string.IsNullOrEmpty(value))
+                if (reader.Value is string value && !string.IsNullOrEmpty(value))
                 {
                     return CompactPosition.Parse(value);
                 }

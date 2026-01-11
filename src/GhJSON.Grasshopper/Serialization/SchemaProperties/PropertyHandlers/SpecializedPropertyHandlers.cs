@@ -123,6 +123,30 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyHandlers
 
                 switch (instance)
                 {
+                    case GH_Panel panel:
+                        // Panels store their text in UserText; GH_Panel does not expose SetPersistentData.
+                        // If multiple items are present, join them with newlines to preserve multiline/internalized lists.
+                        var lines = new List<string>();
+                        foreach (var token in arrayData)
+                        {
+                            if (token.Type == JTokenType.String &&
+                                DataTypeSerializer.TryDeserializeFromPrefix(token.ToString(), out object? strResult) &&
+                                strResult is string deserializedStr)
+                            {
+                                lines.Add(deserializedStr);
+                            }
+                            else
+                            {
+                                lines.Add(token.ToString());
+                            }
+                        }
+
+                        if (lines.Count > 0)
+                        {
+                            panel.UserText = string.Join(Environment.NewLine, lines);
+                        }
+                        break;
+
                     case Param_Number paramNumber:
                         var pDataNumber = SchemaProperties.DataTreeConverter.JObjectToIGHStructure(arrayData, token =>
                         {

@@ -5,22 +5,26 @@ Thank you for your interest in contributing to GhJSON.NET!
 ## Development Setup
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/architects-toolkit/ghjson-dotnet.git
    cd ghjson-dotnet
    ```
 
 2. Restore dependencies:
+
    ```bash
    dotnet restore
    ```
 
 3. Build the solution:
+
    ```bash
    dotnet build
    ```
 
 4. Run tests:
+
    ```bash
    dotnet test
    ```

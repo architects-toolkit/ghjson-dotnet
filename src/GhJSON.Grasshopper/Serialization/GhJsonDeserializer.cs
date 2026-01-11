@@ -20,9 +20,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Document;
+using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Serialization.SchemaProperties;
 using GhJSON.Grasshopper.Serialization.Shared;
@@ -48,6 +50,8 @@ namespace GhJSON.Grasshopper.Serialization
             DeserializationOptions? options = null)
         {
             options ??= DeserializationOptions.Standard;
+
+            GeometricSerializerRegistry.Initialize();
             var result = new DeserializationResult
             {
                 Options = options,
@@ -84,22 +88,7 @@ namespace GhJSON.Grasshopper.Serialization
 
             // Store GUID mapping for connection/group creation
             result.GuidMapping = guidMapping;
-
-            // Create connections
-            if (options.CreateConnections && document.Connections != null)
-            {
-                foreach (var connection in document.Connections)
-                {
-                    try
-                    {
-                        CreateConnection(connection, idToObject);
-                    }
-                    catch (Exception ex)
-                    {
-                        result.Warnings.Add($"Failed to create connection: {ex.Message}");
-                    }
-                }
-            }
+            result.IdMapping = idToObject;
 
             return result;
         }
@@ -108,11 +97,17 @@ namespace GhJSON.Grasshopper.Serialization
             ComponentProperties props,
             DeserializationOptions options)
         {
-            // Try to find the component by GUID first
-            var proxy = Instances.ComponentServer.FindObjectByName(props.Name, true, true);
-            if (proxy == null && props.ComponentGuid != Guid.Empty)
+            IGH_ObjectProxy? proxy = null;
+
+            // Prefer GUID-first lookup to match SmartHopper behavior and avoid ambiguous name matches.
+            if (props.ComponentGuid != Guid.Empty)
             {
                 proxy = Instances.ComponentServer.EmitObjectProxy(props.ComponentGuid);
+            }
+
+            if (proxy == null)
+            {
+                proxy = Instances.ComponentServer.FindObjectByName(props.Name, true, true);
             }
 
             if (proxy == null)
@@ -126,13 +121,9 @@ namespace GhJSON.Grasshopper.Serialization
                 throw new InvalidOperationException($"Failed to instantiate component '{props.Name}'");
             }
 
-            // Set position
-            PointF pivot = props.Pivot;
+            // Initialize attributes but do not set pivot here.
+            // Placement (positioning + adding to canvas) must be handled by the caller (e.g., SmartHopper).
             obj.CreateAttributes();
-            if (obj.Attributes != null)
-            {
-                obj.Attributes.Pivot = pivot;
-            }
 
             // Set instance GUID if specified
             if (props.InstanceGuid.HasValue && props.InstanceGuid.Value != Guid.Empty && options.PreserveInstanceGuids)
@@ -140,7 +131,21 @@ namespace GhJSON.Grasshopper.Serialization
                 obj.NewInstanceGuid(props.InstanceGuid.Value);
             }
 
-            // Apply component state
+            if (obj is IGH_Component component)
+            {
+                // Apply nickname
+                if (!string.IsNullOrEmpty(props.NickName))
+                {
+                    component.NickName = props.NickName;
+                }
+
+                if (IsScriptComponent(component))
+                {
+                    ApplyScriptComponentProperties(component, props, options);
+                }
+            }
+
+            // Apply component state (after script code/parameter rebuild to avoid re-generation)
             if (props.ComponentState != null && options.ApplyComponentState)
             {
                 ApplyComponentState(obj, props.ComponentState);
@@ -153,6 +158,263 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             return obj;
+        }
+
+        private static bool IsScriptComponent(IGH_Component component)
+        {
+            return ScriptComponentFactory.IsScriptComponent(component) ||
+                   ScriptComponentHelper.IsScriptComponentInstance(component);
+        }
+
+        private static void ApplyScriptComponentProperties(
+            IGH_Component component,
+            ComponentProperties props,
+            DeserializationOptions options)
+        {
+            var lang = ScriptComponentHelper.GetScriptLanguageTypeFromComponent(component);
+
+            // STEP 1: Apply script code FIRST.
+            if (lang == ScriptLanguage.VB && props.ComponentState?.VBCode != null)
+            {
+                ApplyVBScriptCode(component, props.ComponentState.VBCode);
+            }
+            else
+            {
+                var scriptCode = props.ComponentState?.Value?.ToString();
+                if (!string.IsNullOrEmpty(scriptCode))
+                {
+                    if (options.InjectScriptTypeHints && lang == ScriptLanguage.CSharp)
+                    {
+                        scriptCode = InjectTypeHintsIntoCSharpRunScript(scriptCode, props);
+                    }
+
+                    ApplyScriptCode(component, scriptCode);
+
+                    if (component is IGH_VariableParameterComponent varParamComp1)
+                    {
+                        varParamComp1.VariableParameterMaintenance();
+                    }
+                }
+            }
+
+            // STEP 2: Rebuild parameters from settings (if present).
+            if (options.ApplyParameterSettings)
+            {
+                if (props.InputSettings != null && props.InputSettings.Any())
+                {
+                    component.Params.Input.Clear();
+                    for (int i = 0; i < props.InputSettings.Count; i++)
+                    {
+                        var settings = props.InputSettings[i];
+                        var param = ScriptParameterMapper.CreateParameter(settings, "input", lang, isOutput: false);
+                        if (param != null)
+                        {
+                            component.Params.RegisterInputParam(param);
+
+                            // Re-apply settings after registration (some script params recreate internal state)
+                            var registered = component.Params.Input[i];
+                            ScriptParameterMapper.ApplySettings(registered, settings);
+                            if (!string.IsNullOrEmpty(settings.TypeHint))
+                            {
+                                ScriptParameterMapper.ApplyTypeHintToParameter(registered, settings.TypeHint);
+                            }
+                        }
+                    }
+
+                    for (int i = 0; i < Math.Min(props.InputSettings.Count, component.Params.Input.Count); i++)
+                    {
+                        if (props.InputSettings[i]?.IsPrincipal == true)
+                        {
+                            component.MasterParameterIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (props.OutputSettings != null && props.OutputSettings.Any())
+                {
+                    component.Params.Output.Clear();
+                    for (int i = 0; i < props.OutputSettings.Count; i++)
+                    {
+                        var settings = props.OutputSettings[i];
+                        var param = ScriptParameterMapper.CreateParameter(settings, "output", lang, isOutput: true);
+                        if (param != null)
+                        {
+                            component.Params.RegisterOutputParam(param);
+
+                            var registered = component.Params.Output[i];
+                            ScriptParameterMapper.ApplySettings(registered, settings);
+                            if (!string.IsNullOrEmpty(settings.TypeHint))
+                            {
+                                ScriptParameterMapper.ApplyTypeHintToParameter(registered, settings.TypeHint);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // STEP 3: Apply ShowStandardOutput AFTER parameters are configured.
+            if (options.ApplyComponentState)
+            {
+                TryApplyShowStandardOutput(component, props.ComponentState);
+            }
+
+            component.CreateAttributes();
+        }
+
+        private static void TryApplyShowStandardOutput(IGH_Component component, ComponentState? state)
+        {
+            try
+            {
+                var compType = component.GetType();
+                var usingStdOutputProp = compType.GetProperty("UsingStandardOutputParam");
+                if (usingStdOutputProp == null || !usingStdOutputProp.CanWrite)
+                    return;
+
+                bool desired = state?.ShowStandardOutput ?? true;
+                bool current = (bool)usingStdOutputProp.GetValue(component);
+
+                if (current == desired)
+                {
+                    usingStdOutputProp.SetValue(component, !desired);
+                    if (component is IGH_VariableParameterComponent varParamComp2)
+                    {
+                        varParamComp2.VariableParameterMaintenance();
+                    }
+                }
+
+                usingStdOutputProp.SetValue(component, desired);
+                if (component is IGH_VariableParameterComponent varParamComp3)
+                {
+                    varParamComp3.VariableParameterMaintenance();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error applying UsingStandardOutputParam: {ex.Message}");
+            }
+        }
+
+        private static void ApplyVBScriptCode(IGH_Component component, VBScriptCode vbCode)
+        {
+            try
+            {
+                var compType = component.GetType();
+                var scriptSourceProp = compType.GetProperty("ScriptSource");
+                if (scriptSourceProp == null || !scriptSourceProp.CanRead)
+                    return;
+
+                var scriptSourceObj = scriptSourceProp.GetValue(component);
+                if (scriptSourceObj == null)
+                    return;
+
+                var scriptSourceType = scriptSourceObj.GetType();
+                var usingCodeProp = scriptSourceType.GetProperty("UsingCode");
+                var scriptCodeProp = scriptSourceType.GetProperty("ScriptCode");
+                var additionalCodeProp = scriptSourceType.GetProperty("AdditionalCode");
+
+                if (usingCodeProp != null && usingCodeProp.CanWrite && vbCode.Imports != null)
+                {
+                    usingCodeProp.SetValue(scriptSourceObj, vbCode.Imports);
+                }
+
+                if (scriptCodeProp != null && scriptCodeProp.CanWrite && vbCode.Script != null)
+                {
+                    scriptCodeProp.SetValue(scriptSourceObj, vbCode.Script);
+                }
+
+                if (additionalCodeProp != null && additionalCodeProp.CanWrite && vbCode.Additional != null)
+                {
+                    additionalCodeProp.SetValue(scriptSourceObj, vbCode.Additional);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error applying VB script code: {ex.Message}");
+            }
+        }
+
+        private static string InjectTypeHintsIntoCSharpRunScript(string scriptCode, ComponentProperties props)
+        {
+            try
+            {
+                if (props.InputSettings != null)
+                {
+                    foreach (var s in props.InputSettings)
+                    {
+                        scriptCode = ReplaceCSharpObjectParamType(scriptCode, s);
+                    }
+                }
+
+                if (props.OutputSettings != null)
+                {
+                    foreach (var s in props.OutputSettings)
+                    {
+                        scriptCode = ReplaceCSharpObjectParamType(scriptCode, s);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error injecting C# type hints: {ex.Message}");
+            }
+
+            return scriptCode;
+        }
+
+        private static string ReplaceCSharpObjectParamType(string scriptCode, ParameterSettings settings)
+        {
+            if (string.IsNullOrEmpty(settings?.TypeHint))
+                return scriptCode;
+
+            var baseType = TypeHintMapper.ExtractBaseType(settings.TypeHint) ?? settings.TypeHint;
+            if (string.IsNullOrEmpty(baseType) || string.Equals(baseType, "object", StringComparison.OrdinalIgnoreCase))
+                return scriptCode;
+
+            var rawName = settings.VariableName ?? settings.ParameterName;
+            if (string.IsNullOrEmpty(rawName))
+                return scriptCode;
+
+            var name = SanitizeCSharpIdentifier(rawName);
+
+            scriptCode = Regex.Replace(
+                scriptCode,
+                $@"\bref\s+object\s+{Regex.Escape(name)}\b",
+                $"ref {baseType} {name}");
+
+            scriptCode = Regex.Replace(
+                scriptCode,
+                $@"\bout\s+object\s+{Regex.Escape(name)}\b",
+                $"out {baseType} {name}");
+
+            scriptCode = Regex.Replace(
+                scriptCode,
+                $@"\bobject\s+{Regex.Escape(name)}\b",
+                $"{baseType} {name}");
+
+            return scriptCode;
+        }
+
+        private static string SanitizeCSharpIdentifier(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return "_";
+
+            var chars = name.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                var c = chars[i];
+                bool ok = c == '_' || char.IsLetterOrDigit(c);
+                chars[i] = ok ? c : '_';
+            }
+
+            var result = new string(chars);
+            if (!char.IsLetter(result[0]) && result[0] != '_')
+            {
+                result = "_" + result;
+            }
+
+            return result;
         }
 
         private static void ApplySchemaProperties(IGH_DocumentObject obj, Dictionary<string, object> schemaProperties)
@@ -185,7 +447,11 @@ namespace GhJSON.Grasshopper.Serialization
             // Apply universal value for special components
             if (state.Value != null && obj is IGH_Component component)
             {
-                ApplyUniversalValue(component, state.Value);
+                // Avoid re-applying script code here because it can regenerate parameters and wipe rebuilt settings.
+                if (!IsScriptComponent(component))
+                {
+                    ApplyUniversalValue(component, state.Value);
+                }
             }
         }
 
@@ -362,47 +628,6 @@ namespace GhJSON.Grasshopper.Serialization
                 Debug.WriteLine($"[GhJsonDeserializer] Error applying script code: {ex.Message}");
             }
         }
-
-        private static void CreateConnection(
-            Core.Models.Connections.ConnectionPairing connection,
-            Dictionary<int, IGH_DocumentObject> idToObject)
-        {
-            if (!idToObject.TryGetValue(connection.From.Id, out var fromObj) ||
-                !idToObject.TryGetValue(connection.To.Id, out var toObj))
-            {
-                throw new InvalidOperationException("Connection endpoint not found");
-            }
-
-            IGH_Param? sourceParam = null;
-            IGH_Param? targetParam = null;
-
-            // Find source parameter
-            if (fromObj is IGH_Param directParam)
-            {
-                sourceParam = directParam;
-            }
-            else if (fromObj is IGH_Component fromComponent)
-            {
-                sourceParam = fromComponent.Params.Output.Find(p => p.Name == connection.From.ParamName);
-            }
-
-            // Find target parameter
-            if (toObj is IGH_Param directTargetParam)
-            {
-                targetParam = directTargetParam;
-            }
-            else if (toObj is IGH_Component toComponent)
-            {
-                targetParam = toComponent.Params.Input.Find(p => p.Name == connection.To.ParamName);
-            }
-
-            if (sourceParam == null || targetParam == null)
-            {
-                throw new InvalidOperationException("Could not find connection parameters");
-            }
-
-            targetParam.AddSource(sourceParam);
-        }
     }
 
     /// <summary>
@@ -440,6 +665,12 @@ namespace GhJSON.Grasshopper.Serialization
         /// Used for connection and group creation after component instantiation.
         /// </summary>
         public Dictionary<Guid, IGH_DocumentObject> GuidMapping { get; set; } = new Dictionary<Guid, IGH_DocumentObject>();
+
+        /// <summary>
+        /// Gets or sets the mapping from compact integer IDs to created component instances.
+        /// This is required to support documents that omit <c>instanceGuid</c> but include <c>id</c>.
+        /// </summary>
+        public Dictionary<int, IGH_DocumentObject> IdMapping { get; set; } = new Dictionary<int, IGH_DocumentObject>();
 
         /// <summary>
         /// Gets or sets the original GhJSON document that was deserialized.

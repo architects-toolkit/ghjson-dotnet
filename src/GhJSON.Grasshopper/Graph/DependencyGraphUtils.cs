@@ -148,7 +148,7 @@ namespace GhJSON.Grasshopper.Graph
                     if (CanvasUtilities.FindInstance(toNode.ComponentId) is IGH_Component childComp)
                     {
                         var inputs = ParameterAccess.GetAllInputs(childComp);
-                        inputIndex = inputs.FindIndex(p => p.Name == conn.To.ParamName);
+                        inputIndex = inputs.FindIndex(p => p.NickName == conn.To.ParamName || p.Name == conn.To.ParamName);
                     }
 
                     toNode.Parents[fromGuid] = inputIndex;
@@ -157,7 +157,7 @@ namespace GhJSON.Grasshopper.Graph
                     if (CanvasUtilities.FindInstance(fromNode.ComponentId) is IGH_Component parentComp)
                     {
                         var outputs = ParameterAccess.GetAllOutputs(parentComp);
-                        outputIndex = outputs.FindIndex(p => p.Name == conn.From.ParamName);
+                        outputIndex = outputs.FindIndex(p => p.NickName == conn.From.ParamName || p.Name == conn.From.ParamName);
                     }
 
                     fromNode.Children[toGuid] = outputIndex;

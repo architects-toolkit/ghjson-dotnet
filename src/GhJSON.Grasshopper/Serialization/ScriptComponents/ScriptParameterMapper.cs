@@ -17,9 +17,12 @@
 
 using System;
 using System.Diagnostics;
+using System.Reflection;
 using GhJSON.Core.Models.Components;
 using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Parameters;
+using Grasshopper.Kernel.Special;
 
 namespace GhJSON.Grasshopper.Serialization.ScriptComponents
 {
@@ -29,6 +32,62 @@ namespace GhJSON.Grasshopper.Serialization.ScriptComponents
     /// </summary>
     public static class ScriptParameterMapper
     {
+        public static IGH_Param? CreateParameter(
+            ParameterSettings settings,
+            string defaultName,
+            ScriptLanguage language,
+            bool isOutput)
+        {
+            if (settings == null)
+                return null;
+
+            var variableNameRaw = settings.VariableName ?? settings.ParameterName ?? defaultName;
+            var variableNameCtor = language == ScriptLanguage.CSharp
+                ? SanitizeCSharpIdentifier(variableNameRaw)
+                : variableNameRaw;
+
+            IGH_Param? param = null;
+
+            if (language == ScriptLanguage.VB)
+            {
+                param = new Param_ScriptVariable
+                {
+                    Name = variableNameRaw,
+                    NickName = variableNameRaw,
+                    Description = string.Empty,
+                    Access = AccessModeMapper.FromString(settings.Access),
+                };
+            }
+            else
+            {
+                var scriptParamType = typeof(GH_Panel).Assembly.GetType("Grasshopper.Kernel.Special.ScriptVariableParam", throwOnError: false);
+                if (scriptParamType != null)
+                {
+                    param = Activator.CreateInstance(scriptParamType, new object[] { variableNameCtor }) as IGH_Param;
+                }
+
+                param ??= new Param_GenericObject();
+                param.Name = variableNameRaw;
+                param.NickName = variableNameRaw;
+                param.Description = string.Empty;
+                param.Access = AccessModeMapper.FromString(settings.Access);
+
+                TrySetProperty(param, "VariableName", variableNameCtor);
+                TrySetProperty(param, "AllowTreeAccess", true);
+            }
+
+            TryApplyOptional(param, settings);
+
+            ApplySettings(param, settings);
+
+            if (!isOutput && settings.IsPrincipal == true)
+            {
+                // Consumer sets MasterParameterIndex.
+            }
+
+            return param;
+        }
+
         /// <summary>
         /// Extracts parameter settings from a script component parameter.
         /// </summary>
@@ -251,23 +310,103 @@ namespace GhJSON.Grasshopper.Serialization.ScriptComponents
         {
             try
             {
-                // Extract base type from formatted type hint
-                var baseType = TypeHintMapper.ExtractBaseType(typeHint);
-                if (string.IsNullOrEmpty(baseType))
-                    return;
-
-                // Try to set TypeHint property via reflection
-                var typeHintProp = param.GetType().GetProperty("TypeHint");
-                if (typeHintProp != null && typeHintProp.CanWrite)
-                {
-                    // This is component-specific and may need adjustment based on the actual type hint system
-                    Debug.WriteLine($"[ScriptParameterMapper] Type hint application requires component-specific implementation for '{baseType}'");
-                }
+                ApplyTypeHintToParameter(param, typeHint);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[ScriptParameterMapper] Error applying type hint to '{param.Name}': {ex.Message}");
             }
+        }
+
+        public static void ApplyTypeHintToParameter(IGH_Param param, string typeHint)
+        {
+            if (param == null || string.IsNullOrWhiteSpace(typeHint))
+                return;
+
+            var baseType = TypeHintMapper.ExtractBaseType(typeHint) ?? typeHint;
+            if (string.Equals(baseType, "object", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            try
+            {
+                var typeHintsProp = param.GetType().GetProperty("TypeHints");
+                if (typeHintsProp != null)
+                {
+                    var typeHintsObj = typeHintsProp.GetValue(param);
+                    if (typeHintsObj != null)
+                    {
+                        var selectMethod = typeHintsObj.GetType().GetMethod("Select", new[] { typeof(string) });
+                        if (selectMethod != null)
+                        {
+                            selectMethod.Invoke(typeHintsObj, new object[] { baseType });
+                            return;
+                        }
+                    }
+                }
+
+                var typeHintProp = param.GetType().GetProperty("TypeHint");
+                if (typeHintProp != null && typeHintProp.CanWrite && typeHintProp.PropertyType == typeof(string))
+                {
+                    typeHintProp.SetValue(param, baseType);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ScriptParameterMapper] Error applying type hint '{baseType}' to '{param.Name}': {ex.Message}");
+            }
+        }
+
+        private static void TryApplyOptional(IGH_Param param, ParameterSettings settings)
+        {
+            try
+            {
+                var optionalProp = param.GetType().GetProperty("Optional");
+                if (optionalProp != null && optionalProp.CanWrite)
+                {
+                    bool isOptional = settings.Required.HasValue ? !settings.Required.Value : true;
+                    optionalProp.SetValue(param, isOptional);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void TrySetProperty(object obj, string propertyName, object value)
+        {
+            try
+            {
+                var prop = obj.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+                if (prop != null && prop.CanWrite)
+                {
+                    prop.SetValue(obj, value);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static string SanitizeCSharpIdentifier(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return "_";
+
+            var chars = name.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                var c = chars[i];
+                bool ok = c == '_' || char.IsLetterOrDigit(c);
+                chars[i] = ok ? c : '_';
+            }
+
+            var result = new string(chars);
+            if (!char.IsLetter(result[0]) && result[0] != '_')
+            {
+                result = "_" + result;
+            }
+
+            return result;
         }
     }
 }

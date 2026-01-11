@@ -25,9 +25,12 @@ using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Connections;
 using GhJSON.Core.Models.Document;
 using GhJSON.Core.Serialization;
+using GhJSON.Core.Serialization.DataTypes;
+using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Serialization.SchemaProperties;
 using GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters;
+using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
@@ -49,6 +52,7 @@ namespace GhJSON.Grasshopper.Serialization
             SerializationOptions? options = null)
         {
             options ??= SerializationOptions.Standard;
+            GeometricSerializerRegistry.Initialize();
             var objectList = objects.ToList();
             var document = new GrasshopperDocument
             {
@@ -88,7 +92,62 @@ namespace GhJSON.Grasshopper.Serialization
                 document.Metadata = CreateMetadata(objectList);
             }
 
+            // Extract groups
+            if (options.IncludeGroups)
+            {
+                ExtractGroupInformation(document, guidToId);
+            }
+
             return document;
+        }
+
+        private static void ExtractGroupInformation(
+            GrasshopperDocument document,
+            Dictionary<Guid, int> guidToId)
+        {
+            try
+            {
+                var canvas = Instances.ActiveCanvas;
+                if (canvas?.Document == null)
+                    return;
+
+                var groups = canvas.Document.Objects.OfType<GH_Group>().ToList();
+                if (groups.Count == 0)
+                    return;
+
+                document.Groups = new List<GroupInfo>();
+
+                foreach (var group in groups)
+                {
+                    var groupInfo = new GroupInfo
+                    {
+                        InstanceGuid = group.InstanceGuid,
+                        Name = group.NickName,
+                        Color = DataTypeSerializer.Serialize(group.Colour)
+                    };
+
+                    var memberIds = new List<int>();
+                    foreach (var member in group.Objects())
+                    {
+                        if (member is IGH_DocumentObject objDo &&
+                            guidToId.TryGetValue(objDo.InstanceGuid, out var id))
+                        {
+                            memberIds.Add(id);
+                        }
+                    }
+
+                    groupInfo.Members = memberIds;
+
+                    if (memberIds.Count > 0)
+                    {
+                        document.Groups.Add(groupInfo);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonSerializer] Error extracting groups: {ex.Message}");
+            }
         }
 
         private static ComponentProperties? SerializeObject(
@@ -106,6 +165,38 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             return null;
+        }
+
+        private static VBScriptCode? ExtractVBScriptCode(IGH_Component component)
+        {
+            try
+            {
+                var componentType = component.GetType();
+                var scriptSourceProp = componentType.GetProperty("ScriptSource");
+                if (scriptSourceProp == null || !scriptSourceProp.CanRead)
+                    return null;
+
+                var scriptSourceObj = scriptSourceProp.GetValue(component);
+                if (scriptSourceObj == null)
+                    return null;
+
+                var scriptSourceType = scriptSourceObj.GetType();
+                var usingCodeProp = scriptSourceType.GetProperty("UsingCode");
+                var scriptCodeProp = scriptSourceType.GetProperty("ScriptCode");
+                var additionalCodeProp = scriptSourceType.GetProperty("AdditionalCode");
+
+                return new VBScriptCode
+                {
+                    Imports = usingCodeProp?.GetValue(scriptSourceObj) as string,
+                    Script = scriptCodeProp?.GetValue(scriptSourceObj) as string,
+                    Additional = additionalCodeProp?.GetValue(scriptSourceObj) as string,
+                };
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonSerializer] Error extracting VB script code: {ex.Message}");
+                return null;
+            }
         }
 
         private static ComponentProperties SerializeComponent(
@@ -135,8 +226,18 @@ namespace GhJSON.Grasshopper.Serialization
             // Extract parameter settings
             if (options.IncludeParameterSettings)
             {
-                props.InputSettings = ExtractParameterSettings(component.Params.Input, options);
-                props.OutputSettings = ExtractParameterSettings(component.Params.Output, options);
+                // Use script-aware extraction for script components
+                if (ScriptComponentFactory.IsScriptComponent(component) ||
+                    ScriptComponentHelper.IsScriptComponentInstance(component))
+                {
+                    props.InputSettings = ExtractScriptParameterSettings(component.Params.Input, component);
+                    props.OutputSettings = ExtractScriptParameterSettings(component.Params.Output, component);
+                }
+                else
+                {
+                    props.InputSettings = ExtractParameterSettings(component.Params.Input, options);
+                    props.OutputSettings = ExtractParameterSettings(component.Params.Output, options);
+                }
             }
 
             // Extract schema properties (legacy format)
@@ -214,10 +315,13 @@ namespace GhJSON.Grasshopper.Serialization
                             if (guidToId.TryGetValue(source.InstanceGuid, out var fromId) &&
                                 guidToId.TryGetValue(component.InstanceGuid, out var toId))
                             {
+                                var fromParamName = !string.IsNullOrEmpty(source.NickName) ? source.NickName : source.Name;
+                                var toParamName = !string.IsNullOrEmpty(input.NickName) ? input.NickName : input.Name;
+
                                 connections.Add(new ConnectionPairing
                                 {
-                                    From = new Connection { Id = fromId, ParamName = source.Name },
-                                    To = new Connection { Id = toId, ParamName = input.Name }
+                                    From = new Connection { Id = fromId, ParamName = fromParamName },
+                                    To = new Connection { Id = toId, ParamName = toParamName }
                                 });
                             }
                         }
@@ -230,10 +334,13 @@ namespace GhJSON.Grasshopper.Serialization
                         if (guidToId.TryGetValue(source.InstanceGuid, out var fromId) &&
                             guidToId.TryGetValue(param.InstanceGuid, out var toId))
                         {
+                            var fromParamName = !string.IsNullOrEmpty(source.NickName) ? source.NickName : source.Name;
+                            var toParamName = !string.IsNullOrEmpty(param.NickName) ? param.NickName : param.Name;
+
                             connections.Add(new ConnectionPairing
                             {
-                                From = new Connection { Id = fromId, ParamName = source.Name },
-                                To = new Connection { Id = toId, ParamName = param.Name }
+                                From = new Connection { Id = fromId, ParamName = fromParamName },
+                                To = new Connection { Id = toId, ParamName = toParamName }
                             });
                         }
                     }
@@ -268,6 +375,42 @@ namespace GhJSON.Grasshopper.Serialization
             {
                 state.Value = universalValue;
                 hasState = true;
+            }
+
+            // Extract script-specific state
+            if (ScriptComponentFactory.IsScriptComponent(component) ||
+                ScriptComponentHelper.IsScriptComponentInstance(component))
+            {
+                var lang = ScriptComponentHelper.GetScriptLanguageTypeFromComponent(component);
+
+                // VB Script uses 3 separate code sections
+                if (lang == ScriptLanguage.VB)
+                {
+                    var vbCode = ExtractVBScriptCode(component);
+                    if (vbCode != null)
+                    {
+                        state.VBCode = vbCode;
+                        hasState = true;
+                    }
+                }
+
+                // Standard output visibility ("out" param)
+                try
+                {
+                    var usingStdOutputProp = component.GetType().GetProperty("UsingStandardOutputParam");
+                    if (usingStdOutputProp != null && usingStdOutputProp.CanRead)
+                    {
+                        var value = usingStdOutputProp.GetValue(component) as bool?;
+                        if (value.HasValue)
+                        {
+                            state.ShowStandardOutput = value.Value;
+                            hasState = true;
+                        }
+                    }
+                }
+                catch
+                {
+                }
             }
 
             return hasState ? state : null;
@@ -326,9 +469,14 @@ namespace GhJSON.Grasshopper.Serialization
                 }
 
                 // Script components - check if it's a known script type
-                if (ScriptComponentFactory.IsScriptComponent(component))
+                if (ScriptComponentFactory.IsScriptComponent(component) ||
+                    ScriptComponentHelper.IsScriptComponentInstance(component))
                 {
-                    return ExtractScriptCode(component);
+                    var lang = ScriptComponentHelper.GetScriptLanguageTypeFromComponent(component);
+                    if (lang != ScriptLanguage.VB)
+                    {
+                        return ExtractScriptCode(component);
+                    }
                 }
             }
             catch (Exception ex)
@@ -380,6 +528,30 @@ namespace GhJSON.Grasshopper.Serialization
                 max);
         }
 
+        private static List<ParameterSettings>? ExtractScriptParameterSettings(
+            List<IGH_Param> parameters,
+            IGH_Component component)
+        {
+            if (parameters == null || parameters.Count == 0)
+                return null;
+
+            var result = new List<ParameterSettings>();
+            var isPrincipalIndex = component is IGH_Component comp ? comp.Params.Input.IndexOf(comp.Params.Input.FirstOrDefault(p => comp.Params.Input.IndexOf(p) == comp.MasterParameterIndex)) : -1;
+
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                var p = parameters[i];
+                var isPrincipal = (p.Kind == GH_ParamKind.input && i == component.MasterParameterIndex);
+                var settings = ScriptParameterMapper.ExtractSettings(p, isPrincipal);
+                if (settings != null)
+                {
+                    result.Add(settings);
+                }
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
         private static List<ParameterSettings>? ExtractParameterSettings(
             List<IGH_Param> parameters,
             SerializationOptions options)
@@ -400,16 +572,6 @@ namespace GhJSON.Grasshopper.Serialization
                         ? p.DataMapping.ToString()
                         : null
                 };
-
-                // Extract persistent data if option is enabled
-                if (options.IncludePersistentData)
-                {
-                    var persistentData = ExtractPersistentData(p);
-                    if (persistentData != null)
-                    {
-                        settings.PersistentData = persistentData;
-                    }
-                }
 
                 // Extract additional settings (Reverse, Simplify)
                 if (p.Reverse || p.Simplify)

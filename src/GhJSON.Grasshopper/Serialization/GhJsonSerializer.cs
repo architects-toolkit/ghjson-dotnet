@@ -125,7 +125,12 @@ namespace GhJSON.Grasshopper.Serialization
                     var groupInfo = new GroupInfo
                     {
                         InstanceGuid = group.InstanceGuid,
-                        Name = group.NickName,
+                        // Grasshopper groups use "Group" as the default title. We only want to
+                        // serialize an explicit name when the user has actually set one.
+                        Name = string.IsNullOrWhiteSpace(group.NickName) ||
+                               string.Equals(group.NickName, "Group", StringComparison.Ordinal)
+                            ? null
+                            : group.NickName,
                         Color = DataTypeSerializer.Serialize(group.Colour)
                     };
 

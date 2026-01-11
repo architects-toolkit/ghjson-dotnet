@@ -542,15 +542,22 @@ namespace GhJSON.Grasshopper.Serialization
                 // Value list
                 if (component is GH_ValueList valueList)
                 {
-                    var valueName = value.ToString();
-                    for (int i = 0; i < valueList.ListItems.Count; i++)
+                    // For checklist mode, multiple selections are encoded in ListItems.Selected
+                    // and applied via schema properties. Do not override them with a single
+                    // universal value selection here.
+                    if (valueList.ListMode != GH_ValueListMode.CheckList)
                     {
-                        if (valueList.ListItems[i].Name == valueName)
+                        var valueName = value.ToString();
+                        for (int i = 0; i < valueList.ListItems.Count; i++)
                         {
-                            valueList.SelectItem(i);
-                            break;
+                            if (valueList.ListItems[i].Name == valueName)
+                            {
+                                valueList.SelectItem(i);
+                                break;
+                            }
                         }
                     }
+
                     return;
                 }
 

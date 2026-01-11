@@ -15,10 +15,13 @@
  * limitations under the License.
  */
 
+using System.Drawing;
+
 namespace GhJSON.Grasshopper.Serialization
 {
     /// <summary>
-    /// Options for controlling GhJSON deserialization behavior.
+    /// Configuration options for GhJSON deserialization (JSON to components).
+    /// Controls how components are created and configured from JSON data.
     /// </summary>
     public class DeserializationOptions
     {
@@ -27,10 +30,76 @@ namespace GhJSON.Grasshopper.Serialization
         /// </summary>
         public static DeserializationOptions Standard => new DeserializationOptions
         {
-            CreateConnections = true,
+            ApplyProperties = true,
+            ApplyParameterSettings = true,
+            InjectScriptTypeHints = true,
             ApplyComponentState = true,
+            ApplyParameterExpressions = true,
+            CreateConnections = true,
+            CreateGroups = true,
+            ValidateComponentTypes = true,
+            ReplaceIntegerIds = true,
             PreserveInstanceGuids = false
         };
+
+        /// <summary>
+        /// Gets options for component creation only (no placement or connections).
+        /// </summary>
+        public static DeserializationOptions ComponentsOnly => new DeserializationOptions
+        {
+            ApplyProperties = true,
+            ApplyParameterSettings = true,
+            InjectScriptTypeHints = true,
+            ApplyComponentState = true,
+            ApplyParameterExpressions = true,
+            CreateConnections = false,
+            CreateGroups = false,
+            ValidateComponentTypes = true,
+            ReplaceIntegerIds = true,
+            PreserveInstanceGuids = false
+        };
+
+        /// <summary>
+        /// Gets options for minimal deserialization (structure only).
+        /// </summary>
+        public static DeserializationOptions Minimal => new DeserializationOptions
+        {
+            ApplyProperties = false,
+            ApplyParameterSettings = false,
+            InjectScriptTypeHints = false,
+            ApplyComponentState = false,
+            ApplyParameterExpressions = false,
+            CreateConnections = true,
+            CreateGroups = false,
+            ValidateComponentTypes = true,
+            ReplaceIntegerIds = true,
+            PreserveInstanceGuids = false
+        };
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to apply component properties from the JSON.
+        /// </summary>
+        public bool ApplyProperties { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to apply parameter settings (nicknames, access modes, etc.).
+        /// </summary>
+        public bool ApplyParameterSettings { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to inject type hints into script component code.
+        /// </summary>
+        public bool InjectScriptTypeHints { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to apply component state (enabled/locked/hidden).
+        /// </summary>
+        public bool ApplyComponentState { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to apply parameter expressions.
+        /// </summary>
+        public bool ApplyParameterExpressions { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to create connections between components.
@@ -38,13 +107,34 @@ namespace GhJSON.Grasshopper.Serialization
         public bool CreateConnections { get; set; } = true;
 
         /// <summary>
-        /// Gets or sets a value indicating whether to apply component state (values, settings).
+        /// Gets or sets a value indicating whether to recreate groups.
         /// </summary>
-        public bool ApplyComponentState { get; set; } = true;
+        public bool CreateGroups { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to validate component types before instantiation.
+        /// </summary>
+        public bool ValidateComponentTypes { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to replace integer IDs with proper GUIDs during deserialization.
+        /// </summary>
+        public bool ReplaceIntegerIds { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to preserve original instance GUIDs.
         /// </summary>
         public bool PreserveInstanceGuids { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the starting position for placing components on canvas.
+        /// If null, uses default positioning logic.
+        /// </summary>
+        public PointF? StartPosition { get; set; } = null;
+
+        /// <summary>
+        /// Gets or sets the spacing between components when positioning.
+        /// </summary>
+        public int ComponentSpacing { get; set; } = 100;
     }
 }

@@ -17,11 +17,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Document;
+using GhJSON.Grasshopper.Serialization.ScriptComponents;
+using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
 
 namespace GhJSON.Grasshopper.Serialization
 {
@@ -142,7 +148,185 @@ namespace GhJSON.Grasshopper.Serialization
                 previewObj.Hidden = state.Hidden.Value;
             }
 
-            // TODO: Apply component-specific state (slider values, panel text, script code, etc.)
+            // Apply universal value for special components
+            if (state.Value != null && obj is IGH_Component component)
+            {
+                ApplyUniversalValue(component, state.Value);
+            }
+        }
+
+        private static void ApplyUniversalValue(IGH_Component component, object value)
+        {
+            try
+            {
+                // Number slider
+                if (component is GH_NumberSlider slider)
+                {
+                    ApplySliderValue(slider, value.ToString());
+                    return;
+                }
+
+                // Panel
+                if (component is GH_Panel panel)
+                {
+                    panel.UserText = value.ToString();
+                    return;
+                }
+
+                // Value list
+                if (component is GH_ValueList valueList)
+                {
+                    var valueName = value.ToString();
+                    for (int i = 0; i < valueList.ListItems.Count; i++)
+                    {
+                        if (valueList.ListItems[i].Name == valueName)
+                        {
+                            valueList.SelectItem(i);
+                            break;
+                        }
+                    }
+                    return;
+                }
+
+                // Boolean toggle
+                if (component is GH_BooleanToggle toggle)
+                {
+                    if (value is bool boolVal)
+                    {
+                        toggle.Value = boolVal;
+                    }
+                    else if (bool.TryParse(value.ToString(), out var parsed))
+                    {
+                        toggle.Value = parsed;
+                    }
+                    return;
+                }
+
+                // Colour swatch
+                if (component is GH_ColourSwatch swatch)
+                {
+                    var color = ParseColor(value.ToString());
+                    if (color.HasValue)
+                    {
+                        swatch.SwatchColour = color.Value;
+                    }
+                    return;
+                }
+
+                // Button object
+                if (component is GH_ButtonObject btn && value is IDictionary<string, object> btnDict)
+                {
+                    if (btnDict.TryGetValue("normal", out var normal))
+                    {
+                        btn.ExpressionNormal = normal?.ToString() ?? "False";
+                    }
+                    if (btnDict.TryGetValue("pressed", out var pressed))
+                    {
+                        btn.ExpressionPressed = pressed?.ToString() ?? "True";
+                    }
+                    return;
+                }
+
+                // Script components
+                if (ScriptComponentFactory.IsScriptComponent(component))
+                {
+                    ApplyScriptCode(component, value.ToString());
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error applying universal value: {ex.Message}");
+            }
+        }
+
+        private static void ApplySliderValue(GH_NumberSlider slider, string? valueStr)
+        {
+            if (string.IsNullOrEmpty(valueStr))
+                return;
+
+            try
+            {
+                // Parse format "current<min~max>"
+                var match = Regex.Match(valueStr, @"^([\d.\-]+)<([\d.\-]+)~([\d.\-]+)>$");
+                if (match.Success)
+                {
+                    var current = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                    var min = decimal.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                    var max = decimal.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+
+                    slider.Slider.Minimum = min;
+                    slider.Slider.Maximum = max;
+                    slider.SetSliderValue(current);
+                }
+                else if (decimal.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var simpleValue))
+                {
+                    // Simple numeric value
+                    slider.SetSliderValue(simpleValue);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error parsing slider value '{valueStr}': {ex.Message}");
+            }
+        }
+
+        private static Color? ParseColor(string? colorStr)
+        {
+            if (string.IsNullOrEmpty(colorStr))
+                return null;
+
+            try
+            {
+                // Parse format "rgba:R,G,B,A"
+                if (colorStr.StartsWith("rgba:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parts = colorStr.Substring(5).Split(',');
+                    if (parts.Length >= 3)
+                    {
+                        var r = int.Parse(parts[0].Trim());
+                        var g = int.Parse(parts[1].Trim());
+                        var b = int.Parse(parts[2].Trim());
+                        var a = parts.Length >= 4 ? int.Parse(parts[3].Trim()) : 255;
+                        return Color.FromArgb(a, r, g, b);
+                    }
+                }
+
+                // Try parsing as named color or hex
+                return ColorTranslator.FromHtml(colorStr);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void ApplyScriptCode(IGH_Component component, string? scriptCode)
+        {
+            if (string.IsNullOrEmpty(scriptCode))
+                return;
+
+            try
+            {
+                // Try to set script code via reflection (IScriptComponent.Text property)
+                var textProp = component.GetType().GetProperty("Text");
+                if (textProp != null && textProp.CanWrite)
+                {
+                    textProp.SetValue(component, scriptCode);
+                    return;
+                }
+
+                // Fallback: try Script property
+                var scriptProp = component.GetType().GetProperty("Script");
+                if (scriptProp != null && scriptProp.CanWrite)
+                {
+                    scriptProp.SetValue(component, scriptCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonDeserializer] Error applying script code: {ex.Message}");
+            }
         }
 
         private static void CreateConnection(

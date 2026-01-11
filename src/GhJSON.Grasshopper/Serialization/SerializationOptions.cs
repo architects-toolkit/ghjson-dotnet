@@ -31,11 +31,13 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeMetadata = true,
             IncludeComponentState = true,
             IncludeParameterSettings = true,
-            IncludeGroups = true
+            IncludeGroups = true,
+            IncludePersistentData = true
         };
 
         /// <summary>
         /// Gets lite serialization options with minimal output.
+        /// Excludes metadata, component state, parameter settings, groups, and persistent data.
         /// </summary>
         public static SerializationOptions Lite => new SerializationOptions
         {
@@ -43,12 +45,14 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeMetadata = false,
             IncludeComponentState = false,
             IncludeParameterSettings = false,
-            IncludeGroups = false
+            IncludeGroups = false,
+            IncludePersistentData = false
         };
 
         /// <summary>
         /// Gets optimized serialization options for AI use.
-        /// Similar to <see cref="Standard"/>, but typically omits bulky fields.
+        /// Similar to <see cref="Standard"/>, but excludes bulky PersistentData fields
+        /// to reduce token usage while maintaining structural schema.
         /// </summary>
         public static SerializationOptions Optimized => new SerializationOptions
         {
@@ -56,7 +60,8 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeMetadata = true,
             IncludeComponentState = true,
             IncludeParameterSettings = true,
-            IncludeGroups = true
+            IncludeGroups = true,
+            IncludePersistentData = false
         };
 
         /// <summary>
@@ -83,5 +88,12 @@ namespace GhJSON.Grasshopper.Serialization
         /// Gets or sets a value indicating whether to include groups.
         /// </summary>
         public bool IncludeGroups { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to include persistent data values.
+        /// When false, PersistentData is excluded to reduce output size (useful for AI context).
+        /// Default is true for Standard, false for Optimized and Lite.
+        /// </summary>
+        public bool IncludePersistentData { get; set; } = true;
     }
 }

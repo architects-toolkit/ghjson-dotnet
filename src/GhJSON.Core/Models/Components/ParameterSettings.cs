@@ -109,5 +109,13 @@ namespace GhJSON.Core.Models.Components
         /// </summary>
         [JsonProperty("additionalSettings", NullValueHandling = NullValueHandling.Ignore)]
         public AdditionalParameterSettings? AdditionalSettings { get; set; }
+
+        /// <summary>
+        /// Gets or sets the persistent data stored in the parameter.
+        /// This contains the actual values assigned to the parameter.
+        /// Excluded when using Optimized serialization to reduce output size.
+        /// </summary>
+        [JsonProperty("persistentData", NullValueHandling = NullValueHandling.Ignore)]
+        public object? PersistentData { get; set; }
     }
 }

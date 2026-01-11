@@ -17,12 +17,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Connections;
 using GhJSON.Core.Models.Document;
 using GhJSON.Core.Serialization;
+using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
 
 namespace GhJSON.Grasshopper.Serialization
 {
@@ -128,8 +133,8 @@ namespace GhJSON.Grasshopper.Serialization
             // Extract parameter settings
             if (options.IncludeParameterSettings)
             {
-                props.InputSettings = ExtractParameterSettings(component.Params.Input);
-                props.OutputSettings = ExtractParameterSettings(component.Params.Output);
+                props.InputSettings = ExtractParameterSettings(component.Params.Input, options);
+                props.OutputSettings = ExtractParameterSettings(component.Params.Output, options);
             }
 
             return props;
@@ -202,20 +207,223 @@ namespace GhJSON.Grasshopper.Serialization
 
         private static ComponentState? ExtractComponentState(IGH_Component component)
         {
-            // TODO: Extract component-specific state (sliders, panels, scripts, etc.)
+            var state = new ComponentState();
+            bool hasState = false;
+
+            // Extract Locked state
+            if (component.Locked)
+            {
+                state.Locked = true;
+                hasState = true;
+            }
+
+            // Extract Hidden state
+            if (component.Hidden)
+            {
+                state.Hidden = true;
+                hasState = true;
+            }
+
+            // Extract universal value for special components
+            var universalValue = ExtractUniversalValue(component);
+            if (universalValue != null)
+            {
+                state.Value = universalValue;
+                hasState = true;
+            }
+
+            return hasState ? state : null;
+        }
+
+        private static object? ExtractUniversalValue(IGH_Component component)
+        {
+            try
+            {
+                // Number slider
+                if (component is GH_NumberSlider slider)
+                {
+                    return FormatSliderValue(slider);
+                }
+
+                // Panel
+                if (component is GH_Panel panel)
+                {
+                    return panel.UserText;
+                }
+
+                // Value list
+                if (component is GH_ValueList valueList)
+                {
+                    return valueList.FirstSelectedItem?.Name;
+                }
+
+                // Boolean toggle
+                if (component is GH_BooleanToggle toggle)
+                {
+                    return toggle.Value;
+                }
+
+                // Colour swatch
+                if (component is GH_ColourSwatch swatch)
+                {
+                    var c = swatch.SwatchColour;
+                    return $"rgba:{c.R},{c.G},{c.B},{c.A}";
+                }
+
+                // Button object
+                if (component is GH_ButtonObject btn)
+                {
+                    var expNormal = btn.ExpressionNormal;
+                    var expPressed = btn.ExpressionPressed;
+
+                    // Only serialize if not default values
+                    if (expNormal != "False" || expPressed != "True")
+                    {
+                        return new Dictionary<string, string>
+                        {
+                            { "normal", expNormal ?? "False" },
+                            { "pressed", expPressed ?? "True" }
+                        };
+                    }
+                }
+
+                // Script components - check if it's a known script type
+                if (ScriptComponentFactory.IsScriptComponent(component))
+                {
+                    return ExtractScriptCode(component);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonSerializer] Error extracting universal value: {ex.Message}");
+            }
+
             return null;
         }
 
-        private static List<ParameterSettings>? ExtractParameterSettings(List<IGH_Param> parameters)
+        private static string? ExtractScriptCode(IGH_Component component)
+        {
+            try
+            {
+                // Try to get script code via reflection (IScriptComponent.Text property)
+                var textProp = component.GetType().GetProperty("Text");
+                if (textProp != null && textProp.CanRead)
+                {
+                    return textProp.GetValue(component)?.ToString();
+                }
+
+                // Fallback: try Script property
+                var scriptProp = component.GetType().GetProperty("Script");
+                if (scriptProp != null && scriptProp.CanRead)
+                {
+                    return scriptProp.GetValue(component)?.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonSerializer] Error extracting script code: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        private static string FormatSliderValue(GH_NumberSlider slider)
+        {
+            var current = slider.CurrentValue;
+            var min = slider.Slider.Minimum;
+            var max = slider.Slider.Maximum;
+
+            // Format as "current<min~max>" for compact representation
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}<{1}~{2}>",
+                current,
+                min,
+                max);
+        }
+
+        private static List<ParameterSettings>? ExtractParameterSettings(
+            List<IGH_Param> parameters,
+            SerializationOptions options)
         {
             if (parameters == null || parameters.Count == 0)
                 return null;
 
-            return parameters.Select(p => new ParameterSettings
+            var result = new List<ParameterSettings>();
+
+            foreach (var p in parameters)
             {
-                ParameterName = p.Name,
-                NickName = p.NickName != p.Name ? p.NickName : null
-            }).ToList();
+                var settings = new ParameterSettings
+                {
+                    ParameterName = p.Name,
+                    NickName = p.NickName != p.Name ? p.NickName : null,
+                    Access = p.Access.ToString().ToLowerInvariant(),
+                    DataMapping = p.DataMapping != GH_DataMapping.None
+                        ? p.DataMapping.ToString()
+                        : null
+                };
+
+                // Extract persistent data if option is enabled
+                if (options.IncludePersistentData)
+                {
+                    var persistentData = ExtractPersistentData(p);
+                    if (persistentData != null)
+                    {
+                        settings.PersistentData = persistentData;
+                    }
+                }
+
+                // Extract additional settings (Reverse, Simplify)
+                if (p.Reverse || p.Simplify)
+                {
+                    settings.AdditionalSettings = new AdditionalParameterSettings
+                    {
+                        Reverse = p.Reverse ? true : null,
+                        Simplify = p.Simplify ? true : null
+                    };
+                }
+
+                result.Add(settings);
+            }
+
+            return result.Count > 0 ? result : null;
+        }
+
+        private static object? ExtractPersistentData(IGH_Param param)
+        {
+            try
+            {
+                var data = param.VolatileData;
+                if (data == null || data.IsEmpty)
+                    return null;
+
+                // For simple single-value parameters, return the value directly
+                if (data.PathCount == 1 && data.DataCount == 1)
+                {
+                    var allData = data.AllData(true).FirstOrDefault();
+                    if (allData != null)
+                    {
+                        // Try to get the underlying value
+                        var valueProperty = allData.GetType().GetProperty("Value");
+                        if (valueProperty != null)
+                        {
+                            return valueProperty.GetValue(allData);
+                        }
+                        return allData.ToString();
+                    }
+                }
+
+                // For complex data trees, return a summary
+                return new Dictionary<string, object>
+                {
+                    ["pathCount"] = data.PathCount,
+                    ["dataCount"] = data.DataCount
+                };
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static DocumentMetadata CreateMetadata(List<IGH_ActiveObject> objects)

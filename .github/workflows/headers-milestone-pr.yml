@@ -1,0 +1,35 @@
+name: Normalize Headers (Milestone Close)
+
+on:
+  milestone:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  normalize:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize C# headers
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File .\tools\Update-LicenseHeaders.ps1
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: normalize license headers"
+          title: "chore: normalize license headers"
+          body: |
+            This PR normalizes license headers across the repository.
+
+            Trigger: Milestone closed (#${{ github.event.milestone.number }} - ${{ github.event.milestone.title }})
+          branch: "chore/normalize-headers-milestone-${{ github.event.milestone.number }}"
+          base: main
+          delete-branch: true

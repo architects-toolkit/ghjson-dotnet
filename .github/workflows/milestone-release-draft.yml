@@ -1,0 +1,62 @@
+name: Create Release Draft on Milestone Close
+
+on:
+  milestone:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  create-release-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get milestone title as version
+        id: version
+        run: |
+          VERSION="${{ github.event.milestone.title }}"
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes from milestone
+        id: notes
+        run: |
+          MILESTONE_NUMBER="${{ github.event.milestone.number }}"
+          MILESTONE_TITLE="${{ github.event.milestone.title }}"
+          MILESTONE_DESC="${{ github.event.milestone.description }}"
+          
+          # Create release notes
+          cat << EOF > release_notes.md
+          ## 🎉 GhJSON.NET $MILESTONE_TITLE
+          
+          $MILESTONE_DESC
+          
+          ### 📦 Packages
+          - \`GhJSON.Core\` - Core models and validation
+          - \`GhJSON.Grasshopper\` - Grasshopper integration
+          
+          ### 📥 Installation
+          \`\`\`bash
+          dotnet add package GhJSON.Core --version ${{ steps.version.outputs.version }}
+          dotnet add package GhJSON.Grasshopper --version ${{ steps.version.outputs.version }}
+          \`\`\`
+          
+          ---
+          *Full changelog and assets will be attached when this release is published.*
+          EOF
+
+      - name: Create Release Draft
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "GhJSON.NET ${{ github.event.milestone.title }}"
+          body_path: release_notes.md
+          draft: true
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

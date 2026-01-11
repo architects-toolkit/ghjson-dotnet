@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Authors>Marc Roca Musach</Authors>
+    <Company>Architect's Toolkit</Company>
+    <Copyright>Copyright (c) 2024-2026 Marc Roca Musach</Copyright>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/architects-toolkit/ghjson-dotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/architects-toolkit/ghjson-dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>grasshopper;rhino;ghjson;serialization</PackageTags>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

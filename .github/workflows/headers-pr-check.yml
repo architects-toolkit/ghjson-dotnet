@@ -1,0 +1,17 @@
+name: Header Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-headers:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check C# headers
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File .\tools\Update-LicenseHeaders.ps1 -Check

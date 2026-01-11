@@ -1,0 +1,70 @@
+name: Publish to NuGet
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to publish (e.g., v1.0.0). Leave empty to use latest release.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run (do not actually publish)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get release info
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            RELEASE_TAG="${{ inputs.release_tag }}"
+          else
+            # Get the latest release
+            RELEASE_TAG=$(gh release list --limit 1 --exclude-drafts | cut -f3)
+          fi
+          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Using release: $RELEASE_TAG"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p ./nupkgs
+          gh release download "${{ steps.release.outputs.tag }}" --pattern "*.nupkg" --dir ./nupkgs
+          echo "Downloaded packages:"
+          ls -la ./nupkgs/
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Publish to NuGet
+        if: ${{ !inputs.dry_run }}
+        run: |
+          for package in ./nupkgs/*.nupkg; do
+            echo "Publishing $package..."
+            dotnet nuget push "$package" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+
+      - name: Dry run output
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "🔍 DRY RUN - Would publish the following packages:"
+          for package in ./nupkgs/*.nupkg; do
+            echo "  - $package"
+          done
+          echo ""
+          echo "To actually publish, run this workflow again with dry_run=false"

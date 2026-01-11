@@ -48,8 +48,13 @@ namespace GhJSON.Grasshopper.Serialization
             DeserializationOptions? options = null)
         {
             options ??= DeserializationOptions.Standard;
-            var result = new DeserializationResult();
+            var result = new DeserializationResult
+            {
+                Options = options,
+                Document = document
+            };
             var idToObject = new Dictionary<int, IGH_DocumentObject>();
+            var guidMapping = new Dictionary<Guid, IGH_DocumentObject>();
 
             foreach (var componentProps in document.Components)
             {
@@ -63,6 +68,12 @@ namespace GhJSON.Grasshopper.Serialization
                         {
                             idToObject[componentProps.Id] = obj;
                         }
+
+                        // Build GUID mapping for canvas operations
+                        if (componentProps.InstanceGuid.HasValue)
+                        {
+                            guidMapping[componentProps.InstanceGuid.Value] = obj;
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -70,6 +81,9 @@ namespace GhJSON.Grasshopper.Serialization
                     result.Errors.Add($"Failed to create component '{componentProps.Name}': {ex.Message}");
                 }
             }
+
+            // Store GUID mapping for connection/group creation
+            result.GuidMapping = guidMapping;
 
             // Create connections
             if (options.CreateConnections && document.Connections != null)
@@ -415,5 +429,22 @@ namespace GhJSON.Grasshopper.Serialization
         /// Gets a value indicating whether deserialization was successful (no errors).
         /// </summary>
         public bool IsSuccess => Errors.Count == 0;
+
+        /// <summary>
+        /// Gets or sets the deserialization options used.
+        /// </summary>
+        public DeserializationOptions? Options { get; set; }
+
+        /// <summary>
+        /// Gets or sets the mapping from instance GUIDs to created component instances.
+        /// Used for connection and group creation after component instantiation.
+        /// </summary>
+        public Dictionary<Guid, IGH_DocumentObject> GuidMapping { get; set; } = new Dictionary<Guid, IGH_DocumentObject>();
+
+        /// <summary>
+        /// Gets or sets the original GhJSON document that was deserialized.
+        /// Useful for accessing component properties during placement.
+        /// </summary>
+        public GrasshopperDocument? Document { get; set; }
     }
 }

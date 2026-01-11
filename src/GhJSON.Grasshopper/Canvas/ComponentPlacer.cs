@@ -22,6 +22,7 @@ using System.Drawing;
 using System.Linq;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Document;
+using GhJSON.Grasshopper.Graph;
 using GhJSON.Grasshopper.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -43,6 +44,7 @@ namespace GhJSON.Grasshopper.Canvas
         /// <param name="startPosition">Starting position for placement (null for auto)</param>
         /// <param name="spacing">Spacing between components when using auto-layout</param>
         /// <param name="useExactPositions">When true, uses exact pivot positions from GhJSON without offset</param>
+        /// <param name="useDependencyLayout">When true and no pivots exist, uses dependency-based layout instead of simple grid</param>
         /// <returns>List of component names that were placed</returns>
         public static List<string> PlaceComponents(
             DeserializationResult result,
@@ -50,7 +52,8 @@ namespace GhJSON.Grasshopper.Canvas
             Dictionary<Guid, IGH_DocumentObject>? guidMapping,
             PointF? startPosition = null,
             int spacing = 100,
-            bool useExactPositions = false)
+            bool useExactPositions = false,
+            bool useDependencyLayout = false)
         {
             if (result.Components.Count == 0)
             {
@@ -87,6 +90,13 @@ namespace GhJSON.Grasshopper.Canvas
                     ApplyOffsettedPositions(result.Components, componentProps!, guidMapping, offset);
                     Debug.WriteLine($"[ComponentPlacer] Applied pivot offset: ({offset.X}, {offset.Y})");
                 }
+            }
+            else if (useDependencyLayout && document != null)
+            {
+                // No pivots: use dependency-based layout (Sugiyama algorithm)
+                var gridStartPosition = startPosition ?? CanvasUtilities.CalculateStartPoint(spacing);
+                ApplyDependencyLayout(result.Components, document, guidMapping, gridStartPosition, spacing);
+                Debug.WriteLine($"[ComponentPlacer] Applied dependency layout starting at ({gridStartPosition.X}, {gridStartPosition.Y})");
             }
             else
             {
@@ -206,6 +216,57 @@ namespace GhJSON.Grasshopper.Canvas
                     maxHeight = 0;
                     columnCount = 0;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Applies dependency-based layout using the Sugiyama algorithm.
+        /// </summary>
+        private static void ApplyDependencyLayout(
+            List<IGH_DocumentObject> components,
+            GrasshopperDocument document,
+            Dictionary<Guid, IGH_DocumentObject> guidMapping,
+            PointF startPosition,
+            int spacing)
+        {
+            try
+            {
+                // Use DependencyGraphUtils to calculate optimal positions
+                var layoutNodes = DependencyGraphUtils.CreateComponentGrid(document, force: true, spacingX: spacing, spacingY: spacing);
+
+                // Apply calculated positions to components
+                foreach (var node in layoutNodes)
+                {
+                    if (guidMapping.TryGetValue(node.ComponentId, out var instance))
+                    {
+                        var newPivot = new PointF(
+                            startPosition.X + node.Pivot.X,
+                            startPosition.Y + node.Pivot.Y);
+                        instance.Attributes.Pivot = newPivot;
+                        Debug.WriteLine($"[ComponentPlacer] Dependency layout: '{instance.Name}' at ({newPivot.X}, {newPivot.Y})");
+                    }
+                }
+
+                // Handle any components not in layout (fallback to simple positioning)
+                var layoutGuids = new HashSet<Guid>(layoutNodes.Select(n => n.ComponentId));
+                float fallbackY = layoutNodes.Any() ? layoutNodes.Max(n => n.Pivot.Y) + spacing : 0;
+                float fallbackX = startPosition.X;
+
+                foreach (var component in components)
+                {
+                    if (!layoutGuids.Contains(component.InstanceGuid))
+                    {
+                        component.CreateAttributes();
+                        component.Attributes.Pivot = new PointF(fallbackX, startPosition.Y + fallbackY);
+                        fallbackX += component.Attributes.Bounds.Width + spacing;
+                        Debug.WriteLine($"[ComponentPlacer] Fallback position: '{component.Name}' at ({component.Attributes.Pivot.X}, {component.Attributes.Pivot.Y})");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ComponentPlacer] Dependency layout failed, falling back to grid: {ex.Message}");
+                ApplySimpleGridLayout(components, startPosition, spacing);
             }
         }
 

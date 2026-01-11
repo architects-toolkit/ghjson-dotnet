@@ -105,26 +105,28 @@ namespace GhJSON.Core.Models.Document
 
         /// <summary>
         /// Creates a mapping from component integer IDs to their instance GUIDs.
-        /// This is useful for translating connections (which use integer IDs) to component GUIDs.
+        /// This is useful for resolving connections that use integer IDs.
+        /// Only includes components that have an instance GUID set.
         /// </summary>
         /// <returns>Dictionary mapping integer ID to GUID.</returns>
         public Dictionary<int, Guid> GetIdToGuidMapping()
         {
             return this.Components
-                .Where(c => c.Id.HasValue)
-                .ToDictionary(c => c.Id!.Value, c => c.InstanceGuid);
+                .Where(c => c.InstanceGuid.HasValue)
+                .ToDictionary(c => c.Id, c => c.InstanceGuid!.Value);
         }
 
         /// <summary>
         /// Creates a mapping from component instance GUIDs to their integer IDs.
         /// This is useful for creating connections from component GUIDs.
+        /// Only includes components that have an instance GUID set.
         /// </summary>
         /// <returns>Dictionary mapping GUID to integer ID.</returns>
         public Dictionary<Guid, int> GetGuidToIdMapping()
         {
             return this.Components
-                .Where(c => c.Id.HasValue)
-                .ToDictionary(c => c.InstanceGuid, c => c.Id!.Value);
+                .Where(c => c.InstanceGuid.HasValue)
+                .ToDictionary(c => c.InstanceGuid!.Value, c => c.Id);
         }
 
         /// <summary>

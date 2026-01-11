@@ -118,14 +118,71 @@ namespace GhJSON.Core.Validation
         }
 
         /// <summary>
+        /// Populates missing metadata fields with computed or default values.
+        /// Sets creation/modification dates to now if not defined, and fills component/parameter counts.
+        /// </summary>
+        /// <param name="json">The JSON object to fix.</param>
+        /// <returns>The fixed JSON object.</returns>
+        public static JObject PopulateMetadata(JObject json)
+        {
+            // Ensure metadata object exists
+            if (json["metadata"] == null)
+            {
+                json["metadata"] = new JObject();
+            }
+
+            var metadata = (JObject)json["metadata"]!;
+            var now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+
+            // Set creation date if not defined
+            if (metadata["created"] == null || string.IsNullOrWhiteSpace(metadata["created"]?.ToString()))
+            {
+                metadata["created"] = now;
+            }
+
+            // Set modification date if not defined
+            if (metadata["modified"] == null || string.IsNullOrWhiteSpace(metadata["modified"]?.ToString()))
+            {
+                metadata["modified"] = now;
+            }
+
+            // Fill component count
+            if (json["components"] is JArray components)
+            {
+                metadata["componentCount"] = components.Count;
+            }
+
+            // Fill connection count
+            if (json["connections"] is JArray connections)
+            {
+                metadata["connectionCount"] = connections.Count;
+            }
+
+            // Fill group count
+            if (json["groups"] is JArray groups)
+            {
+                metadata["groupCount"] = groups.Count;
+            }
+
+            return json;
+        }
+
+        /// <summary>
         /// Applies all available fixes to a GhJSON document.
         /// </summary>
         /// <param name="json">The JSON object to fix.</param>
+        /// <param name="populateMetadata">Whether to populate missing metadata fields.</param>
         /// <returns>The fixed JSON object and any ID mappings.</returns>
-        public static (JObject Json, Dictionary<string, Guid> IdMapping) FixAll(JObject json)
+        public static (JObject Json, Dictionary<string, Guid> IdMapping) FixAll(JObject json, bool populateMetadata = true)
         {
             var (fixedJson, idMapping) = FixComponentInstanceGuids(json);
             fixedJson = RemovePivotsIfIncomplete(fixedJson);
+            
+            if (populateMetadata)
+            {
+                fixedJson = PopulateMetadata(fixedJson);
+            }
+
             return (fixedJson, idMapping);
         }
     }

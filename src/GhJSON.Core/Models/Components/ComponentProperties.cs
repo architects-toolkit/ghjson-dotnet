@@ -64,10 +64,10 @@ namespace GhJSON.Core.Models.Components
 
         /// <summary>
         /// Gets or sets the unique identifier for this specific component instance.
+        /// Optional - can be inferred from the component name if not provided.
         /// </summary>
-        [JsonProperty("instanceGuid")]
-        [JsonRequired]
-        public Guid InstanceGuid { get; set; }
+        [JsonProperty("instanceGuid", NullValueHandling = NullValueHandling.Ignore)]
+        public Guid? InstanceGuid { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether the component is currently selected in the Grasshopper canvas.
@@ -84,9 +84,11 @@ namespace GhJSON.Core.Models.Components
 
         /// <summary>
         /// Gets or sets the integer ID for the component (used for group references and connections).
+        /// Required for compact reference in connections and groups.
         /// </summary>
-        [JsonProperty("id", NullValueHandling = NullValueHandling.Ignore)]
-        public int? Id { get; set; }
+        [JsonProperty("id")]
+        [JsonRequired]
+        public int Id { get; set; }
 
         /// <summary>
         /// Gets or sets simple key-value pairs for basic component properties.

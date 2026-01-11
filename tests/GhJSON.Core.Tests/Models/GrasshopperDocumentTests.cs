@@ -72,8 +72,8 @@ namespace GhJSON.Core.Tests.Models
             {
                 Components = new System.Collections.Generic.List<ComponentProperties>
                 {
-                    new ComponentProperties { Name = "A", InstanceGuid = guid1, Id = 1, Pivot = new CompactPosition(0, 0) },
-                    new ComponentProperties { Name = "B", InstanceGuid = guid2, Id = 2, Pivot = new CompactPosition(0, 0) }
+                    new ComponentProperties { Name = "A", Id = 1, InstanceGuid = guid1, Pivot = new CompactPosition(0, 0) },
+                    new ComponentProperties { Name = "B", Id = 2, InstanceGuid = guid2, Pivot = new CompactPosition(0, 0) }
                 }
             };
             
@@ -120,14 +120,14 @@ namespace GhJSON.Core.Tests.Models
                     new ComponentProperties 
                     { 
                         Name = "A", 
-                        InstanceGuid = Guid.NewGuid(), 
+                        Id = 1,
                         Pivot = new CompactPosition(0, 0),
                         Warnings = new System.Collections.Generic.List<string> { "Test warning" }
                     },
                     new ComponentProperties 
                     { 
                         Name = "B", 
-                        InstanceGuid = Guid.NewGuid(), 
+                        Id = 2,
                         Pivot = new CompactPosition(0, 0)
                     }
                 }

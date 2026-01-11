@@ -27,6 +27,13 @@ namespace GhJSON.Core.Models.Document
     public class DocumentMetadata
     {
         /// <summary>
+        /// Gets or sets the title of the document.
+        /// </summary>
+        [JsonProperty("title", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(EmptyStringIgnoreConverter))]
+        public string? Title { get; set; }
+
+        /// <summary>
         /// Gets or sets the description of the document.
         /// </summary>
         [JsonProperty("description", NullValueHandling = NullValueHandling.Ignore)]
@@ -76,6 +83,12 @@ namespace GhJSON.Core.Models.Document
         public string? GrasshopperVersion { get; set; }
 
         /// <summary>
+        /// Gets or sets the list of tags for categorizing and searching definitions.
+        /// </summary>
+        [JsonProperty("tags", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string>? Tags { get; set; }
+
+        /// <summary>
         /// Gets or sets the list of required plugin dependencies.
         /// </summary>
         [JsonProperty("dependencies", NullValueHandling = NullValueHandling.Ignore)]
@@ -88,10 +101,23 @@ namespace GhJSON.Core.Models.Document
         public int? ComponentCount { get; set; }
 
         /// <summary>
-        /// Gets or sets the number of parameters in the document.
+        /// Gets or sets the number of connections in the document.
         /// </summary>
-        [JsonProperty("parameterCount", NullValueHandling = NullValueHandling.Ignore)]
-        public int? ParameterCount { get; set; }
+        [JsonProperty("connectionCount", NullValueHandling = NullValueHandling.Ignore)]
+        public int? ConnectionCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of groups in the document.
+        /// </summary>
+        [JsonProperty("groupCount", NullValueHandling = NullValueHandling.Ignore)]
+        public int? GroupCount { get; set; }
+
+        /// <summary>
+        /// Gets or sets the name of the plugin that generated this file.
+        /// </summary>
+        [JsonProperty("plugin", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(EmptyStringIgnoreConverter))]
+        public string? Plugin { get; set; }
 
         /// <summary>
         /// Gets or sets the plugin version that generated this file.

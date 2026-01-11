@@ -103,6 +103,11 @@ namespace GhJSON.Core.Validation
                             errors.Add($"components[{i}].name is missing or null.");
                         }
 
+                        if (comp["id"] == null || comp["id"]!.Type != JTokenType.Integer)
+                        {
+                            errors.Add($"components[{i}].id is missing or not an integer.");
+                        }
+
                         if (comp["componentGuid"] == null || comp["componentGuid"]!.Type == JTokenType.Null)
                         {
                             warnings.Add($"components[{i}].componentGuid is missing or null.");
@@ -116,11 +121,8 @@ namespace GhJSON.Core.Validation
                             }
                         }
 
-                        if (comp["instanceGuid"] == null || comp["instanceGuid"]!.Type == JTokenType.Null)
-                        {
-                            errors.Add($"components[{i}].instanceGuid is missing or null.");
-                        }
-                        else
+                        // instanceGuid is now optional - only validate if present
+                        if (comp["instanceGuid"] != null && comp["instanceGuid"]!.Type != JTokenType.Null)
                         {
                             var ig = comp["instanceGuid"]!.ToString();
                             if (!Guid.TryParse(ig, out _))

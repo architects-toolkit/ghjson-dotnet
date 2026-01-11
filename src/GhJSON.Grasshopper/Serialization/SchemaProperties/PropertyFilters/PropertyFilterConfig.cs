@@ -61,6 +61,8 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             "Reverse",
             "Expression",
             "Invert",
+            "Unitize",
+            "Hidden",
             "Locked",
         };
 

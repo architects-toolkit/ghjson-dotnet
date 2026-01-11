@@ -22,6 +22,7 @@ using System.Globalization;
 using System.Linq;
 using GhJSON.Core.Serialization.DataTypes;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
@@ -48,7 +49,28 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyHandlers
             {
                 if (sourceObject is IGH_Param param)
                 {
-                    var dataTree = param.VolatileData;
+                    // IGH_Param does not expose PersistentData directly; use reflection when available
+                    // and otherwise fall back to VolatileData (which, for internalized params, equals persistent).
+                    IGH_Structure dataTree = null;
+
+                    try
+                    {
+                        var persistentProp = param.GetType().GetProperty("PersistentData");
+                        if (persistentProp != null && typeof(IGH_Structure).IsAssignableFrom(persistentProp.PropertyType))
+                        {
+                            dataTree = persistentProp.GetValue(param) as IGH_Structure;
+                        }
+                    }
+                    catch
+                    {
+                        // ignore reflection errors and fall back to VolatileData
+                    }
+
+                    if (dataTree == null)
+                    {
+                        dataTree = param.VolatileData;
+                    }
+
                     if (dataTree != null)
                     {
                         var dictionary = SchemaProperties.DataTreeConverter.IGHStructureToDictionary(dataTree);

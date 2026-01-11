@@ -213,7 +213,9 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties
                 return string.IsNullOrEmpty(value?.ToString()) || value?.ToString() == ghObj.Name;
             }
 
-            if (propertyName == "Locked" || propertyName == "Hidden")
+            // Hidden/Locked are meaningful for parameters (visibility/lock state), but for most components
+            // we model these via ComponentState instead of SchemaProperties.
+            if ((propertyName == "Locked" || propertyName == "Hidden") && sourceObject is not IGH_Param)
             {
                 return true;
             }

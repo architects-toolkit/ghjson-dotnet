@@ -30,6 +30,7 @@ using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Serialization.SchemaProperties;
 using GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters;
+using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -237,8 +238,8 @@ namespace GhJSON.Grasshopper.Serialization
                 }
                 else
                 {
-                    props.InputSettings = ExtractParameterSettings(component.Params.Input, options);
-                    props.OutputSettings = ExtractParameterSettings(component.Params.Output, options);
+                    props.InputSettings = ExtractParameterSettings(component.Params.Input, component, isInput: true);
+                    props.OutputSettings = ExtractParameterSettings(component.Params.Output, component, isInput: false);
                 }
             }
 
@@ -306,6 +307,47 @@ namespace GhJSON.Grasshopper.Serialization
         {
             var connections = new List<ConnectionPairing>();
 
+            // Internal IGH_Param instances (component inputs/outputs) have their own InstanceGuid,
+            // which is NOT the same as the owning component's InstanceGuid and is typically not
+            // present in the top-level object list. To serialize connections reliably we must
+            // resolve each param to its owning document object (component or stand-alone param).
+            var paramOwner = new Dictionary<IGH_Param, IGH_ActiveObject>();
+
+            foreach (var obj in objects)
+            {
+                if (obj is IGH_Param p)
+                {
+                    paramOwner[p] = obj;
+                }
+                else if (obj is IGH_Component c)
+                {
+                    foreach (var pIn in c.Params.Input)
+                    {
+                        paramOwner[pIn] = obj;
+                    }
+
+                    foreach (var pOut in c.Params.Output)
+                    {
+                        paramOwner[pOut] = obj;
+                    }
+                }
+            }
+
+            IGH_ActiveObject? ResolveOwner(IGH_Param p)
+            {
+                if (p == null)
+                {
+                    return null;
+                }
+
+                if (paramOwner.TryGetValue(p, out var owner))
+                {
+                    return owner;
+                }
+
+                return null;
+            }
+
             foreach (var obj in objects)
             {
                 if (obj is IGH_Component component)
@@ -314,16 +356,35 @@ namespace GhJSON.Grasshopper.Serialization
                     {
                         foreach (var source in input.Sources)
                         {
-                            if (guidToId.TryGetValue(source.InstanceGuid, out var fromId) &&
+                            var fromOwner = ResolveOwner(source);
+
+                            if (fromOwner == null)
+                            {
+                                continue;
+                            }
+
+                            if (guidToId.TryGetValue(fromOwner.InstanceGuid, out var fromId) &&
                                 guidToId.TryGetValue(component.InstanceGuid, out var toId))
                             {
-                                var fromParamName = source.Name;
-                                var toParamName = input.Name;
+                                var fromParamName = source.NickName;
+                                var toParamName = input.NickName;
+
+                                int? fromParamIndex = null;
+                                if (fromOwner is IGH_Component fromComp)
+                                {
+                                    var idx = fromComp.Params.Output.IndexOf(source);
+                                    if (idx >= 0)
+                                    {
+                                        fromParamIndex = idx;
+                                    }
+                                }
+
+                                var toParamIndex = component.Params.Input.IndexOf(input);
 
                                 connections.Add(new ConnectionPairing
                                 {
-                                    From = new Connection { Id = fromId, ParamName = fromParamName },
-                                    To = new Connection { Id = toId, ParamName = toParamName }
+                                    From = new Connection { Id = fromId, ParamName = fromParamName, ParamIndex = fromParamIndex },
+                                    To = new Connection { Id = toId, ParamName = toParamName, ParamIndex = toParamIndex >= 0 ? toParamIndex : null }
                                 });
                             }
                         }
@@ -333,15 +394,32 @@ namespace GhJSON.Grasshopper.Serialization
                 {
                     foreach (var source in param.Sources)
                     {
-                        if (guidToId.TryGetValue(source.InstanceGuid, out var fromId) &&
+                        var fromOwner = ResolveOwner(source);
+
+                        if (fromOwner == null)
+                        {
+                            continue;
+                        }
+
+                        if (guidToId.TryGetValue(fromOwner.InstanceGuid, out var fromId) &&
                             guidToId.TryGetValue(param.InstanceGuid, out var toId))
                         {
-                            var fromParamName = source.Name;
-                            var toParamName = param.Name;
+                            var fromParamName = source.NickName;
+                            var toParamName = param.NickName;
+
+                            int? fromParamIndex = null;
+                            if (fromOwner is IGH_Component fromComp)
+                            {
+                                var idx = fromComp.Params.Output.IndexOf(source);
+                                if (idx >= 0)
+                                {
+                                    fromParamIndex = idx;
+                                }
+                            }
 
                             connections.Add(new ConnectionPairing
                             {
-                                From = new Connection { Id = fromId, ParamName = fromParamName },
+                                From = new Connection { Id = fromId, ParamName = fromParamName, ParamIndex = fromParamIndex },
                                 To = new Connection { Id = toId, ParamName = toParamName }
                             });
                         }
@@ -497,6 +575,55 @@ namespace GhJSON.Grasshopper.Serialization
                 hasState = true;
             }
 
+            // Extract bounds for UI components (panels, etc.)
+            try
+            {
+                if (component is GH_Panel && component.Attributes != null)
+                {
+                    var b = component.Attributes.Bounds;
+                    state.Bounds = new Dictionary<string, float>
+                    {
+                        ["width"] = b.Width,
+                        ["height"] = b.Height,
+                    };
+                    hasState = true;
+                }
+            }
+            catch
+            {
+            }
+
+            // Extract color for UI components (panel, swatch)
+            try
+            {
+                Color? c = null;
+
+                if (component is GH_Panel panel)
+                {
+                    c = panel.Properties.Colour;
+                }
+                else if (component is GH_ColourSwatch swatch)
+                {
+                    c = swatch.SwatchColour;
+                }
+
+                if (c.HasValue)
+                {
+                    var col = c.Value;
+                    state.Color = new Dictionary<string, int>
+                    {
+                        ["r"] = col.R,
+                        ["g"] = col.G,
+                        ["b"] = col.B,
+                        ["a"] = col.A,
+                    };
+                    hasState = true;
+                }
+            }
+            catch
+            {
+            }
+
             // Extract script-specific state
             if (ScriptComponentFactory.IsScriptComponent(component) ||
                 ScriptComponentHelper.IsScriptComponentInstance(component))
@@ -611,18 +738,72 @@ namespace GhJSON.Grasshopper.Serialization
         {
             try
             {
-                // Try to get script code via reflection (IScriptComponent.Text property)
-                var textProp = component.GetType().GetProperty("Text");
-                if (textProp != null && textProp.CanRead)
+                // Legacy (integrated) implementation relied on RhinoCodePlatform.GH.IScriptComponent.Text.
+                // In ghjson-dotnet we avoid compile-time dependencies, so we use reflection and support
+                // explicit interface implementations by reading the property from the interface type.
+                try
                 {
-                    return textProp.GetValue(component)?.ToString();
+                    var typeOfScript = component.GetType();
+                    var scriptInterface = typeOfScript.GetInterfaces().FirstOrDefault(i => i.Name == "IScriptComponent");
+                    if (scriptInterface != null)
+                    {
+                        var textProp = scriptInterface.GetProperty("Text");
+                        if (textProp != null && textProp.CanRead)
+                        {
+                            var value = textProp.GetValue(component)?.ToString();
+                            if (!string.IsNullOrWhiteSpace(value))
+                            {
+                                return value;
+                            }
+                        }
+                    }
+                }
+                catch
+                {
                 }
 
-                // Fallback: try Script property
-                var scriptProp = component.GetType().GetProperty("Script");
-                if (scriptProp != null && scriptProp.CanRead)
+                // Try common script code property names across GH1 / Rhino 8 script components.
+                // We keep this reflection-based so ghjson-dotnet doesn't need RhinoCodePlatform refs.
+                var type = component.GetType();
+                string[] candidates = { "Text", "Script", "Code", "ScriptCode", "Source", "SourceCode" };
+
+                foreach (var name in candidates)
                 {
-                    return scriptProp.GetValue(component)?.ToString();
+                    var prop = type.GetProperty(name);
+                    if (prop != null && prop.CanRead)
+                    {
+                        var value = prop.GetValue(component)?.ToString();
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
+                }
+
+                // Rhino 8 script components often expose code through a ScriptSource object.
+                // Mirror VB's approach but tolerate different property names.
+                var scriptSourceProp = type.GetProperty("ScriptSource");
+                if (scriptSourceProp != null && scriptSourceProp.CanRead)
+                {
+                    var scriptSourceObj = scriptSourceProp.GetValue(component);
+                    if (scriptSourceObj != null)
+                    {
+                        var scriptSourceType = scriptSourceObj.GetType();
+                        string[] sourceCandidates = { "ScriptCode", "Code", "Text", "Source", "SourceCode" };
+
+                        foreach (var name in sourceCandidates)
+                        {
+                            var prop = scriptSourceType.GetProperty(name);
+                            if (prop != null && prop.CanRead)
+                            {
+                                var value = prop.GetValue(scriptSourceObj)?.ToString();
+                                if (!string.IsNullOrWhiteSpace(value))
+                                {
+                                    return value;
+                                }
+                            }
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -674,36 +855,23 @@ namespace GhJSON.Grasshopper.Serialization
 
         private static List<ParameterSettings>? ExtractParameterSettings(
             List<IGH_Param> parameters,
-            SerializationOptions options)
+            IGH_Component owner,
+            bool isInput)
         {
             if (parameters == null || parameters.Count == 0)
                 return null;
 
             var result = new List<ParameterSettings>();
 
-            foreach (var p in parameters)
+            for (int i = 0; i < parameters.Count; i++)
             {
-                var settings = new ParameterSettings
+                var p = parameters[i];
+                var isPrincipal = isInput && i == owner.MasterParameterIndex;
+                var settings = ParameterMapper.ExtractSettings(p, isPrincipal);
+                if (settings != null)
                 {
-                    ParameterName = p.Name,
-                    NickName = p.NickName != p.Name ? p.NickName : null,
-                    Access = p.Access.ToString().ToLowerInvariant(),
-                    DataMapping = p.DataMapping != GH_DataMapping.None
-                        ? p.DataMapping.ToString()
-                        : null
-                };
-
-                // Extract additional settings (Reverse, Simplify)
-                if (p.Reverse || p.Simplify)
-                {
-                    settings.AdditionalSettings = new AdditionalParameterSettings
-                    {
-                        Reverse = p.Reverse ? true : null,
-                        Simplify = p.Simplify ? true : null
-                    };
+                    result.Add(settings);
                 }
-
-                result.Add(settings);
             }
 
             return result.Count > 0 ? result : null;

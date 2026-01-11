@@ -31,9 +31,9 @@ When the release draft is published, a GitHub Action builds the packages:
 
 **Workflow file**: `.github/workflows/release-build.yml`
 
-### Stage 3: Manual Trigger → Publish to NuGet
+### Stage 3: Manual Trigger → Publish to NuGet (Trusted Publishing)
 
-A manually triggered workflow publishes packages to NuGet:
+A manually triggered workflow publishes packages to NuGet using Trusted Publishing (short-lived API key via OIDC, no stored secrets):
 
 - **Trigger**: Manual workflow dispatch
 - **Inputs**:
@@ -41,34 +41,32 @@ A manually triggered workflow publishes packages to NuGet:
   - `dry_run`: Test mode without actually publishing
 - **Actions**:
   1. Download `.nupkg` files from the release
-  2. Push to NuGet using the API key
+  2. Request a temporary NuGet API key via `NuGet/login@v1` (OIDC)
+  3. Push to NuGet using the short-lived key
 
 **Workflow file**: `.github/workflows/publish-nuget.yml`
 
 ## Prerequisites
 
-### 1. NuGet API Key
+### 1. nuget.org Trusted Publishing policy
 
-Create an API key at [nuget.org](https://www.nuget.org/account/apikeys):
+1. Sign in to [nuget.org](https://www.nuget.org/) with the account that owns the GhJSON packages.
+2. Go to your username → **Trusted Publishing**.
+3. Add a new policy with:
+   - **Repository Owner**: `architects-toolkit`
+   - **Repository**: `ghjson-dotnet`
+   - **Workflow File**: `publish-nuget.yml`
+   - **Environment**: *(leave empty unless you later bind the workflow to an environment)*
+4. Save the policy. nuget.org will now trust the GitHub workflow to request short-lived publish tokens.
 
-1. Sign in to nuget.org
-2. Go to Account → API Keys
-3. Create a new key:
-   - **Name**: `ghjson-dotnet`
-   - **Expiration**: 365 days
-   - **Scopes**: Push
-   - **Glob Pattern**: `GhJSON.*`
-4. Copy the key immediately (it won't be shown again)
+### 2. NuGet account username secret
 
-### 2. GitHub Secret
+Trusted Publishing still needs the nuget.org username (profile name) to request the temp key.
 
-Add the API key as a repository secret:
-
-1. Go to repository Settings → Secrets and variables → Actions
-2. Click "New repository secret"
-3. Name: `NUGET_API_KEY`
-4. Value: Your NuGet API key
-5. Click "Add secret"
+1. In GitHub → Settings → Secrets and variables → Actions → **New repository secret**
+2. Name: `NUGET_USERNAME`
+3. Value: your nuget.org username (not email)
+4. Save
 
 ## Manual Publishing Steps
 
@@ -82,31 +80,36 @@ dotnet build --configuration Release
 dotnet pack --configuration Release --output ./nupkgs
 ```
 
-### 2. Push to NuGet
+### 2. Push to NuGet (with Trusted Publishing)
 
 ```bash
-# Push each package
+# Get a short-lived API key (requires GITHUB_ID_TOKEN + nuget.org policy)
+dotnet tool install -g NuGet.Credentials # if not already installed
+nuget login -NonInteractive -Source https://api.nuget.org/v3/index.json -UserName YOUR_NUGET_USERNAME
+
+# Push each package using the temp API key NuGet emitted to the standard config
 dotnet nuget push ./nupkgs/GhJSON.Core.*.nupkg \
-  --api-key YOUR_API_KEY \
-  --source https://api.nuget.org/v3/index.json
+  --source https://api.nuget.org/v3/index.json \
+  --skip-duplicate
 
 dotnet nuget push ./nupkgs/GhJSON.Grasshopper.*.nupkg \
-  --api-key YOUR_API_KEY \
-  --source https://api.nuget.org/v3/index.json
+  --source https://api.nuget.org/v3/index.json \
+  --skip-duplicate
 ```
 
 ### 3. Verify on NuGet
 
 Check the packages at:
-- https://www.nuget.org/packages/GhJSON.Core
-- https://www.nuget.org/packages/GhJSON.Grasshopper
+
+- [GhJSON.Core](https://www.nuget.org/packages/GhJSON.Core)
+- [GhJSON.Grasshopper](https://www.nuget.org/packages/GhJSON.Grasshopper)
 
 **Note**: It may take a few minutes for packages to be indexed and appear in search.
 
 ## Package Information
 
 | Package | Target Framework | Dependencies |
-|---------|------------------|--------------|
+| --- | --- | --- |
 | GhJSON.Core | netstandard2.0 | Newtonsoft.Json |
 | GhJSON.Grasshopper | net7.0-windows, net7.0 | GhJSON.Core, Grasshopper, RhinoCommon |
 

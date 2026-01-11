@@ -143,6 +143,47 @@ namespace GhJSON.Grasshopper.Serialization
                 {
                     ApplyScriptComponentProperties(component, props, options);
                 }
+                else if (options.ApplyParameterSettings)
+                {
+                    // Apply parameter settings for standard (non-script) components.
+                    // This is required so modifiers such as Reverse/Simplify, Expressions, and principal input
+                    // round-trip when params belong to a component.
+                    try
+                    {
+                        if (props.InputSettings != null && props.InputSettings.Any())
+                        {
+                            for (int i = 0; i < Math.Min(props.InputSettings.Count, component.Params.Input.Count); i++)
+                            {
+                                var s = props.InputSettings[i];
+                                if (s != null)
+                                {
+                                    ParameterMapper.ApplySettings(component.Params.Input[i], s);
+                                }
+
+                                if (s?.IsPrincipal == true)
+                                {
+                                    component.MasterParameterIndex = i;
+                                }
+                            }
+                        }
+
+                        if (props.OutputSettings != null && props.OutputSettings.Any())
+                        {
+                            for (int i = 0; i < Math.Min(props.OutputSettings.Count, component.Params.Output.Count); i++)
+                            {
+                                var s = props.OutputSettings[i];
+                                if (s != null)
+                                {
+                                    ParameterMapper.ApplySettings(component.Params.Output[i], s);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[GhJsonDeserializer] Error applying parameter settings for '{props.Name}': {ex.Message}");
+                    }
+                }
             }
 
             // Apply component state (after script code/parameter rebuild to avoid re-generation)
@@ -444,6 +485,31 @@ namespace GhJSON.Grasshopper.Serialization
                 previewObj.Hidden = state.Hidden.Value;
             }
 
+            // Apply color (panel + swatch)
+            try
+            {
+                if (state.Color != null &&
+                    state.Color.TryGetValue("r", out var r) &&
+                    state.Color.TryGetValue("g", out var g) &&
+                    state.Color.TryGetValue("b", out var b))
+                {
+                    int a = state.Color.TryGetValue("a", out var av) ? av : 255;
+                    var c = Color.FromArgb(a, r, g, b);
+
+                    if (obj is GH_Panel panel)
+                    {
+                        panel.Properties.Colour = c;
+                    }
+                    else if (obj is GH_ColourSwatch swatch)
+                    {
+                        swatch.SwatchColour = c;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
             // Apply universal value for special components
             if (state.Value != null && obj is IGH_Component component)
             {
@@ -608,19 +674,59 @@ namespace GhJSON.Grasshopper.Serialization
 
             try
             {
-                // Try to set script code via reflection (IScriptComponent.Text property)
-                var textProp = component.GetType().GetProperty("Text");
-                if (textProp != null && textProp.CanWrite)
+                var type = component.GetType();
+
+                // Legacy (integrated) implementation used RhinoCodePlatform.GH.IScriptComponent.Text.
+                // That property is often an explicit interface implementation, so it won't appear as
+                // a public property on the concrete component type.
+                try
                 {
-                    textProp.SetValue(component, scriptCode);
-                    return;
+                    var scriptInterface = type.GetInterfaces().FirstOrDefault(i => i.Name == "IScriptComponent");
+                    if (scriptInterface != null)
+                    {
+                        var textProp = scriptInterface.GetProperty("Text");
+                        if (textProp != null && textProp.CanWrite)
+                        {
+                            textProp.SetValue(component, scriptCode);
+                            return;
+                        }
+                    }
+                }
+                catch
+                {
                 }
 
-                // Fallback: try Script property
-                var scriptProp = component.GetType().GetProperty("Script");
-                if (scriptProp != null && scriptProp.CanWrite)
+                // Try common direct properties first
+                string[] candidates = { "Text", "Script", "Code", "ScriptCode", "Source", "SourceCode" };
+                foreach (var name in candidates)
                 {
-                    scriptProp.SetValue(component, scriptCode);
+                    var prop = type.GetProperty(name);
+                    if (prop != null && prop.CanWrite)
+                    {
+                        prop.SetValue(component, scriptCode);
+                        return;
+                    }
+                }
+
+                // Rhino 8 script components often use a ScriptSource object
+                var scriptSourceProp = type.GetProperty("ScriptSource");
+                if (scriptSourceProp != null && scriptSourceProp.CanRead)
+                {
+                    var scriptSourceObj = scriptSourceProp.GetValue(component);
+                    if (scriptSourceObj != null)
+                    {
+                        var scriptSourceType = scriptSourceObj.GetType();
+                        string[] sourceCandidates = { "ScriptCode", "Code", "Text", "Source", "SourceCode" };
+                        foreach (var name in sourceCandidates)
+                        {
+                            var prop = scriptSourceType.GetProperty(name);
+                            if (prop != null && prop.CanWrite)
+                            {
+                                prop.SetValue(scriptSourceObj, scriptCode);
+                                return;
+                            }
+                        }
+                    }
                 }
             }
             catch (Exception ex)

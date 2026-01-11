@@ -24,6 +24,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Document;
+using GhJSON.Core.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Serialization.SchemaProperties;
@@ -31,13 +32,14 @@ using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
+using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Grasshopper.Serialization
 {
     /// <summary>
     /// Deserializes GhJSON documents to Grasshopper objects.
     /// </summary>
-    public static class GhJsonDeserializer
+    public static partial class GhJsonDeserializer
     {
         /// <summary>
         /// Deserializes a GrasshopperDocument to Grasshopper objects.
@@ -186,16 +188,17 @@ namespace GhJSON.Grasshopper.Serialization
                 }
             }
 
-            // Apply component state (after script code/parameter rebuild to avoid re-generation)
-            if (props.ComponentState != null && options.ApplyComponentState)
-            {
-                ApplyComponentState(obj, props.ComponentState);
-            }
-
-            // Apply schema properties (legacy format)
+            // Apply schema properties first (legacy behavior)
+            // so that componentState.value can rely on properties being present (e.g. ValueList ListItems).
             if (options.ApplySchemaProperties && props.SchemaProperties != null && props.SchemaProperties.Count > 0)
             {
                 ApplySchemaProperties(obj, props.SchemaProperties);
+            }
+
+            // Apply component state after script code/parameter rebuild to avoid re-generation.
+            if (props.ComponentState != null && options.ApplyComponentState)
+            {
+                ApplyComponentState(obj, props.ComponentState);
             }
 
             return obj;
@@ -463,12 +466,78 @@ namespace GhJSON.Grasshopper.Serialization
             try
             {
                 var manager = new PropertyManagerV2();
-                manager.ApplyProperties(obj, schemaProperties);
+                var normalized = new Dictionary<string, object>();
+                foreach (var kvp in schemaProperties)
+                {
+                    var unwrapped = UnwrapComponentPropertyValue(kvp.Value);
+                    if (unwrapped != null)
+                    {
+                        normalized[kvp.Key] = unwrapped;
+                    }
+                }
+
+                manager.ApplyProperties(obj, normalized);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[GhJsonDeserializer] Error applying schema properties: {ex.Message}");
             }
+        }
+
+        private static object? UnwrapComponentPropertyValue(object? value)
+        {
+            if (value == null)
+            {
+                return null;
+            }
+
+            // JObject wrapper: { "value": ... }
+            if (value is JObject jo)
+            {
+                if (jo.TryGetValue("value", StringComparison.OrdinalIgnoreCase, out var token))
+                {
+                    return UnwrapJToken(token);
+                }
+
+                return value;
+            }
+
+            // Dictionary wrapper: { "value": ... }
+            if (value is IDictionary<string, object> dict)
+            {
+                foreach (var key in dict.Keys)
+                {
+                    if (string.Equals(key, "value", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return UnwrapComponentPropertyValue(dict[key]);
+                    }
+                }
+
+                return value;
+            }
+
+            // Raw JToken
+            if (value is JToken jt)
+            {
+                return UnwrapJToken(jt);
+            }
+
+            return value;
+        }
+
+        private static object? UnwrapJToken(JToken token)
+        {
+            if (token is JValue jv)
+            {
+                return jv.Value;
+            }
+
+            if (token is JObject || token is JArray)
+            {
+                return token;
+            }
+
+            return token.ToString();
         }
 
         private static void ApplyComponentState(IGH_DocumentObject obj, ComponentState state)
@@ -485,29 +554,22 @@ namespace GhJSON.Grasshopper.Serialization
                 previewObj.Hidden = state.Hidden.Value;
             }
 
-            // Apply color (panel + swatch)
-            try
+            // Apply panel-specific appearance (color and size) using legacy AdditionalProperties pattern
+            if (obj is GH_Panel panel)
             {
-                if (state.Color != null &&
-                    state.Color.TryGetValue("r", out var r) &&
-                    state.Color.TryGetValue("g", out var g) &&
-                    state.Color.TryGetValue("b", out var b))
-                {
-                    int a = state.Color.TryGetValue("a", out var av) ? av : 255;
-                    var c = Color.FromArgb(a, r, g, b);
-
-                    if (obj is GH_Panel panel)
-                    {
-                        panel.Properties.Colour = c;
-                    }
-                    else if (obj is GH_ColourSwatch swatch)
-                    {
-                        swatch.SwatchColour = c;
-                    }
-                }
+                ApplyPanelAppearance(panel, state);
             }
-            catch
+            else if (obj is GH_ColourSwatch swatch)
             {
+                // Apply swatch color from AdditionalProperties
+                if (state.AdditionalProperties != null &&
+                    state.AdditionalProperties.TryGetValue("color", out var colorObj) &&
+                    colorObj is string colorStr &&
+                    DataTypeSerializer.TryDeserialize("Color", colorStr, out var deserialized) &&
+                    deserialized is Color serializedColor)
+                {
+                    swatch.SwatchColour = serializedColor;
+                }
             }
 
             // Apply universal value for special components
@@ -578,11 +640,23 @@ namespace GhJSON.Grasshopper.Serialization
                 // Colour swatch
                 if (component is GH_ColourSwatch swatch)
                 {
-                    var color = ParseColor(value.ToString());
+                    var str = value.ToString();
+
+                    // Primary path: use GhJSON.Core DataTypeSerializer with inline prefix (e.g. "argb:...")
+                    if (GhJSON.Core.Serialization.DataTypes.DataTypeSerializer.TryDeserializeFromPrefix(str, out object? colorObj) &&
+                        colorObj is Color c)
+                    {
+                        swatch.SwatchColour = c;
+                        return;
+                    }
+
+                    // Fallback: legacy rgba parser
+                    var color = ParseColor(str);
                     if (color.HasValue)
                     {
                         swatch.SwatchColour = color.Value;
                     }
+
                     return;
                 }
 
@@ -790,5 +864,37 @@ namespace GhJSON.Grasshopper.Serialization
         /// Useful for accessing component properties during placement.
         /// </summary>
         public GrasshopperDocument? Document { get; set; }
+    }
+
+    /// <summary>
+    /// Helper methods for GhJsonDeserializer.
+    /// </summary>
+    public static partial class GhJsonDeserializer
+    {
+        private static void ApplyPanelAppearance(GH_Panel panel, ComponentState state)
+        {
+            if (state.AdditionalProperties != null &&
+                state.AdditionalProperties.TryGetValue("color", out var colorObj) &&
+                colorObj is string colorStr &&
+                GhJSON.Core.Serialization.DataTypes.DataTypeSerializer.TryDeserialize("Color", colorStr, out var deserialized) &&
+                deserialized is Color serializedColor)
+            {
+                panel.Properties.Colour = serializedColor;
+            }
+
+            if (state.AdditionalProperties != null &&
+                state.AdditionalProperties.TryGetValue("bounds", out var boundsObj) &&
+                boundsObj is string boundsStr &&
+                GhJSON.Core.Serialization.DataTypes.DataTypeSerializer.TryDeserialize("Bounds", boundsStr, out var deserializedBounds) &&
+                deserializedBounds is ValueTuple<double, double> boundsTuple)
+            {
+                var attr = panel.Attributes;
+                if (attr != null)
+                {
+                    // Preserve location, update size
+                    attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, (float)boundsTuple.Item1, (float)boundsTuple.Item2);
+                }
+            }
+        }
     }
 }

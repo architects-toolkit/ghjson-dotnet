@@ -64,19 +64,32 @@ namespace GhJSON.Grasshopper.Serialization
                 Connections = new List<ConnectionPairing>()
             };
 
-            // Build GUID to ID mapping
+            // Property-manager centric approach (legacy parity):
+            // Build ComponentProperties from PropertyManagerV2 schema properties first,
+            // then layer componentState + parameter settings.
+            var ctx = GetSchemaPropertyContext(options);
+            var propertyManager = new PropertyManagerV2(ctx);
+
+            // Collect objects to serialize:
+            // - all IGH_Component
+            // - stand-alone IGH_Param only (skip params owned by a component)
+            var objectsToSerialize = new List<IGH_ActiveObject>();
+            objectsToSerialize.AddRange(objectList.OfType<IGH_Component>());
+            objectsToSerialize.AddRange(objectList
+                .OfType<IGH_Param>()
+                .Where(p => p.Attributes?.Parent == null));
+
+            // Build GUID to ID mapping from serialized objects only
             var guidToId = new Dictionary<Guid, int>();
             int nextId = 1;
-
-            foreach (var obj in objectList)
+            foreach (var obj in objectsToSerialize)
             {
                 guidToId[obj.InstanceGuid] = nextId++;
             }
 
-            // Serialize components
-            foreach (var obj in objectList)
+            foreach (var obj in objectsToSerialize)
             {
-                var props = SerializeObject(obj, guidToId, options);
+                var props = CreateComponentProperties(obj, guidToId, options, propertyManager);
                 if (props != null)
                 {
                     document.Components.Add(props);
@@ -102,6 +115,70 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             return document;
+        }
+
+        private static ComponentProperties? CreateComponentProperties(
+            IGH_ActiveObject obj,
+            Dictionary<Guid, int> guidToId,
+            SerializationOptions options,
+            PropertyManagerV2 propertyManager)
+        {
+            if (obj == null)
+                return null;
+
+            var pivot = obj.Attributes?.Pivot ?? new System.Drawing.PointF(0, 0);
+
+            var props = new ComponentProperties
+            {
+                Name = obj.Name,
+                NickName = !string.IsNullOrWhiteSpace(obj.NickName) && obj.NickName != obj.Name
+                    ? obj.NickName
+                    : null,
+                ComponentGuid = obj.ComponentGuid,
+                InstanceGuid = obj.InstanceGuid,
+                Id = guidToId.TryGetValue(obj.InstanceGuid, out var id) ? id : 0,
+                Pivot = new CompactPosition(pivot.X, pivot.Y)
+            };
+
+            // Only include Selected when true (legacy behavior)
+            if (obj.Attributes?.Selected == true)
+            {
+                props.Selected = true;
+            }
+
+            // Schema properties
+            if (options.IncludeSchemaProperties)
+            {
+                var schemaProps = propertyManager.ExtractProperties(obj);
+                if (schemaProps.Count > 0)
+                {
+                    props.SchemaProperties = schemaProps;
+                }
+            }
+
+            // Component state
+            if (options.IncludeComponentState && obj is IGH_Component ghComp)
+            {
+                props.ComponentState = ExtractComponentState(ghComp);
+            }
+
+            // Parameter settings
+            if (options.IncludeParameterSettings && obj is IGH_Component component)
+            {
+                if (ScriptComponentFactory.IsScriptComponent(component) ||
+                    ScriptComponentHelper.IsScriptComponentInstance(component))
+                {
+                    props.InputSettings = ExtractScriptParameterSettings(component.Params.Input, component);
+                    props.OutputSettings = ExtractScriptParameterSettings(component.Params.Output, component);
+                }
+                else
+                {
+                    props.InputSettings = ExtractParameterSettings(component.Params.Input, component, isInput: true);
+                    props.OutputSettings = ExtractParameterSettings(component.Params.Output, component, isInput: false);
+                }
+            }
+
+            return props;
         }
 
         private static void ExtractGroupInformation(
@@ -163,16 +240,11 @@ namespace GhJSON.Grasshopper.Serialization
             Dictionary<Guid, int> guidToId,
             SerializationOptions options)
         {
-            if (obj is IGH_Component component)
-            {
-                return SerializeComponent(component, guidToId, options);
-            }
-            else if (obj is IGH_Param param)
-            {
-                return SerializeParameter(param, guidToId, options);
-            }
-
-            return null;
+            // Backward-compatible entry point used by older call sites.
+            // Prefer CreateComponentProperties (property-manager centric).
+            var ctx = GetSchemaPropertyContext(options);
+            var propertyManager = new PropertyManagerV2(ctx);
+            return CreateComponentProperties(obj, guidToId, options, propertyManager);
         }
 
         private static VBScriptCode? ExtractVBScriptCode(IGH_Component component)
@@ -580,53 +652,47 @@ namespace GhJSON.Grasshopper.Serialization
                 hasState = true;
             }
 
-            // Extract bounds for UI components (panels, etc.)
-            try
+            // Extract panel-specific appearance (color, size) using legacy AdditionalProperties pattern
+            if (component is GH_Panel panel)
             {
-                if (component is GH_Panel && component.Attributes != null)
+                try
                 {
-                    var b = component.Attributes.Bounds;
-                    state.Bounds = new Dictionary<string, float>
+                    var panelColor = panel.Properties?.Colour;
+                    if (panelColor.HasValue)
                     {
-                        ["width"] = b.Width,
-                        ["height"] = b.Height,
-                    };
+                        state.AdditionalProperties ??= new Dictionary<string, object>();
+                        state.AdditionalProperties["color"] = DataTypeSerializer.Serialize(panelColor.Value);
+                        hasState = true;
+                    }
+
+                    var bounds = panel.Attributes?.Bounds;
+                    if (bounds.HasValue && !bounds.Value.IsEmpty)
+                    {
+                        state.AdditionalProperties ??= new Dictionary<string, object>();
+                        // Store as Bounds serializer format: bounds:W,H (preserve order, no sorting)
+                        var boundsTuple = (width: (double)bounds.Value.Width, height: (double)bounds.Value.Height);
+                        state.AdditionalProperties["bounds"] = DataTypeSerializer.Serialize(boundsTuple);
+                        hasState = true;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            // Extract color for color swatch (legacy pattern)
+            else if (component is GH_ColourSwatch swatch)
+            {
+                try
+                {
+                    var swatchColor = swatch.SwatchColour;
+                    state.AdditionalProperties ??= new Dictionary<string, object>();
+                    state.AdditionalProperties["color"] = DataTypeSerializer.Serialize(swatchColor);
                     hasState = true;
                 }
-            }
-            catch
-            {
-            }
-
-            // Extract color for UI components (panel, swatch)
-            try
-            {
-                Color? c = null;
-
-                if (component is GH_Panel panel)
+                catch
                 {
-                    c = panel.Properties.Colour;
                 }
-                else if (component is GH_ColourSwatch swatch)
-                {
-                    c = swatch.SwatchColour;
-                }
-
-                if (c.HasValue)
-                {
-                    var col = c.Value;
-                    state.Color = new Dictionary<string, int>
-                    {
-                        ["r"] = col.R,
-                        ["g"] = col.G,
-                        ["b"] = col.B,
-                        ["a"] = col.A,
-                    };
-                    hasState = true;
-                }
-            }
-            catch
-            {
             }
 
             // Extract script-specific state
@@ -867,10 +933,22 @@ namespace GhJSON.Grasshopper.Serialization
                 return null;
 
             var result = new List<ParameterSettings>();
+            bool isScriptComponent = ScriptComponentFactory.IsScriptComponent(owner) || 
+                                   ScriptComponentHelper.IsScriptComponentInstance(owner);
 
             for (int i = 0; i < parameters.Count; i++)
             {
                 var p = parameters[i];
+
+                // Skip the standard output "out" parameter for script components (including VB Script)
+                // This is controlled by the UsingStandardOutputParam property in ComponentState
+                if (isScriptComponent && !isInput && 
+                    (string.Equals(p.Name, "out", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(p.NickName, "out", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
                 var isPrincipal = isInput && i == owner.MasterParameterIndex;
                 var settings = ParameterMapper.ExtractSettings(p, isPrincipal);
                 if (settings != null)

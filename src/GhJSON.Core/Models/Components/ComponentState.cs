@@ -157,7 +157,7 @@ namespace GhJSON.Core.Models.Components
 
         /// <summary>
         /// Gets or sets the rounding mode for number sliders.
-        /// Values: "Round", "None", "Even", "Odd"
+        /// Values: "Float", "Integer", "Even", "Odd"
         /// </summary>
         [JsonProperty("rounding", NullValueHandling = NullValueHandling.Ignore)]
         [JsonConverter(typeof(EmptyStringIgnoreConverter))]

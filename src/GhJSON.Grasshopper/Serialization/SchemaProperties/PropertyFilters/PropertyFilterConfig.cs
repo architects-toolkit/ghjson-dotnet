@@ -91,12 +91,10 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             },
             [ComponentCategory.Slider] = new()
             {
-                "CurrentValue",
                 "Minimum",
                 "Maximum",
                 "Range",
                 "Decimals",
-                "Rounding",
                 "Limit",
                 "DisplayFormat",
             },

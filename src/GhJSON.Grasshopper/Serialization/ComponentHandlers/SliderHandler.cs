@@ -192,6 +192,13 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                     var min = decimal.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
                     var max = decimal.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
 
+                    // Precision: highest decimal count determines slider.DecimalPlaces.
+                    slider.Slider.DecimalPlaces = Math.Max(
+                        0,
+                        Math.Max(
+                            GetDecimalPlaces(match.Groups[1].Value),
+                            Math.Max(GetDecimalPlaces(match.Groups[2].Value), GetDecimalPlaces(match.Groups[3].Value))));
+
                     slider.Slider.Minimum = min;
                     slider.Slider.Maximum = max;
                     slider.SetSliderValue(current);
@@ -206,6 +213,24 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             {
                 Debug.WriteLine($"[SliderHandler] Error applying value '{valueStr}': {ex.Message}");
             }
+        }
+
+        private static int GetDecimalPlaces(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+            {
+                return 0;
+            }
+
+            int idx = s.IndexOf('.', StringComparison.Ordinal);
+            if (idx < 0)
+            {
+                return 0;
+            }
+
+            int end = s.IndexOfAny(new[] { 'e', 'E' }, idx + 1);
+            int decimals = (end > idx ? end : s.Length) - idx - 1;
+            return decimals < 0 ? 0 : decimals;
         }
     }
 }

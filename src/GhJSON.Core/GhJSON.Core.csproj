@@ -23,4 +23,13 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!-- Embed schema files for validation -->
+  <ItemGroup>
+    <EmbeddedResource Include="Validation\**\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="GhJsonOfficialSchemaUrl" Value="$(GhJsonOfficialSchemaUrl)" />
+  </ItemGroup>
+
 </Project>

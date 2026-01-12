@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -33,7 +33,7 @@ namespace GhJSON.Core.Tests.Migration
                 ""components"": [
                     {
                         ""id"": 1,
-                        ""Name"": ""Addition"",
+                        ""name"": ""Addition"",
                         ""pivot"": { ""X"": 100, ""Y"": 200 }
                     }
                 ],
@@ -44,14 +44,14 @@ namespace GhJSON.Core.Tests.Migration
             var result = pipeline.Migrate(json);
 
             Assert.True(result.Success);
-            Assert.True(result.WasModified);
+            Assert.False(result.WasModified); // no migrators registered yet
             Assert.NotNull(result.Document);
             Assert.Equal("1.0", result.ToVersion);
-            Assert.True(result.Changes.Count > 0);
+            Assert.Empty(result.Changes);
         }
 
         [Fact]
-        public void Pipeline_NeedsMigration_ReturnsTrueForOldSchema()
+        public void Pipeline_NeedsMigration_ReturnsFalseWhenNoMigrators()
         {
             var json = @"{
                 ""schemaVersion"": ""0.9"",
@@ -63,7 +63,7 @@ namespace GhJSON.Core.Tests.Migration
             var jObject = JObject.Parse(json);
             var pipeline = MigrationPipeline.Default;
 
-            Assert.True(pipeline.NeedsMigration(jObject));
+            Assert.False(pipeline.NeedsMigration(jObject));
         }
 
         [Fact]

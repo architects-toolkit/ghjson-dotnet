@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Documentation**: Added a documentation index (`docs/index.md`) and comprehensive usage guides under `docs/Usage/`.
 
+- **Grasshopper Get/Put extensions**:
+  - Added `GhJSON.Grasshopper.Canvas.GetOptions` and `GhJsonGrasshopper.GetWithOptions()` to support connection-depth expansion and connection trimming.
+  - Expanded `GetScope` with common canvas scopes (errors/warnings/remarks, enabled/disabled, preview on/off, start/end/middle/isolated nodes, params/components).
+  - Added optional filter flags to `GetOptions`: `ObjectKinds`, `NodeRoles`, `Attributes`.
+  - Added `GhJsonGrasshopper.ConnectComponents()` façade for creating wires between components.
+  - Extended `PutOptions` with `PreserveExternalConnections` and `CapturedConnections` to support edit-mode external wiring preservation.
+
 #### Component Handler Pattern (Phase 1 Core Refactoring)
 
 - **IComponentHandler interface**: Extensible contract for component-specific serialization/deserialization logic

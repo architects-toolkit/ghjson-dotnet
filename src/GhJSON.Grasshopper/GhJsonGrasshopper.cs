@@ -363,6 +363,299 @@ namespace GhJSON.Grasshopper
             return Serialize(objects, options);
         }
 
+        /// <summary>
+        /// Gets objects from the canvas with advanced options including connection depth expansion.
+        /// </summary>
+        /// <param name="options">Get options controlling scope, filters, and expansion.</param>
+        /// <returns>A get result containing the document and expansion information.</returns>
+        public static Canvas.GetResult GetWithOptions(Canvas.GetOptions options)
+        {
+            Initialize();
+            options ??= Canvas.GetOptions.Default;
+
+            var canvas = Instances.ActiveCanvas;
+            if (canvas?.Document == null)
+            {
+                return new Canvas.GetResult { Document = new GhJsonDocument() };
+            }
+
+            static bool MatchesAttributes(IGH_ActiveObject obj, Canvas.GetAttributes attributes)
+            {
+                if (attributes.HasFlag(Canvas.GetAttributes.Selected) && !obj.Attributes.Selected)
+                {
+                    return false;
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.HasError) && !Canvas.FilterHelpers.HasRuntimeMessage(obj, GH_RuntimeMessageLevel.Error))
+                {
+                    return false;
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.HasWarning) && !Canvas.FilterHelpers.HasRuntimeMessage(obj, GH_RuntimeMessageLevel.Warning))
+                {
+                    return false;
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.HasRemark) && !Canvas.FilterHelpers.HasRuntimeMessage(obj, GH_RuntimeMessageLevel.Remark))
+                {
+                    return false;
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.Enabled))
+                {
+                    if (obj is GH_Component c)
+                    {
+                        if (c.Locked)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.Disabled))
+                {
+                    if (obj is GH_Component c)
+                    {
+                        if (!c.Locked)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.PreviewOn))
+                {
+                    if (obj is GH_Component c)
+                    {
+                        if (!c.IsPreviewCapable || c.Hidden)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                if (attributes.HasFlag(Canvas.GetAttributes.PreviewOff))
+                {
+                    if (obj is GH_Component c)
+                    {
+                        if (!c.IsPreviewCapable || !c.Hidden)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            static bool MatchesObjectKinds(IGH_ActiveObject obj, Canvas.GetObjectKinds kinds)
+            {
+                var isComponent = obj is IGH_Component;
+                var isParam = obj is IGH_Param;
+
+                var matches = false;
+                if (kinds.HasFlag(Canvas.GetObjectKinds.Components) && isComponent)
+                {
+                    matches = true;
+                }
+
+                if (kinds.HasFlag(Canvas.GetObjectKinds.Params) && isParam)
+                {
+                    matches = true;
+                }
+
+                return matches;
+            }
+
+
+            // Determine initial object set based on scope/filters
+            List<IGH_ActiveObject> objects;
+            if (options.GuidsFilter != null && options.GuidsFilter.Any())
+            {
+                var guidSet = new HashSet<Guid>(options.GuidsFilter);
+                objects = canvas.Document.Objects
+                    .Where(o => guidSet.Contains(o.InstanceGuid))
+                    .OfType<IGH_ActiveObject>()
+                    .ToList();
+            }
+            else
+            {
+                objects = options.Scope switch
+                {
+                    Canvas.GetScope.Selected => canvas.Document.SelectedObjects()
+                        .OfType<IGH_ActiveObject>()
+                        .ToList(),
+                    Canvas.GetScope.Errors => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => Canvas.FilterHelpers.HasRuntimeMessage(o, GH_RuntimeMessageLevel.Error))
+                        .ToList(),
+                    Canvas.GetScope.Warnings => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => Canvas.FilterHelpers.HasRuntimeMessage(o, GH_RuntimeMessageLevel.Warning))
+                        .ToList(),
+                    Canvas.GetScope.Remarks => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => Canvas.FilterHelpers.HasRuntimeMessage(o, GH_RuntimeMessageLevel.Remark))
+                        .ToList(),
+                    Canvas.GetScope.Enabled => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => o is GH_Component c && !c.Locked)
+                        .ToList(),
+                    Canvas.GetScope.Disabled => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => o is GH_Component c && c.Locked)
+                        .ToList(),
+                    Canvas.GetScope.PreviewOn => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => o is GH_Component c && c.IsPreviewCapable && !c.Hidden)
+                        .ToList(),
+                    Canvas.GetScope.PreviewOff => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .Where(o => o is GH_Component c && c.IsPreviewCapable && c.Hidden)
+                        .ToList(),
+                    _ => canvas.Document.Objects
+                        .OfType<IGH_ActiveObject>()
+                        .ToList()
+                };
+            }
+
+            // Scope values that depend on graph degree
+            Dictionary<Guid, (int indegree, int outdegree)>? degrees = null;
+
+            if (options.GuidsFilter == null || !options.GuidsFilter.Any())
+            {
+                if (options.Scope is Canvas.GetScope.StartNodes or Canvas.GetScope.EndNodes or Canvas.GetScope.MiddleNodes or Canvas.GetScope.IsolatedNodes)
+                {
+                    var allObjects = canvas.Document.Objects.OfType<IGH_ActiveObject>().ToList();
+                    var fullDoc = Serialize(allObjects, Options.Lite());
+                    degrees = Canvas.FilterHelpers.BuildDegrees(fullDoc);
+
+                    var role = options.Scope switch
+                    {
+                        Canvas.GetScope.StartNodes => Canvas.GetNodeRoles.StartNodes,
+                        Canvas.GetScope.EndNodes => Canvas.GetNodeRoles.EndNodes,
+                        Canvas.GetScope.MiddleNodes => Canvas.GetNodeRoles.MiddleNodes,
+                        _ => Canvas.GetNodeRoles.IsolatedNodes,
+                    };
+
+                    objects = allObjects
+                        .Where(o => Canvas.FilterHelpers.MatchesNodeRoles(o.InstanceGuid, role, degrees))
+                        .ToList();
+                }
+                else if (options.Scope == Canvas.GetScope.ParamsOnly)
+                {
+                    objects = canvas.Document.Objects.OfType<IGH_ActiveObject>().Where(o => o is IGH_Param).ToList();
+                }
+                else if (options.Scope == Canvas.GetScope.ComponentsOnly)
+                {
+                    objects = canvas.Document.Objects.OfType<IGH_ActiveObject>().Where(o => o is IGH_Component).ToList();
+                }
+            }
+
+            // Apply strongly-typed filters
+            if (options.TypeFilter != null)
+            {
+                if (degrees == null)
+                {
+                    var allObjects = canvas.Document.Objects.OfType<IGH_ActiveObject>().ToList();
+                    var fullDoc = Serialize(allObjects, Options.Lite());
+                    degrees = Canvas.FilterHelpers.BuildDegrees(fullDoc);
+                }
+
+                objects = objects.Where(o => Canvas.FilterHelpers.ApplyTypeFilter(o, options.TypeFilter, degrees)).ToList();
+            }
+
+            if (options.AttributeFilter != null)
+            {
+                objects = objects.Where(o => Canvas.FilterHelpers.ApplyAttributeFilter(o, options.AttributeFilter)).ToList();
+            }
+
+            if (options.CategoryFilter != null)
+            {
+                objects = objects.Where(o => Canvas.FilterHelpers.ApplyCategoryFilter(o, options.CategoryFilter)).ToList();
+            }
+
+            var result = new Canvas.GetResult();
+            result.InitialGuids.AddRange(objects.Select(o => o.InstanceGuid));
+
+            // Apply connection depth expansion if requested
+            if (options.ConnectionDepth > 0)
+            {
+                // Serialize all canvas objects to build connection graph
+                var allObjects = canvas.Document.Objects.OfType<IGH_ActiveObject>().ToList();
+                var fullDoc = Serialize(allObjects, Options.Lite());
+
+                // Expand by depth
+                var expandedGuids = Canvas.ConnectionDepthExpander.ExpandByDepth(
+                    fullDoc,
+                    result.InitialGuids,
+                    options.ConnectionDepth);
+
+                result.ExpandedGuids.AddRange(expandedGuids);
+
+                // Update object list to include expanded set
+                var guidSet = new HashSet<Guid>(expandedGuids);
+                objects = allObjects.Where(o => guidSet.Contains(o.InstanceGuid)).ToList();
+            }
+            else
+            {
+                result.ExpandedGuids.AddRange(result.InitialGuids);
+            }
+
+            // Serialize the final object set
+            result.Document = Serialize(objects, options.SerializationOptions);
+
+            // Trim connections if requested
+            if (options.TrimConnectionsToResult)
+            {
+                var allowedGuids = new HashSet<Guid>(result.ExpandedGuids);
+                Canvas.ConnectionDepthExpander.TrimConnections(result.Document, allowedGuids);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Connects two components on the active canvas by creating a wire between an output and an input parameter.
+        /// </summary>
+        /// <param name="sourceGuid">GUID of the source component (output side).</param>
+        /// <param name="targetGuid">GUID of the target component (input side).</param>
+        /// <param name="sourceParamName">Name or nickname of the output parameter. If null, uses first output.</param>
+        /// <param name="targetParamName">Name or nickname of the input parameter. If null, uses first input.</param>
+        /// <param name="redraw">True to redraw canvas and trigger solution recalculation.</param>
+        /// <returns>True if the connection was successful (or already existed).</returns>
+        public static bool ConnectComponents(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName = null,
+            string? targetParamName = null,
+            bool redraw = true)
+        {
+            Initialize();
+            return Canvas.ConnectionBuilder.ConnectComponents(
+                sourceGuid,
+                targetGuid,
+                sourceParamName,
+                targetParamName,
+                redraw);
+        }
+
         #endregion
 
         #region Put (Place on Canvas)
@@ -415,6 +708,18 @@ namespace GhJSON.Grasshopper
                 if (connectionsCreated < document.Connections.Count)
                 {
                     result.Warnings.Add($"Created {connectionsCreated} of {document.Connections.Count} connections");
+                }
+            }
+
+            // Restore external connections if provided
+            if (options.PreserveExternalConnections && options.CapturedConnections != null)
+            {
+                result.ExternalConnectionsRestored = Canvas.ExternalConnectionManager.RestoreExternalConnections(
+                    options.CapturedConnections);
+                
+                if (result.ExternalConnectionsRestored < options.CapturedConnections.Connections.Count)
+                {
+                    result.Warnings.Add($"Restored {result.ExternalConnectionsRestored} of {options.CapturedConnections.Connections.Count} external connections");
                 }
             }
 
@@ -568,6 +873,18 @@ namespace GhJSON.Grasshopper
         public bool ApplyParameterSettings { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets whether to preserve external connections when replacing existing objects.
+        /// When true and PreserveInstanceGuids is true, captures and restores connections to/from objects outside the document.
+        /// </summary>
+        public bool PreserveExternalConnections { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets captured external connections to restore after placement.
+        /// Used internally when PreserveExternalConnections is enabled.
+        /// </summary>
+        public Canvas.CapturedConnections CapturedConnections { get; set; }
+
+        /// <summary>
         /// Converts to deserialization options.
         /// </summary>
         internal DeserializationOptions ToDeserializationOptions()
@@ -611,6 +928,11 @@ namespace GhJSON.Grasshopper
         /// Gets the list of warnings that occurred.
         /// </summary>
         public List<string> Warnings { get; } = new List<string>();
+
+        /// <summary>
+        /// Gets the number of external connections restored (when applicable).
+        /// </summary>
+        public int ExternalConnectionsRestored { get; set; }
 
         /// <summary>
         /// Gets a value indicating whether the operation was successful (no errors).

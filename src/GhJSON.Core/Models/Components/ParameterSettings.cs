@@ -105,10 +105,34 @@ namespace GhJSON.Core.Models.Components
         public string? TypeHint { get; set; }
 
         /// <summary>
-        /// Gets or sets additional parameter settings such as flags and modifiers.
+        /// Gets or sets a value indicating whether to reverse the parameter data order.
         /// </summary>
-        [JsonProperty("additionalSettings", NullValueHandling = NullValueHandling.Ignore)]
-        public AdditionalParameterSettings? AdditionalSettings { get; set; }
+        [JsonProperty("reverse", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Reverse { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to simplify the parameter data tree.
+        /// </summary>
+        [JsonProperty("simplify", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Simplify { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the parameter is locked.
+        /// </summary>
+        [JsonProperty("locked", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Locked { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to invert boolean values (Param_Boolean only).
+        /// </summary>
+        [JsonProperty("invert", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Invert { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to unitize vectors (Param_Vector only).
+        /// </summary>
+        [JsonProperty("unitize", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Unitize { get; set; }
 
         /// <summary>
         /// Gets or sets the persistent data stored in the parameter.

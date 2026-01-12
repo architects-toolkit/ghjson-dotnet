@@ -113,17 +113,17 @@ namespace GhJSON.Core.Models.Document
         public int? GroupCount { get; set; }
 
         /// <summary>
-        /// Gets or sets the name of the plugin that generated this file.
+        /// Gets or sets the name of the tool that generated this GhJSON file.
         /// </summary>
-        [JsonProperty("plugin", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonProperty("generatorName", NullValueHandling = NullValueHandling.Ignore)]
         [JsonConverter(typeof(EmptyStringIgnoreConverter))]
-        public string? Plugin { get; set; }
+        public string? GeneratorName { get; set; }
 
         /// <summary>
-        /// Gets or sets the plugin version that generated this file.
+        /// Gets or sets the version of the tool that generated this file.
         /// </summary>
-        [JsonProperty("pluginVersion", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonProperty("generatorVersion", NullValueHandling = NullValueHandling.Ignore)]
         [JsonConverter(typeof(EmptyStringIgnoreConverter))]
-        public string? PluginVersion { get; set; }
+        public string? GeneratorVersion { get; set; }
     }
 }

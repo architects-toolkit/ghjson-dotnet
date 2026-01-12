@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -73,7 +73,7 @@ namespace GhJSON.Grasshopper.Tests.Components
             {
                 // Synthetic doc: 2 nodes, 1 connection (A -> B).
                 // We don't rely on live Grasshopper Instances; CreateComponentGrid should still return a grid.
-                var doc = new GrasshopperDocument
+                var doc = new GhJsonDocument
                 {
                     SchemaVersion = "1.0",
                     Components = new List<ComponentProperties>

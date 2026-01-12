@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -48,7 +48,7 @@ namespace GhJSON.Grasshopper.Canvas
         /// <returns>List of component names that were placed</returns>
         public static List<string> PlaceComponents(
             DeserializationResult result,
-            GrasshopperDocument? document,
+            GhJsonDocument? document,
             Dictionary<Guid, IGH_DocumentObject>? guidMapping,
             PointF? startPosition = null,
             int spacing = 100,
@@ -224,7 +224,7 @@ namespace GhJSON.Grasshopper.Canvas
         /// </summary>
         private static void ApplyDependencyLayout(
             List<IGH_DocumentObject> components,
-            GrasshopperDocument document,
+            GhJsonDocument document,
             Dictionary<Guid, IGH_DocumentObject> guidMapping,
             PointF startPosition,
             int spacing)

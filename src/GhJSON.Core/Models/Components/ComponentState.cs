@@ -49,7 +49,13 @@ namespace GhJSON.Core.Models.Components
         public VBScriptCode? VBCode { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the component is locked.
+        /// Gets or sets a value indicating whether the component is currently selected on the canvas.
+        /// </summary>
+        [JsonProperty("selected", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Selected { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the component is locked (disabled).
         /// </summary>
         [JsonProperty("locked", NullValueHandling = NullValueHandling.Ignore)]
         public bool? Locked { get; set; }
@@ -59,18 +65,6 @@ namespace GhJSON.Core.Models.Components
         /// </summary>
         [JsonProperty("hidden", NullValueHandling = NullValueHandling.Ignore)]
         public bool? Hidden { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether the component is enabled (unlocked).
-        /// </summary>
-        [JsonProperty("enabled", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? Enabled { get; set; }
-
-        /// <summary>
-        /// Gets or sets a value indicating whether preview is enabled.
-        /// </summary>
-        [JsonProperty("preview", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? Preview { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether multiline mode is enabled (for panels, text components).
@@ -85,10 +79,11 @@ namespace GhJSON.Core.Models.Components
         public bool? Wrap { get; set; }
 
         /// <summary>
-        /// Gets or sets the component color as RGBA values.
+        /// Gets or sets the component color in ARGB format (e.g., '255,128,64,255').
         /// </summary>
         [JsonProperty("color", NullValueHandling = NullValueHandling.Ignore)]
-        public Dictionary<string, int>? Color { get; set; }
+        [JsonConverter(typeof(EmptyStringIgnoreConverter))]
+        public string? Color { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether inputs should be marshalled (for script components).
@@ -129,9 +124,10 @@ namespace GhJSON.Core.Models.Components
 
         /// <summary>
         /// Gets or sets corner points for scribble components.
+        /// Format: array of strings "x,y" (e.g., ["10,20", "30,40"]).
         /// </summary>
         [JsonProperty("corners", NullValueHandling = NullValueHandling.Ignore)]
-        public List<Dictionary<string, float>>? Corners { get; set; }
+        public List<string>? Corners { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether to draw indices (for panels).
@@ -153,10 +149,11 @@ namespace GhJSON.Core.Models.Components
 
         /// <summary>
         /// Gets or sets the bounds (size) for panels and other UI components.
-        /// Format: {"width": 100, "height": 50}
+        /// Format: 'WxH' (e.g., '100x200').
         /// </summary>
         [JsonProperty("bounds", NullValueHandling = NullValueHandling.Ignore)]
-        public Dictionary<string, float>? Bounds { get; set; }
+        [JsonConverter(typeof(EmptyStringIgnoreConverter))]
+        public string? Bounds { get; set; }
 
         /// <summary>
         /// Gets or sets the rounding mode for number sliders.

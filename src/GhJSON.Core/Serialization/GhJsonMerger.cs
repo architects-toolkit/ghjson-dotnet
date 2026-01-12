@@ -1,20 +1,18 @@
-/*
- * SmartHopper - AI-powered Grasshopper Plugin
+﻿/*
+ * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
- * 
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3 of the License, or (at your option) any later version.
- * 
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- * 
- * You should have received a copy of the GNU Lesser General Public License
- * along with this library; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 using System;
@@ -33,7 +31,7 @@ namespace GhJSON.Core.Serialization
     public class MergeResult
     {
         /// <summary>Gets or sets the merged document.</summary>
-        public GrasshopperDocument Document { get; set; } = null!;
+        public GhJsonDocument Document { get; set; } = null!;
 
         /// <summary>Gets or sets the number of components added from the source.</summary>
         public int ComponentsAdded { get; set; }
@@ -71,7 +69,7 @@ namespace GhJSON.Core.Serialization
         /// <param name="target">The target document to merge into. This document is modified in place.</param>
         /// <param name="source">The source document to merge from.</param>
         /// <returns>Result containing merge statistics and the merged document.</returns>
-        public static MergeResult Merge(GrasshopperDocument target, GrasshopperDocument source)
+        public static MergeResult Merge(GhJsonDocument target, GhJsonDocument source)
         {
             var result = new MergeResult { Document = target };
 
@@ -246,7 +244,7 @@ namespace GhJSON.Core.Serialization
                 Name = source.Name,
                 NickName = source.NickName,
                 Pivot = source.Pivot,
-                Params = source.Params,
+                Properties = source.Properties,
                 InputSettings = source.InputSettings,
                 OutputSettings = source.OutputSettings,
                 ComponentState = source.ComponentState

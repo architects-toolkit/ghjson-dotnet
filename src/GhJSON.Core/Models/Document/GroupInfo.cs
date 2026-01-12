@@ -29,9 +29,17 @@ namespace GhJSON.Core.Models.Document
     {
         /// <summary>
         /// Gets or sets the unique identifier for this group instance.
+        /// Optional when using integer ID.
         /// </summary>
-        [JsonProperty("instanceGuid")]
-        public Guid InstanceGuid { get; set; }
+        [JsonProperty("instanceGuid", NullValueHandling = NullValueHandling.Ignore)]
+        public Guid? InstanceGuid { get; set; }
+
+        /// <summary>
+        /// Gets or sets the integer ID of the group.
+        /// Must be unique within the file. Used for compact representation.
+        /// </summary>
+        [JsonProperty("id", NullValueHandling = NullValueHandling.Ignore)]
+        public int? Id { get; set; }
 
         /// <summary>
         /// Gets or sets the name/nickname of the group.

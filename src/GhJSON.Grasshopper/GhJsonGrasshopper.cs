@@ -25,9 +25,11 @@ using GhJSON.Grasshopper.Canvas;
 using GhJSON.Grasshopper.Serialization;
 using GhJSON.Grasshopper.Serialization.ComponentHandlers;
 using GhJSON.Grasshopper.Serialization.DataTypes;
+using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Validation;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Grasshopper
 {
@@ -80,6 +82,50 @@ namespace GhJSON.Grasshopper
         }
 
         /// <summary>
+        /// Serialization options factory helpers.
+        /// </summary>
+        public static class Options
+        {
+            /// <summary>
+            /// Creates standard serialization options with full metadata and data.
+            /// </summary>
+            public static SerializationOptions Standard(
+                bool includeMetadata = true,
+                bool includeGroups = true,
+                bool includePersistentData = true)
+            {
+                var options = SerializationOptions.Standard;
+                options.IncludeMetadata = includeMetadata;
+                options.IncludeGroups = includeGroups;
+                options.IncludePersistentData = includePersistentData;
+                return options;
+            }
+
+            /// <summary>
+            /// Creates optimized serialization options for reduced output size.
+            /// </summary>
+            public static SerializationOptions Optimized(
+                bool includeMetadata = false,
+                bool includeGroups = false,
+                bool includePersistentData = false)
+            {
+                var options = SerializationOptions.Optimized;
+                options.IncludeMetadata = includeMetadata;
+                options.IncludeGroups = includeGroups;
+                options.IncludePersistentData = includePersistentData;
+                return options;
+            }
+
+            /// <summary>
+            /// Creates lite serialization options (minimal output, no metadata or persistent data).
+            /// </summary>
+            public static SerializationOptions Lite()
+            {
+                return SerializationOptions.Lite;
+            }
+        }
+
+        /// <summary>
         /// Serializes a collection of Grasshopper objects using a custom handler registry.
         /// </summary>
         /// <param name="objects">The objects to serialize.</param>
@@ -93,6 +139,129 @@ namespace GhJSON.Grasshopper
         {
             Initialize();
             return GhJsonSerializer.Serialize(objects, options, handlerRegistry);
+        }
+
+        #endregion
+
+        #region Script
+
+        /// <summary>
+        /// Script component operations.
+        /// </summary>
+        public static class Script
+        {
+            /// <summary>
+            /// Creates a GhJSON document containing a script component.
+            /// </summary>
+            public static string CreateGhJson(
+                string languageKey,
+                string scriptCode,
+                JArray? inputs = null,
+                JArray? outputs = null,
+                string? nickname = null,
+                Guid? instanceGuid = null,
+                PointF? pivot = null,
+                bool indented = false)
+            {
+                var inputSettings = ConvertToParameterSettings(inputs);
+                var outputSettings = ConvertToParameterSettings(outputs);
+                var comp = ScriptComponentFactory.CreateScriptComponent(languageKey, scriptCode, inputSettings, outputSettings, nickname);
+
+                if (instanceGuid.HasValue)
+                {
+                    comp.InstanceGuid = instanceGuid;
+                }
+
+                if (pivot.HasValue)
+                {
+                    comp.Pivot = pivot.Value;
+                }
+
+                var doc = Core.GhJson.CreateDocument();
+                doc.Components.Add(comp);
+
+                return Core.GhJson.Serialize(doc, new Core.WriteOptions { Indented = indented });
+            }
+
+            /// <summary>
+            /// Converts JArray parameter definitions to ParameterSettings.
+            /// </summary>
+            public static List<Core.Models.Components.ParameterSettings>? ConvertToParameterSettings(JArray? parameters)
+            {
+                if (parameters == null || parameters.Count == 0)
+                {
+                    return null;
+                }
+
+                var result = new List<Core.Models.Components.ParameterSettings>();
+                foreach (var param in parameters)
+                {
+                    if (param is not JObject obj)
+                    {
+                        continue;
+                    }
+
+                    var name = obj["name"]?.ToString();
+                    var variableName = obj["variableName"]?.ToString() ?? name;
+
+                    var settings = new Core.Models.Components.ParameterSettings
+                    {
+                        ParameterName = name ?? "param",
+                        VariableName = variableName,
+                        Description = obj["description"]?.ToString(),
+                        TypeHint = obj["type"]?.ToString(),
+                        Access = obj["access"]?.ToString(),
+                        DataMapping = obj["dataMapping"]?.ToString(),
+                        Required = obj["required"]?.ToObject<bool?>(),
+                        IsPrincipal = obj["isPrincipal"]?.ToObject<bool?>(),
+                        Expression = obj["expression"]?.ToString(),
+                        Reverse = obj["reverse"]?.ToObject<bool?>(),
+                        Simplify = obj["simplify"]?.ToObject<bool?>(),
+                        Invert = obj["invert"]?.ToObject<bool?>(),
+                    };
+
+                    result.Add(settings);
+                }
+
+                return result.Count > 0 ? result : null;
+            }
+
+            /// <summary>
+            /// Detects the script language from a component GUID.
+            /// </summary>
+            public static string DetectLanguageFromGuid(Guid componentGuid)
+            {
+                return ScriptComponentFactory.DetectLanguageFromGuid(componentGuid);
+            }
+
+            /// <summary>
+            /// Gets component info for a script language.
+            /// </summary>
+            public static ScriptComponentInfo? GetComponentInfo(string? languageKey)
+            {
+                return ScriptComponentFactory.GetComponentInfo(languageKey);
+            }
+
+            /// <summary>
+            /// Normalizes a language identifier to a supported key or returns the provided default.
+            /// </summary>
+            public static string NormalizeLanguageKeyOrDefault(string? languageKey, string defaultLanguage = "python")
+            {
+                return ScriptComponentFactory.NormalizeLanguageKeyOrDefault(languageKey, defaultLanguage);
+            }
+        }
+
+        #endregion
+
+        #region Runtime Data
+
+        /// <summary>
+        /// Extracts runtime data from Grasshopper objects.
+        /// </summary>
+        public static JObject ExtractRuntimeData(IEnumerable<IGH_ActiveObject> objects)
+        {
+            Initialize();
+            return GhJsonSerializer.ExtractRuntimeData(objects);
         }
 
         #endregion

@@ -38,6 +38,11 @@ namespace GhJSON.Core
             Converters = { new CompactPositionConverter() }
         };
 
+        public static GhJsonDocument CreateDocument()
+        {
+            return new GhJsonDocument();
+        }
+
         #region Read/Write
 
         /// <summary>
@@ -102,6 +107,15 @@ namespace GhJSON.Core
                 Converters = { new CompactPositionConverter() }
             };
             return JsonConvert.SerializeObject(document, settings);
+        }
+
+        #endregion
+
+        #region Merge
+
+        public static MergeResult Merge(GhJsonDocument target, GhJsonDocument source)
+        {
+            return GhJsonMerger.Merge(target, source);
         }
 
         #endregion

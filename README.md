@@ -1,6 +1,6 @@
 # GhJSON.NET
 
-.NET implementation of the GhJSON format for Grasshopper definition serialization.
+.NET implementation of the [GhJSON format](https://github.com/architects-toolkit/ghjson-spec) for Grasshopper definition serialization.
 
 ## Overview
 

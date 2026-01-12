@@ -1,6 +1,6 @@
 # GhJSON.NET
 
-.NET implementation of the GhJSON format for Grasshopper definition serialization.
+.NET implementation of the [GhJSON format](https://architects-toolkit.github.io/ghjson-spec/) for Grasshopper definition serialization.
 
 ## Overview
 
@@ -8,6 +8,10 @@ GhJSON is a JSON-based format for representing Grasshopper definitions. This lib
 
 - **GhJSON.Core**: Platform-independent models and validation
 - **GhJSON.Grasshopper**: Grasshopper integration for serialization/deserialization
+
+## Documentation
+
+See the documentation index at [`docs/index.md`](./docs/index.md).
 
 ## Installation
 
@@ -25,46 +29,39 @@ dotnet add package GhJSON.Grasshopper
 
 ```csharp
 using GhJSON.Grasshopper;
+using GhJSON.Grasshopper.Serialization;
 
-// Serialize selected components
-var document = GhJsonSerializer.Serialize(selectedObjects, SerializationOptions.Standard);
-string json = document.ToJson();
+// Serialize selected components from the active canvas
+var document = GhJsonGrasshopper.GetSelected(SerializationOptions.Optimized);
+var json = document.ToJson();
 ```
 
 ### Deserialization (GhJSON → Grasshopper Canvas)
 
 ```csharp
+using GhJSON.Core;
 using GhJSON.Grasshopper;
 
-// Deserialize from JSON
-var document = GrasshopperDocument.FromJson(json);
-var result = GhJsonDeserializer.Deserialize(document, DeserializationOptions.Standard);
-
-// Place components on canvas
-foreach (var component in result.Components)
-{
-    ghDocument.AddObject(component, false);
-}
+// Parse and place on the active canvas
+var document = GhJson.Parse(json);
+var put = GhJsonGrasshopper.Put(document);
 ```
 
 ### Validation
 
 ```csharp
-using GhJSON.Core.Validation;
+using GhJSON.Core;
 
-var validationResult = GhJsonValidator.Validate(json);
+var validationResult = GhJson.Validate(json);
 if (!validationResult.IsValid)
 {
-    foreach (var error in validationResult.Errors)
-    {
-        Console.WriteLine($"[{error.Severity}] {error.Message}");
-    }
+    // validationResult.Errors / validationResult.Warnings
 }
 ```
 
 ## GhJSON Format
 
-See the [GhJSON Specification](https://github.com/architects-toolkit/ghjson-spec) for the complete format definition.
+See the [GhJSON Specification](https://architects-toolkit.github.io/ghjson-spec/) or the [GhJSON-spec repo](https://github.com/architects-toolkit/ghjson-spec) for the complete format definition.
 
 ### Example
 

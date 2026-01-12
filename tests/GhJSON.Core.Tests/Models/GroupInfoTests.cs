@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -31,7 +31,7 @@ namespace GhJSON.Core.Tests.Models
             var group = new GroupInfo();
 
             Assert.Null(group.Name);
-            Assert.Equal(Guid.Empty, group.InstanceGuid);
+            Assert.Null(group.InstanceGuid);
             Assert.Null(group.Color);
             Assert.NotNull(group.Members);
             Assert.Empty(group.Members);
@@ -68,15 +68,15 @@ namespace GhJSON.Core.Tests.Models
         {
             var group = new GroupInfo
             {
-                InstanceGuid = Guid.NewGuid()
+                Members = new List<int>()
             };
 
             var json = JsonConvert.SerializeObject(group);
 
-            Assert.Contains("\"instanceGuid\"", json);
             Assert.Contains("\"members\"", json); // Members is not null, it's an empty list
             Assert.DoesNotContain("\"name\"", json);
             Assert.DoesNotContain("\"color\"", json);
+            Assert.DoesNotContain("\"instanceGuid\"", json);
         }
     }
 }

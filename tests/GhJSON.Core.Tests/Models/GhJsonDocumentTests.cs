@@ -24,12 +24,12 @@ using Xunit;
 
 namespace GhJSON.Core.Tests.Models
 {
-    public class GrasshopperDocumentTests
+    public class GhJsonDocumentTests
     {
         [Fact]
         public void ToJson_EmptyDocument_ReturnsValidJson()
         {
-            var doc = new GrasshopperDocument();
+            var doc = new GhJsonDocument();
             
             var json = doc.ToJson();
             
@@ -54,7 +54,7 @@ namespace GhJSON.Core.Tests.Models
                 ""connections"": []
             }";
             
-            var doc = GrasshopperDocument.FromJson(json);
+            var doc = GhJsonDocument.FromJson(json);
             
             Assert.NotNull(doc);
             Assert.Equal("1.0", doc.SchemaVersion);
@@ -68,7 +68,7 @@ namespace GhJSON.Core.Tests.Models
         {
             var guid1 = Guid.NewGuid();
             var guid2 = Guid.NewGuid();
-            var doc = new GrasshopperDocument
+            var doc = new GhJsonDocument
             {
                 Components = new System.Collections.Generic.List<ComponentProperties>
                 {
@@ -87,7 +87,7 @@ namespace GhJSON.Core.Tests.Models
         [Fact]
         public void GetComponentConnections_ReturnsCorrectConnections()
         {
-            var doc = new GrasshopperDocument
+            var doc = new GhJsonDocument
             {
                 Connections = new System.Collections.Generic.List<ConnectionPairing>
                 {
@@ -113,7 +113,7 @@ namespace GhJSON.Core.Tests.Models
         [Fact]
         public void GetComponentsWithIssues_ReturnsComponentsWithWarningsOrErrors()
         {
-            var doc = new GrasshopperDocument
+            var doc = new GhJsonDocument
             {
                 Components = new System.Collections.Generic.List<ComponentProperties>
                 {

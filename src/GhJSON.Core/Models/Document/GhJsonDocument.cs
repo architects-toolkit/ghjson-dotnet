@@ -26,9 +26,9 @@ using Newtonsoft.Json;
 namespace GhJSON.Core.Models.Document
 {
     /// <summary>
-    /// Represents a complete Grasshopper document with components and their connections.
+    /// Represents a complete GhJSON document with components and their connections.
     /// </summary>
-    public class GrasshopperDocument
+    public class GhJsonDocument
     {
         /// <summary>
         /// Gets or sets the GhJSON schema version.
@@ -140,13 +140,13 @@ namespace GhJSON.Core.Models.Document
         }
 
         /// <summary>
-        /// Deserializes a JSON string to a GrasshopperDocument.
+        /// Deserializes a JSON string to a GhJsonDocument.
         /// </summary>
         /// <param name="json">The JSON string to deserialize.</param>
-        /// <returns>The deserialized GrasshopperDocument.</returns>
-        public static GrasshopperDocument? FromJson(string json)
+        /// <returns>The deserialized GhJsonDocument.</returns>
+        public static GhJsonDocument? FromJson(string json)
         {
-            return JsonConvert.DeserializeObject<GrasshopperDocument>(json);
+            return JsonConvert.DeserializeObject<GhJsonDocument>(json);
         }
     }
 }

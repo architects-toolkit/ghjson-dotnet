@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -46,7 +46,7 @@ namespace GhJSON.Core.Serialization
         /// <param name="document">The GhJSON document to serialize.</param>
         /// <param name="settings">Optional JSON serializer settings.</param>
         /// <returns>A JSON string representation of the document.</returns>
-        public static string SerializeToJson(GrasshopperDocument document, JsonSerializerSettings? settings = null)
+        public static string SerializeToJson(GhJsonDocument document, JsonSerializerSettings? settings = null)
         {
             return JsonConvert.SerializeObject(document, settings ?? DefaultSettings);
         }
@@ -58,7 +58,7 @@ namespace GhJSON.Core.Serialization
         /// <param name="fixJson">Whether to apply fixes before deserialization.</param>
         /// <param name="settings">Optional JSON serializer settings.</param>
         /// <returns>A GhJSON document object.</returns>
-        public static GrasshopperDocument? DeserializeFromJson(
+        public static GhJsonDocument? DeserializeFromJson(
             string json,
             bool fixJson = true,
             JsonSerializerSettings? settings = null)
@@ -72,7 +72,7 @@ namespace GhJSON.Core.Serialization
             }
 
             // Deserialize into document
-            return JsonConvert.DeserializeObject<GrasshopperDocument>(jroot.ToString(), settings ?? DefaultSettings);
+            return JsonConvert.DeserializeObject<GhJsonDocument>(jroot.ToString(), settings ?? DefaultSettings);
         }
 
         /// <summary>
@@ -81,7 +81,7 @@ namespace GhJSON.Core.Serialization
         /// <param name="document">The GhJSON document to save.</param>
         /// <param name="filePath">The file path to save to.</param>
         /// <param name="settings">Optional JSON serializer settings.</param>
-        public static void SaveToFile(GrasshopperDocument document, string filePath, JsonSerializerSettings? settings = null)
+        public static void SaveToFile(GhJsonDocument document, string filePath, JsonSerializerSettings? settings = null)
         {
             string json = SerializeToJson(document, settings);
             File.WriteAllText(filePath, json);
@@ -94,7 +94,7 @@ namespace GhJSON.Core.Serialization
         /// <param name="fixJson">Whether to apply fixes before deserialization.</param>
         /// <param name="settings">Optional JSON serializer settings.</param>
         /// <returns>A GhJSON document object.</returns>
-        public static GrasshopperDocument? LoadFromFile(
+        public static GhJsonDocument? LoadFromFile(
             string filePath,
             bool fixJson = true,
             JsonSerializerSettings? settings = null)

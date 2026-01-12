@@ -40,7 +40,7 @@ namespace GhJSON.Grasshopper.Canvas
         /// <param name="guidMapping">Dictionary mapping GUIDs to component instances</param>
         /// <returns>Number of groups created</returns>
         public static int CreateGroups(
-            GrasshopperDocument? ghDocument,
+            GhJsonDocument? ghDocument,
             Dictionary<Guid, IGH_DocumentObject>? guidMapping)
         {
             if (ghDocument?.Groups == null || ghDocument.Groups.Count == 0)

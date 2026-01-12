@@ -38,7 +38,7 @@ namespace GhJSON.Grasshopper.Canvas
         /// <param name="guidMapping">Dictionary mapping GUIDs to component instances</param>
         /// <returns>Number of connections created</returns>
         public static int CreateConnections(
-            GrasshopperDocument? document,
+            GhJsonDocument? document,
             Dictionary<Guid, IGH_DocumentObject>? guidMapping)
         {
             if (document?.Connections == null || document.Connections.Count == 0)

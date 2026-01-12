@@ -26,6 +26,7 @@ using GhJSON.Core.Models.Connections;
 using GhJSON.Core.Models.Document;
 using GhJSON.Core.Serialization;
 using GhJSON.Core.Serialization.DataTypes;
+using GhJSON.Grasshopper.Serialization.ComponentHandlers;
 using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Serialization.SchemaProperties;
@@ -45,19 +46,35 @@ namespace GhJSON.Grasshopper.Serialization
     public static class GhJsonSerializer
     {
         /// <summary>
-        /// Serializes a collection of Grasshopper objects to a GrasshopperDocument.
+        /// Serializes a collection of Grasshopper objects to a GhJsonDocument.
         /// </summary>
         /// <param name="objects">The objects to serialize.</param>
         /// <param name="options">Serialization options.</param>
-        /// <returns>A GrasshopperDocument representing the serialized objects.</returns>
-        public static GrasshopperDocument Serialize(
+        /// <returns>A GhJsonDocument representing the serialized objects.</returns>
+        public static GhJsonDocument Serialize(
             IEnumerable<IGH_ActiveObject> objects,
             SerializationOptions? options = null)
         {
+            return Serialize(objects, options, ComponentHandlerRegistry.Default);
+        }
+
+        /// <summary>
+        /// Serializes a collection of Grasshopper objects to a GhJsonDocument using a custom handler registry.
+        /// </summary>
+        /// <param name="objects">The objects to serialize.</param>
+        /// <param name="options">Serialization options.</param>
+        /// <param name="handlerRegistry">Custom handler registry for component serialization.</param>
+        /// <returns>A GhJsonDocument representing the serialized objects.</returns>
+        public static GhJsonDocument Serialize(
+            IEnumerable<IGH_ActiveObject> objects,
+            SerializationOptions? options,
+            ComponentHandlerRegistry handlerRegistry)
+        {
             options ??= SerializationOptions.Standard;
+            handlerRegistry ??= ComponentHandlerRegistry.Default;
             GeometricSerializerRegistry.Initialize();
             var objectList = objects.ToList();
-            var document = new GrasshopperDocument
+            var document = new GhJsonDocument
             {
                 SchemaVersion = "1.0",
                 Components = new List<ComponentProperties>(),
@@ -89,7 +106,7 @@ namespace GhJSON.Grasshopper.Serialization
 
             foreach (var obj in objectsToSerialize)
             {
-                var props = CreateComponentProperties(obj, guidToId, options, propertyManager);
+                var props = CreateComponentProperties(obj, guidToId, options, propertyManager, handlerRegistry);
                 if (props != null)
                 {
                     document.Components.Add(props);
@@ -121,7 +138,8 @@ namespace GhJSON.Grasshopper.Serialization
             IGH_ActiveObject obj,
             Dictionary<Guid, int> guidToId,
             SerializationOptions options,
-            PropertyManagerV2 propertyManager)
+            PropertyManagerV2 propertyManager,
+            ComponentHandlerRegistry handlerRegistry)
         {
             if (obj == null)
                 return null;
@@ -156,10 +174,11 @@ namespace GhJSON.Grasshopper.Serialization
                 }
             }
 
-            // Component state
-            if (options.IncludeComponentState && obj is IGH_Component ghComp)
+            // Component state - use handler registry
+            if (options.IncludeComponentState)
             {
-                props.ComponentState = ExtractComponentState(ghComp);
+                var handler = handlerRegistry.GetHandler(obj);
+                props.ComponentState = handler.ExtractState(obj);
             }
 
             // Parameter settings
@@ -182,7 +201,7 @@ namespace GhJSON.Grasshopper.Serialization
         }
 
         private static void ExtractGroupInformation(
-            GrasshopperDocument document,
+            GhJsonDocument document,
             Dictionary<Guid, int> guidToId)
         {
             try
@@ -244,127 +263,7 @@ namespace GhJSON.Grasshopper.Serialization
             // Prefer CreateComponentProperties (property-manager centric).
             var ctx = GetSchemaPropertyContext(options);
             var propertyManager = new PropertyManagerV2(ctx);
-            return CreateComponentProperties(obj, guidToId, options, propertyManager);
-        }
-
-        private static VBScriptCode? ExtractVBScriptCode(IGH_Component component)
-        {
-            try
-            {
-                var componentType = component.GetType();
-                var scriptSourceProp = componentType.GetProperty("ScriptSource");
-                if (scriptSourceProp == null || !scriptSourceProp.CanRead)
-                    return null;
-
-                var scriptSourceObj = scriptSourceProp.GetValue(component);
-                if (scriptSourceObj == null)
-                    return null;
-
-                var scriptSourceType = scriptSourceObj.GetType();
-                var usingCodeProp = scriptSourceType.GetProperty("UsingCode");
-                var scriptCodeProp = scriptSourceType.GetProperty("ScriptCode");
-                var additionalCodeProp = scriptSourceType.GetProperty("AdditionalCode");
-
-                return new VBScriptCode
-                {
-                    Imports = usingCodeProp?.GetValue(scriptSourceObj) as string,
-                    Script = scriptCodeProp?.GetValue(scriptSourceObj) as string,
-                    Additional = additionalCodeProp?.GetValue(scriptSourceObj) as string,
-                };
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GhJsonSerializer] Error extracting VB script code: {ex.Message}");
-                return null;
-            }
-        }
-
-        private static ComponentProperties SerializeComponent(
-            IGH_Component component,
-            Dictionary<Guid, int> guidToId,
-            SerializationOptions options)
-        {
-            var attrs = component.Attributes;
-            var pivot = attrs?.Pivot ?? new System.Drawing.PointF(0, 0);
-
-            var props = new ComponentProperties
-            {
-                Name = component.Name,
-                NickName = component.NickName != component.Name ? component.NickName : null,
-                ComponentGuid = component.ComponentGuid,
-                InstanceGuid = component.InstanceGuid,
-                Id = guidToId.TryGetValue(component.InstanceGuid, out var id) ? id : 0,
-                Pivot = new CompactPosition(pivot.X, pivot.Y)
-            };
-
-            // Extract component state
-            if (options.IncludeComponentState)
-            {
-                props.ComponentState = ExtractComponentState(component);
-            }
-
-            // Extract parameter settings
-            if (options.IncludeParameterSettings)
-            {
-                // Use script-aware extraction for script components
-                if (ScriptComponentFactory.IsScriptComponent(component) ||
-                    ScriptComponentHelper.IsScriptComponentInstance(component))
-                {
-                    props.InputSettings = ExtractScriptParameterSettings(component.Params.Input, component);
-                    props.OutputSettings = ExtractScriptParameterSettings(component.Params.Output, component);
-                }
-                else
-                {
-                    props.InputSettings = ExtractParameterSettings(component.Params.Input, component, isInput: true);
-                    props.OutputSettings = ExtractParameterSettings(component.Params.Output, component, isInput: false);
-                }
-            }
-
-            // Extract schema properties (legacy format)
-            if (options.IncludeSchemaProperties)
-            {
-                var ctx = GetSchemaPropertyContext(options);
-                var manager = new PropertyManagerV2(ctx);
-                var schemaProps = manager.ExtractProperties(component);
-                if (schemaProps.Count > 0)
-                {
-                    props.SchemaProperties = schemaProps;
-                }
-            }
-
-            return props;
-        }
-
-        private static ComponentProperties SerializeParameter(
-            IGH_Param param,
-            Dictionary<Guid, int> guidToId,
-            SerializationOptions options)
-        {
-            var attrs = param.Attributes;
-            var pivot = attrs?.Pivot ?? new System.Drawing.PointF(0, 0);
-
-            var props = new ComponentProperties
-            {
-                Name = param.Name,
-                NickName = param.NickName != param.Name ? param.NickName : null,
-                ComponentGuid = param.ComponentGuid,
-                InstanceGuid = param.InstanceGuid,
-                Id = guidToId.TryGetValue(param.InstanceGuid, out var id) ? id : 0,
-                Pivot = new CompactPosition(pivot.X, pivot.Y)
-            };
-
-            if (options.IncludeSchemaProperties)
-            {
-                var ctx = GetSchemaPropertyContext(options);
-                var manager = new PropertyManagerV2(ctx);
-                var schemaProps = manager.ExtractProperties(param);
-                if (schemaProps.Count > 0)
-                {
-                    props.SchemaProperties = schemaProps;
-                }
-            }
-
-            return props;
+            return CreateComponentProperties(obj, guidToId, options, propertyManager, ComponentHandlerRegistry.Default);
         }
 
         private static SerializationContext GetSchemaPropertyContext(SerializationOptions options)
@@ -623,281 +522,6 @@ namespace GhJSON.Grasshopper.Serialization
 
             paramData["branches"] = branches;
             return paramData;
-        }
-
-        private static ComponentState? ExtractComponentState(IGH_Component component)
-        {
-            var state = new ComponentState();
-            bool hasState = false;
-
-            // Extract Locked state
-            if (component.Locked)
-            {
-                state.Locked = true;
-                hasState = true;
-            }
-
-            // Extract Hidden state
-            if (component.Hidden)
-            {
-                state.Hidden = true;
-                hasState = true;
-            }
-
-            // Extract universal value for special components
-            var universalValue = ExtractUniversalValue(component);
-            if (universalValue != null)
-            {
-                state.Value = universalValue;
-                hasState = true;
-            }
-
-            // Extract panel-specific appearance (color, size) using legacy AdditionalProperties pattern
-            if (component is GH_Panel panel)
-            {
-                try
-                {
-                    var panelColor = panel.Properties?.Colour;
-                    if (panelColor.HasValue)
-                    {
-                        state.AdditionalProperties ??= new Dictionary<string, object>();
-                        state.AdditionalProperties["color"] = DataTypeSerializer.Serialize(panelColor.Value);
-                        hasState = true;
-                    }
-
-                    var bounds = panel.Attributes?.Bounds;
-                    if (bounds.HasValue && !bounds.Value.IsEmpty)
-                    {
-                        state.AdditionalProperties ??= new Dictionary<string, object>();
-                        // Store as Bounds serializer format: bounds:W,H (preserve order, no sorting)
-                        var boundsTuple = (width: (double)bounds.Value.Width, height: (double)bounds.Value.Height);
-                        state.AdditionalProperties["bounds"] = DataTypeSerializer.Serialize(boundsTuple);
-                        hasState = true;
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            // Extract color for color swatch (legacy pattern)
-            else if (component is GH_ColourSwatch swatch)
-            {
-                try
-                {
-                    var swatchColor = swatch.SwatchColour;
-                    state.AdditionalProperties ??= new Dictionary<string, object>();
-                    state.AdditionalProperties["color"] = DataTypeSerializer.Serialize(swatchColor);
-                    hasState = true;
-                }
-                catch
-                {
-                }
-            }
-
-            // Extract script-specific state
-            if (ScriptComponentFactory.IsScriptComponent(component) ||
-                ScriptComponentHelper.IsScriptComponentInstance(component))
-            {
-                var lang = ScriptComponentHelper.GetScriptLanguageTypeFromComponent(component);
-
-                // VB Script uses 3 separate code sections
-                if (lang == ScriptLanguage.VB)
-                {
-                    var vbCode = ExtractVBScriptCode(component);
-                    if (vbCode != null)
-                    {
-                        state.VBCode = vbCode;
-                        hasState = true;
-                    }
-                }
-
-                // Standard output visibility ("out" param)
-                try
-                {
-                    var usingStdOutputProp = component.GetType().GetProperty("UsingStandardOutputParam");
-                    if (usingStdOutputProp != null && usingStdOutputProp.CanRead)
-                    {
-                        var value = usingStdOutputProp.GetValue(component) as bool?;
-                        if (value.HasValue)
-                        {
-                            state.ShowStandardOutput = value.Value;
-                            hasState = true;
-                        }
-                    }
-                }
-                catch
-                {
-                }
-            }
-
-            return hasState ? state : null;
-        }
-
-        private static object? ExtractUniversalValue(IGH_Component component)
-        {
-            try
-            {
-                // Number slider
-                if (component is GH_NumberSlider slider)
-                {
-                    return FormatSliderValue(slider);
-                }
-
-                // Panel
-                if (component is GH_Panel panel)
-                {
-                    return panel.UserText;
-                }
-
-                // Value list
-                if (component is GH_ValueList valueList)
-                {
-                    return valueList.FirstSelectedItem?.Name;
-                }
-
-                // Boolean toggle
-                if (component is GH_BooleanToggle toggle)
-                {
-                    return toggle.Value;
-                }
-
-                // Colour swatch
-                if (component is GH_ColourSwatch swatch)
-                {
-                    var c = swatch.SwatchColour;
-                    return $"rgba:{c.R},{c.G},{c.B},{c.A}";
-                }
-
-                // Button object
-                if (component is GH_ButtonObject btn)
-                {
-                    var expNormal = btn.ExpressionNormal;
-                    var expPressed = btn.ExpressionPressed;
-
-                    // Only serialize if not default values
-                    if (expNormal != "False" || expPressed != "True")
-                    {
-                        return new Dictionary<string, string>
-                        {
-                            { "normal", expNormal ?? "False" },
-                            { "pressed", expPressed ?? "True" }
-                        };
-                    }
-                }
-
-                // Script components - check if it's a known script type
-                if (ScriptComponentFactory.IsScriptComponent(component) ||
-                    ScriptComponentHelper.IsScriptComponentInstance(component))
-                {
-                    var lang = ScriptComponentHelper.GetScriptLanguageTypeFromComponent(component);
-                    if (lang != ScriptLanguage.VB)
-                    {
-                        return ExtractScriptCode(component);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GhJsonSerializer] Error extracting universal value: {ex.Message}");
-            }
-
-            return null;
-        }
-
-        private static string? ExtractScriptCode(IGH_Component component)
-        {
-            try
-            {
-                // Legacy (integrated) implementation relied on RhinoCodePlatform.GH.IScriptComponent.Text.
-                // In ghjson-dotnet we avoid compile-time dependencies, so we use reflection and support
-                // explicit interface implementations by reading the property from the interface type.
-                try
-                {
-                    var typeOfScript = component.GetType();
-                    var scriptInterface = typeOfScript.GetInterfaces().FirstOrDefault(i => i.Name == "IScriptComponent");
-                    if (scriptInterface != null)
-                    {
-                        var textProp = scriptInterface.GetProperty("Text");
-                        if (textProp != null && textProp.CanRead)
-                        {
-                            var value = textProp.GetValue(component)?.ToString();
-                            if (!string.IsNullOrWhiteSpace(value))
-                            {
-                                return value;
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                }
-
-                // Try common script code property names across GH1 / Rhino 8 script components.
-                // We keep this reflection-based so ghjson-dotnet doesn't need RhinoCodePlatform refs.
-                var type = component.GetType();
-                string[] candidates = { "Text", "Script", "Code", "ScriptCode", "Source", "SourceCode" };
-
-                foreach (var name in candidates)
-                {
-                    var prop = type.GetProperty(name);
-                    if (prop != null && prop.CanRead)
-                    {
-                        var value = prop.GetValue(component)?.ToString();
-                        if (!string.IsNullOrWhiteSpace(value))
-                        {
-                            return value;
-                        }
-                    }
-                }
-
-                // Rhino 8 script components often expose code through a ScriptSource object.
-                // Mirror VB's approach but tolerate different property names.
-                var scriptSourceProp = type.GetProperty("ScriptSource");
-                if (scriptSourceProp != null && scriptSourceProp.CanRead)
-                {
-                    var scriptSourceObj = scriptSourceProp.GetValue(component);
-                    if (scriptSourceObj != null)
-                    {
-                        var scriptSourceType = scriptSourceObj.GetType();
-                        string[] sourceCandidates = { "ScriptCode", "Code", "Text", "Source", "SourceCode" };
-
-                        foreach (var name in sourceCandidates)
-                        {
-                            var prop = scriptSourceType.GetProperty(name);
-                            if (prop != null && prop.CanRead)
-                            {
-                                var value = prop.GetValue(scriptSourceObj)?.ToString();
-                                if (!string.IsNullOrWhiteSpace(value))
-                                {
-                                    return value;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GhJsonSerializer] Error extracting script code: {ex.Message}");
-            }
-
-            return null;
-        }
-
-        private static string FormatSliderValue(GH_NumberSlider slider)
-        {
-            var current = slider.CurrentValue;
-            var min = slider.Slider.Minimum;
-            var max = slider.Slider.Maximum;
-
-            // Format as "current<min~max>" for compact representation
-            return string.Format(
-                CultureInfo.InvariantCulture,
-                "{0}<{1}~{2}>",
-                current,
-                min,
-                max);
         }
 
         private static List<ParameterSettings>? ExtractScriptParameterSettings(

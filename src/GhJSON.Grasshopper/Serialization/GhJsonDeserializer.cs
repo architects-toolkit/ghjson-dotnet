@@ -25,6 +25,7 @@ using System.Text.RegularExpressions;
 using GhJSON.Core.Models.Components;
 using GhJSON.Core.Models.Document;
 using GhJSON.Core.Serialization.DataTypes;
+using GhJSON.Grasshopper.Serialization.ComponentHandlers;
 using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
 using GhJSON.Grasshopper.Serialization.SchemaProperties;
@@ -42,16 +43,32 @@ namespace GhJSON.Grasshopper.Serialization
     public static partial class GhJsonDeserializer
     {
         /// <summary>
-        /// Deserializes a GrasshopperDocument to Grasshopper objects.
+        /// Deserializes a GhJsonDocument to Grasshopper objects.
         /// </summary>
         /// <param name="document">The document to deserialize.</param>
         /// <param name="options">Deserialization options.</param>
         /// <returns>The deserialization result containing the created components.</returns>
         public static DeserializationResult Deserialize(
-            GrasshopperDocument document,
+            GhJsonDocument document,
             DeserializationOptions? options = null)
         {
+            return Deserialize(document, options, ComponentHandlerRegistry.Default);
+        }
+
+        /// <summary>
+        /// Deserializes a GhJsonDocument to Grasshopper objects using a custom handler registry.
+        /// </summary>
+        /// <param name="document">The document to deserialize.</param>
+        /// <param name="options">Deserialization options.</param>
+        /// <param name="handlerRegistry">Custom handler registry for component deserialization.</param>
+        /// <returns>The deserialization result containing the created components.</returns>
+        public static DeserializationResult Deserialize(
+            GhJsonDocument document,
+            DeserializationOptions? options,
+            ComponentHandlerRegistry handlerRegistry)
+        {
             options ??= DeserializationOptions.Standard;
+            handlerRegistry ??= ComponentHandlerRegistry.Default;
 
             GeometricSerializerRegistry.Initialize();
             var result = new DeserializationResult
@@ -66,7 +83,7 @@ namespace GhJSON.Grasshopper.Serialization
             {
                 try
                 {
-                    var obj = CreateComponent(componentProps, options);
+                    var obj = CreateComponent(componentProps, options, handlerRegistry);
                     if (obj != null)
                     {
                         result.Components.Add(obj);
@@ -97,7 +114,8 @@ namespace GhJSON.Grasshopper.Serialization
 
         private static IGH_DocumentObject? CreateComponent(
             ComponentProperties props,
-            DeserializationOptions options)
+            DeserializationOptions options,
+            ComponentHandlerRegistry handlerRegistry)
         {
             IGH_ObjectProxy? proxy = null;
 
@@ -198,7 +216,8 @@ namespace GhJSON.Grasshopper.Serialization
             // Apply component state after script code/parameter rebuild to avoid re-generation.
             if (props.ComponentState != null && options.ApplyComponentState)
             {
-                ApplyComponentState(obj, props.ComponentState);
+                var handler = handlerRegistry.GetHandler(obj);
+                handler.ApplyState(obj, props.ComponentState);
             }
 
             return obj;
@@ -540,214 +559,6 @@ namespace GhJSON.Grasshopper.Serialization
             return token.ToString();
         }
 
-        private static void ApplyComponentState(IGH_DocumentObject obj, ComponentState state)
-        {
-            // Apply locked state
-            if (state.Locked.HasValue && obj is IGH_ActiveObject activeObj)
-            {
-                activeObj.Locked = state.Locked.Value;
-            }
-
-            // Apply hidden state
-            if (state.Hidden.HasValue && obj is IGH_PreviewObject previewObj)
-            {
-                previewObj.Hidden = state.Hidden.Value;
-            }
-
-            // Apply panel-specific appearance (color and size) using legacy AdditionalProperties pattern
-            if (obj is GH_Panel panel)
-            {
-                ApplyPanelAppearance(panel, state);
-            }
-            else if (obj is GH_ColourSwatch swatch)
-            {
-                // Apply swatch color from AdditionalProperties
-                if (state.AdditionalProperties != null &&
-                    state.AdditionalProperties.TryGetValue("color", out var colorObj) &&
-                    colorObj is string colorStr &&
-                    DataTypeSerializer.TryDeserialize("Color", colorStr, out var deserialized) &&
-                    deserialized is Color serializedColor)
-                {
-                    swatch.SwatchColour = serializedColor;
-                }
-            }
-
-            // Apply universal value for special components
-            if (state.Value != null && obj is IGH_Component component)
-            {
-                // Avoid re-applying script code here because it can regenerate parameters and wipe rebuilt settings.
-                if (!IsScriptComponent(component))
-                {
-                    ApplyUniversalValue(component, state.Value);
-                }
-            }
-        }
-
-        private static void ApplyUniversalValue(IGH_Component component, object value)
-        {
-            try
-            {
-                // Number slider
-                if (component is GH_NumberSlider slider)
-                {
-                    ApplySliderValue(slider, value.ToString());
-                    return;
-                }
-
-                // Panel
-                if (component is GH_Panel panel)
-                {
-                    panel.UserText = value.ToString();
-                    return;
-                }
-
-                // Value list
-                if (component is GH_ValueList valueList)
-                {
-                    // For checklist mode, multiple selections are encoded in ListItems.Selected
-                    // and applied via schema properties. Do not override them with a single
-                    // universal value selection here.
-                    if (valueList.ListMode != GH_ValueListMode.CheckList)
-                    {
-                        var valueName = value.ToString();
-                        for (int i = 0; i < valueList.ListItems.Count; i++)
-                        {
-                            if (valueList.ListItems[i].Name == valueName)
-                            {
-                                valueList.SelectItem(i);
-                                break;
-                            }
-                        }
-                    }
-
-                    return;
-                }
-
-                // Boolean toggle
-                if (component is GH_BooleanToggle toggle)
-                {
-                    if (value is bool boolVal)
-                    {
-                        toggle.Value = boolVal;
-                    }
-                    else if (bool.TryParse(value.ToString(), out var parsed))
-                    {
-                        toggle.Value = parsed;
-                    }
-                    return;
-                }
-
-                // Colour swatch
-                if (component is GH_ColourSwatch swatch)
-                {
-                    var str = value.ToString();
-
-                    // Primary path: use GhJSON.Core DataTypeSerializer with inline prefix (e.g. "argb:...")
-                    if (GhJSON.Core.Serialization.DataTypes.DataTypeSerializer.TryDeserializeFromPrefix(str, out object? colorObj) &&
-                        colorObj is Color c)
-                    {
-                        swatch.SwatchColour = c;
-                        return;
-                    }
-
-                    // Fallback: legacy rgba parser
-                    var color = ParseColor(str);
-                    if (color.HasValue)
-                    {
-                        swatch.SwatchColour = color.Value;
-                    }
-
-                    return;
-                }
-
-                // Button object
-                if (component is GH_ButtonObject btn && value is IDictionary<string, object> btnDict)
-                {
-                    if (btnDict.TryGetValue("normal", out var normal))
-                    {
-                        btn.ExpressionNormal = normal?.ToString() ?? "False";
-                    }
-                    if (btnDict.TryGetValue("pressed", out var pressed))
-                    {
-                        btn.ExpressionPressed = pressed?.ToString() ?? "True";
-                    }
-                    return;
-                }
-
-                // Script components
-                if (ScriptComponentFactory.IsScriptComponent(component))
-                {
-                    ApplyScriptCode(component, value.ToString());
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GhJsonDeserializer] Error applying universal value: {ex.Message}");
-            }
-        }
-
-        private static void ApplySliderValue(GH_NumberSlider slider, string? valueStr)
-        {
-            if (string.IsNullOrEmpty(valueStr))
-                return;
-
-            try
-            {
-                // Parse format "current<min~max>"
-                var match = Regex.Match(valueStr, @"^([\d.\-]+)<([\d.\-]+)~([\d.\-]+)>$");
-                if (match.Success)
-                {
-                    var current = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-                    var min = decimal.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-                    var max = decimal.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
-
-                    slider.Slider.Minimum = min;
-                    slider.Slider.Maximum = max;
-                    slider.SetSliderValue(current);
-                }
-                else if (decimal.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var simpleValue))
-                {
-                    // Simple numeric value
-                    slider.SetSliderValue(simpleValue);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GhJsonDeserializer] Error parsing slider value '{valueStr}': {ex.Message}");
-            }
-        }
-
-        private static Color? ParseColor(string? colorStr)
-        {
-            if (string.IsNullOrEmpty(colorStr))
-                return null;
-
-            try
-            {
-                // Parse format "rgba:R,G,B,A"
-                if (colorStr.StartsWith("rgba:", StringComparison.OrdinalIgnoreCase))
-                {
-                    var parts = colorStr.Substring(5).Split(',');
-                    if (parts.Length >= 3)
-                    {
-                        var r = int.Parse(parts[0].Trim());
-                        var g = int.Parse(parts[1].Trim());
-                        var b = int.Parse(parts[2].Trim());
-                        var a = parts.Length >= 4 ? int.Parse(parts[3].Trim()) : 255;
-                        return Color.FromArgb(a, r, g, b);
-                    }
-                }
-
-                // Try parsing as named color or hex
-                return ColorTranslator.FromHtml(colorStr);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
         private static void ApplyScriptCode(IGH_Component component, string? scriptCode)
         {
             if (string.IsNullOrEmpty(scriptCode))
@@ -863,38 +674,7 @@ namespace GhJSON.Grasshopper.Serialization
         /// Gets or sets the original GhJSON document that was deserialized.
         /// Useful for accessing component properties during placement.
         /// </summary>
-        public GrasshopperDocument? Document { get; set; }
+        public GhJsonDocument? Document { get; set; }
     }
 
-    /// <summary>
-    /// Helper methods for GhJsonDeserializer.
-    /// </summary>
-    public static partial class GhJsonDeserializer
-    {
-        private static void ApplyPanelAppearance(GH_Panel panel, ComponentState state)
-        {
-            if (state.AdditionalProperties != null &&
-                state.AdditionalProperties.TryGetValue("color", out var colorObj) &&
-                colorObj is string colorStr &&
-                GhJSON.Core.Serialization.DataTypes.DataTypeSerializer.TryDeserialize("Color", colorStr, out var deserialized) &&
-                deserialized is Color serializedColor)
-            {
-                panel.Properties.Colour = serializedColor;
-            }
-
-            if (state.AdditionalProperties != null &&
-                state.AdditionalProperties.TryGetValue("bounds", out var boundsObj) &&
-                boundsObj is string boundsStr &&
-                GhJSON.Core.Serialization.DataTypes.DataTypeSerializer.TryDeserialize("Bounds", boundsStr, out var deserializedBounds) &&
-                deserializedBounds is ValueTuple<double, double> boundsTuple)
-            {
-                var attr = panel.Attributes;
-                if (attr != null)
-                {
-                    // Preserve location, update size
-                    attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, (float)boundsTuple.Item1, (float)boundsTuple.Item2);
-                }
-            }
-        }
-    }
 }

@@ -43,7 +43,7 @@ namespace GhJSON.Grasshopper.Graph
         /// <param name="islandSpacingY">Vertical spacing between disconnected islands.</param>
         /// <returns>List of NodeGridComponent entries for each component.</returns>
         public static List<NodeGridComponent> CreateComponentGrid(
-            GrasshopperDocument doc,
+            GhJsonDocument doc,
             bool force = false,
             float spacingX = 50f,
             float spacingY = 80f,
@@ -125,7 +125,7 @@ namespace GhJSON.Grasshopper.Graph
             return result;
         }
 
-        private static List<NodeGridComponent> InitializeGrid(GrasshopperDocument doc)
+        private static List<NodeGridComponent> InitializeGrid(GhJsonDocument doc)
         {
             var grid = doc.Components.Select(c => new NodeGridComponent
             {

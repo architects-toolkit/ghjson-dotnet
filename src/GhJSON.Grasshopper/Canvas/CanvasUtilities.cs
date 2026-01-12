@@ -55,7 +55,7 @@ namespace GhJSON.Grasshopper.Canvas
         /// <param name="guidMapping">Dictionary mapping GUIDs to component instances</param>
         /// <returns>Dictionary mapping integer IDs to component instances</returns>
         public static Dictionary<int, IGH_DocumentObject> BuildIdMapping(
-            GrasshopperDocument? document,
+            GhJsonDocument? document,
             Dictionary<Guid, IGH_DocumentObject>? guidMapping)
         {
             var idToComponent = new Dictionary<int, IGH_DocumentObject>();

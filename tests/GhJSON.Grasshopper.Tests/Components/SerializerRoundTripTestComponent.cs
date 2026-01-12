@@ -125,11 +125,11 @@ namespace GhJSON.Grasshopper.Tests.Components
                     allPassed = false;
                 }
 
-                // Parse back to GrasshopperDocument
-                var parsedDoc = GrasshopperDocument.FromJson(jsonOutput);
+                // Parse back to GhJsonDocument
+                var parsedDoc = GhJsonDocument.FromJson(jsonOutput);
                 if (parsedDoc != null)
                 {
-                    results.Add($"✓ Parsed back to GrasshopperDocument");
+                    results.Add($"✓ Parsed back to GhJsonDocument");
                     results.Add($"  - Components: {parsedDoc.Components.Count}");
                     results.Add($"  - Connections: {parsedDoc.Connections.Count}");
 
@@ -146,7 +146,7 @@ namespace GhJSON.Grasshopper.Tests.Components
                 }
                 else
                 {
-                    results.Add("✗ Failed to parse JSON back to GrasshopperDocument");
+                    results.Add("✗ Failed to parse JSON back to GhJsonDocument");
                     allPassed = false;
                 }
             }

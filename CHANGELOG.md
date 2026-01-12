@@ -9,6 +9,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Component Handler Pattern (Phase 1 Core Refactoring)
+
+- **IComponentHandler interface**: Extensible contract for component-specific serialization/deserialization logic
+  - `ExtractState()` / `ApplyState()` for component state management
+  - `ExtractValue()` / `ApplyValue()` for universal value handling
+  - Support for GUID-based and Type-based handler matching
+  - Priority system for handler selection (higher = preferred)
+- **ComponentHandlerRegistry**: Centralized registry for component handlers
+  - Auto-registration of built-in handlers
+  - Runtime extensibility via `Register()` / `Unregister()`
+  - GUID and Type caching for fast handler lookup
+  - Thread-safe handler management
+- **Built-in component handlers**:
+  - `SliderHandler` - GH_NumberSlider (value format: `current<min~max>`, rounding mode)
+  - `PanelHandler` - GH_Panel (text, color, bounds, multiline, wrap, draw settings)
+  - `ValueListHandler` - GH_ValueList (list mode, selected items/indices)
+  - `ToggleHandler` - GH_BooleanToggle (boolean value)
+  - `ColorSwatchHandler` - GH_ColourSwatch (color in argb/rgba format)
+  - `ButtonHandler` - GH_ButtonObject (normal/pressed expressions)
+  - `ScribbleHandler` - GH_Scribble (text, font, corner positions)
+  - `ScriptHandler` - Script components (C#/Python/VB code, standard output visibility)
+  - `DefaultComponentHandler` - Fallback for generic locked/hidden state
+- **Serializer/Deserializer integration**:
+  - `GhJsonSerializer.Serialize()` accepts optional `ComponentHandlerRegistry`
+  - `GhJsonDeserializer.Deserialize()` accepts optional `ComponentHandlerRegistry`
+  - Default registry used when not specified
+
+#### Operations Module (Phase 2)
+
+- **FixOperations**: Orchestrated document repair operations
+  - `IdAssigner` - Assigns sequential IDs to components missing valid IDs
+  - `GuidGenerator` - Generates instance GUIDs for components without them
+  - `MetadataPopulator` - Populates metadata fields (timestamps, schema version)
+  - `CountUpdater` - Updates component/connection counts in metadata
+  - `DocumentFixer` - Orchestrates all fix operations with configurable `FixOptions`
+- **MergeOperations**: Document merging with conflict resolution
+  - `DocumentMerger` - Merges source document into target with ID remapping
+  - `ConflictResolver` - Handles GUID conflicts (TargetWins, SourceWins, KeepBoth, Fail)
+  - `PositionAdjuster` - Offsets positions to avoid overlap during merge
+  - `MergeOptions` - Configures merge behavior (conflict resolution, position adjustment)
+- **Operation contracts**:
+  - `IDocumentOperation` interface for extensible operations
+  - `FixOptions` / `FixResult` for fix operation configuration and results
+  - `MergeResult` for merge operation statistics
+
+#### Migration Module (Phase 3)
+
+- **MigrationPipeline**: Orchestrated schema version migrations
+  - `IMigrator` interface for versioned migrators
+  - `MigrationPipeline.Default` - Pipeline with all built-in migrators
+  - `MigrationResult` with change tracking and error handling
+  - `NeedsMigration()` check for version detection
+- **Built-in migrators**:
+  - `V0_9_to_V1_0_PivotMigrator` - Converts pivot from object `{X,Y}` to string `"X,Y"`
+  - `V0_9_to_V1_0_PropertyMigrator` - Renames legacy property names to v1.0 schema
+
+#### TidyUp Operations (Phase 3)
+
+- **LayoutAnalyzer**: Graph structure analysis for layout optimization
+  - Identifies source/sink nodes (no inputs/outputs)
+  - Calculates node depths (longest path from source)
+  - Groups nodes by depth level
+  - Identifies disconnected component islands
+- **PivotOrganizer**: Reorganizes pivots based on graph flow
+  - Horizontal arrangement by dependency depth
+  - Vertical stacking within depth levels
+  - Separate island handling with spacing
+  - Configurable spacing via `PivotOrganizerOptions`
+- **DocumentTidier**: Orchestrates tidy operations
+  - `TidyAll()` - Apply all tidy operations
+  - `AnalyzeLayout()` - Analyze without modifying
+  - Configurable via `TidyOptions`
+
+#### API Consolidation (Phase 4)
+
+- **GhJson static facade** (`GhJSON.Core.GhJson`): Main entry point for platform-independent GhJSON operations
+  - `Read()` / `Parse()` - Load documents from file, stream, or JSON string
+  - `Write()` / `Serialize()` - Save documents with configurable `WriteOptions`
+  - `Validate()` / `IsValid()` - Multi-level document validation
+  - `Fix()` / `FixMinimal()` - Document repair operations
+  - `Migrate()` / `NeedsMigration()` - Schema version migration
+- **GhJsonGrasshopper static facade** (`GhJSON.Grasshopper.GhJsonGrasshopper`): Main entry point for Grasshopper operations
+  - `Serialize()` - Convert GH objects to GhJSON document
+  - `Deserialize()` - Create GH objects from GhJSON (without placement)
+  - `Get()` / `GetSelected()` / `GetByGuids()` - Read from canvas
+  - `Put()` - Place document on canvas with `PutOptions` (connections, groups, layout)
+  - `Validate()` / `IsValid()` - Grasshopper-specific validation
+  - `RegisterHandler()` - Register custom component handlers
+- **PutOptions configuration class**: Configures canvas placement behavior
+  - `Offset`, `Spacing`, `UseExactPositions`, `UseDependencyLayout`
+  - `CreateConnections`, `CreateGroups`, `PreserveInstanceGuids`
+  - `ApplyComponentState`, `ApplySchemaProperties`, `ApplyParameterSettings`
+- **PutResult class**: Result of Put operations with placed objects and mappings
+- **WriteOptions class**: Configures JSON serialization (indentation, null handling)
+- **Automatic registry initialization**: `GhJsonGrasshopper.Initialize()` ensures all serializers and handlers are registered
+
 #### Core Features
 
 - **Instance GUID injection**: Added `GhJsonFixer.InjectMissingInstanceGuids()` to generate GUIDs for components that don't have them (useful for AI-generated documents)
@@ -49,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Breaking Changes
 
+- **Renamed `GrasshopperDocument` to `GhJsonDocument`**: Clearer naming for the root document model
 - **Deserialization flow**: `GhJsonDeserializer.Deserialize()` no longer creates connections or sets component pivots
   - Use `ComponentPlacer` for positioning
   - Use `ConnectionManager.CreateConnections()` for wiring
@@ -72,6 +169,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Legacy connection creation**: Removed in-deserializer connection helper (replaced by `Canvas.ConnectionManager`)
 - **Direct pivot setting**: Removed from deserializer (delegated to placement utilities)
+- **Dead code cleanup**: Removed unused type-specific methods from serializer/deserializer
+  - `GhJsonSerializer`: Removed `SerializeComponent`, `SerializeParameter`, `ExtractComponentState`, `ExtractUniversalValue`, `ExtractVBScriptCode`, `ExtractScriptCode`, `FormatSliderValue` (all duplicated in component handlers)
+  - `GhJsonDeserializer`: Removed `ApplyComponentState`, `ApplyUniversalValue`, `ApplySliderValue`, `ParseColor`, `ApplyPanelAppearance` (handlers are used via `handler.ApplyState()` instead)
 
 ## [1.0.0] - Initial Release
 

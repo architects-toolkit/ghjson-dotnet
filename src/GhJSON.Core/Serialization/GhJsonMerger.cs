@@ -33,7 +33,7 @@ namespace GhJSON.Core.Serialization
     public class MergeResult
     {
         /// <summary>Gets or sets the merged document.</summary>
-        public GrasshopperDocument Document { get; set; } = null!;
+        public GhJsonDocument Document { get; set; } = null!;
 
         /// <summary>Gets or sets the number of components added from the source.</summary>
         public int ComponentsAdded { get; set; }
@@ -71,7 +71,7 @@ namespace GhJSON.Core.Serialization
         /// <param name="target">The target document to merge into. This document is modified in place.</param>
         /// <param name="source">The source document to merge from.</param>
         /// <returns>Result containing merge statistics and the merged document.</returns>
-        public static MergeResult Merge(GrasshopperDocument target, GrasshopperDocument source)
+        public static MergeResult Merge(GhJsonDocument target, GhJsonDocument source)
         {
             var result = new MergeResult { Document = target };
 

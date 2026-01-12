@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Documentation**: Added a documentation index (`docs/index.md`) and comprehensive usage guides under `docs/Usage/`.
+
 #### Component Handler Pattern (Phase 1 Core Refactoring)
 
 - **IComponentHandler interface**: Extensible contract for component-specific serialization/deserialization logic

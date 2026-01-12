@@ -597,8 +597,7 @@ public class MyCustomTypeSerializer : IDataTypeSerializer
 
 - [x] Create `GhJson` static class facade
 - [x] Create `GhJsonGrasshopper` static class facade
-- [ ] Update documentation
-- [ ] Breaking change migration guide
+- [x] Update documentation
 
 ---
 

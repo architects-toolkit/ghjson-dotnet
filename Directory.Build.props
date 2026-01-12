@@ -13,5 +13,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GhJsonOfficialSchemaUrl>https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json</GhJsonOfficialSchemaUrl>
   </PropertyGroup>
 </Project>

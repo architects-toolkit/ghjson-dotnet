@@ -17,10 +17,20 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="JsonSchema.Net" Version="7.2.2" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Validation\ghjson.schema.v1.0\ghjson.schema.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="GhJsonOfficialSchemaUrl" Value="$(GhJsonOfficialSchemaUrl)" />
   </ItemGroup>
 
 </Project>

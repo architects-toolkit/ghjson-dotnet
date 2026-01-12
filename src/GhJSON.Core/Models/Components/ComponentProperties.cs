@@ -55,6 +55,11 @@ namespace GhJSON.Core.Models.Components
         [JsonProperty("componentGuid")]
         public Guid ComponentGuid { get; set; }
 
+        public bool ShouldSerializeComponentGuid()
+        {
+            return this.ComponentGuid != Guid.Empty;
+        }
+
         /// <summary>
         /// Gets or sets the unique identifier for this specific component instance.
         /// Optional - can be inferred from the component name if not provided.

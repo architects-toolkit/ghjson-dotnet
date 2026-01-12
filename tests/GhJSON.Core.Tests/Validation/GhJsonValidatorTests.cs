@@ -30,8 +30,6 @@ namespace GhJSON.Core.Tests.Validation
                 ""components"": [
                     {
                         ""name"": ""Addition"",
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890"",
-                        ""componentGuid"": ""d1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 1,
                         ""pivot"": ""100,200""
                     }
@@ -96,8 +94,8 @@ namespace GhJSON.Core.Tests.Validation
                 ""components"": [
                     {
                         ""name"": ""Test"",
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890"",
-                        ""id"": 1
+                        ""id"": 1,
+                        ""pivot"": ""0,0""
                     }
                 ]
             }";
@@ -113,7 +111,7 @@ namespace GhJSON.Core.Tests.Validation
             var json = @"{
                 ""components"": [
                     {
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890""
+                        ""id"": 1
                     }
                 ],
                 ""connections"": []
@@ -123,7 +121,7 @@ namespace GhJSON.Core.Tests.Validation
 
             Assert.False(result);
             Assert.NotNull(errorMessage);
-            Assert.Contains("name", errorMessage);
+            Assert.Contains("Schema:", errorMessage);
         }
 
         [Fact]
@@ -142,7 +140,7 @@ namespace GhJSON.Core.Tests.Validation
 
             Assert.False(result);
             Assert.NotNull(errorMessage);
-            Assert.Contains("id", errorMessage);
+            Assert.Contains("Schema:", errorMessage);
         }
 
         [Fact]
@@ -161,9 +159,32 @@ namespace GhJSON.Core.Tests.Validation
 
             var result = GhJsonValidator.Validate(json, out var errorMessage);
 
-            // Invalid GUID format is a warning, not an error
+            // With official schema validation, invalid GUID format is an error (format: uuid)
+            Assert.False(result);
             Assert.NotNull(errorMessage);
-            Assert.Contains("Warning", errorMessage);
+            Assert.Contains("Schema:", errorMessage);
+        }
+
+        [Fact]
+        public void Validate_UnknownRootProperty_ReturnsFalse()
+        {
+            var json = @"{
+                ""components"": [
+                    {
+                        ""name"": ""Test"",
+                        ""id"": 1,
+                        ""pivot"": ""0,0""
+                    }
+                ],
+                ""connections"": [],
+                ""unexpected"": 123
+            }";
+
+            var result = GhJsonValidator.Validate(json, out var errorMessage);
+
+            Assert.False(result);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Schema:", errorMessage);
         }
 
         [Fact]
@@ -173,12 +194,10 @@ namespace GhJSON.Core.Tests.Validation
                 ""components"": [
                     {
                         ""name"": ""A"",
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 1
                     },
                     {
                         ""name"": ""B"",
-                        ""instanceGuid"": ""b1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 2
                     }
                 ],
@@ -194,7 +213,7 @@ namespace GhJSON.Core.Tests.Validation
 
             Assert.False(result);
             Assert.NotNull(errorMessage);
-            Assert.Contains("from", errorMessage);
+            Assert.Contains("Schema:", errorMessage);
         }
 
         [Fact]
@@ -204,7 +223,6 @@ namespace GhJSON.Core.Tests.Validation
                 ""components"": [
                     {
                         ""name"": ""A"",
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 1
                     }
                 ],
@@ -220,6 +238,7 @@ namespace GhJSON.Core.Tests.Validation
 
             Assert.False(result);
             Assert.NotNull(errorMessage);
+            // This one is a semantic check (id reference), not schema.
             Assert.Contains("999", errorMessage);
         }
 
@@ -230,14 +249,10 @@ namespace GhJSON.Core.Tests.Validation
                 ""components"": [
                     {
                         ""name"": ""A"",
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890"",
-                        ""componentGuid"": ""d1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 1
                     },
                     {
                         ""name"": ""B"",
-                        ""instanceGuid"": ""b1b2c3d4-e5f6-7890-abcd-ef1234567890"",
-                        ""componentGuid"": ""e1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 2
                     }
                 ],
@@ -262,8 +277,6 @@ namespace GhJSON.Core.Tests.Validation
                 ""components"": [
                     {
                         ""name"": ""Test"",
-                        ""instanceGuid"": ""a1b2c3d4-e5f6-7890-abcd-ef1234567890"",
-                        ""componentGuid"": ""d1b2c3d4-e5f6-7890-abcd-ef1234567890"",
                         ""id"": 1
                     }
                 ],

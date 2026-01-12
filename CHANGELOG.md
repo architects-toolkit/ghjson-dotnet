@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Official JSON Schema validation**: `GhJSON.Core.Validation.GhJsonValidator` now validates GhJSON documents against the official v1.0 JSON Schema (`https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json`) with an embedded offline fallback.
+
 - **Test Coverage Analysis**: Analyzed existing test suite for schema compliance and feature coverage
   - Existing tests cover: Models, Serialization (basic types, colors, compact position), Validation, Operations, Migration
   - GhJSON.Core.Tests: 21 test files covering core functionality

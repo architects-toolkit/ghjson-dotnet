@@ -17,8 +17,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
+using System.Threading;
+using Json.Schema;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -29,6 +35,18 @@ namespace GhJSON.Core.Validation
     /// </summary>
     public static class GhJsonValidator
     {
+        private const string DefaultOfficialSchemaUrl = "https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json";
+
+        private const string EmbeddedSchemaResourceName = "GhJSON.Core.Validation.ghjson.schema.v1.0.ghjson.schema.json";
+
+        private static readonly Lazy<JsonSchema> EmbeddedOfficialSchema = new Lazy<JsonSchema>(() =>
+            JsonSchema.FromText(ReadEmbeddedSchemaJson()));
+
+        private static readonly Lazy<HttpClient> Http = new Lazy<HttpClient>(() => new HttpClient());
+
+        private static readonly object SchemaLock = new object();
+        private static JsonSchema? _cachedOfficialSchema;
+
         /// <summary>
         /// Validates that the given JSON string conforms to the expected GhJSON document format.
         /// </summary>
@@ -59,123 +77,17 @@ namespace GhJSON.Core.Validation
                 }
             }
 
-            JArray? components = null;
-            JArray? connections = null;
+            // 1) Validate against the official JSON Schema (source of truth)
             if (root != null)
             {
-                if (root["components"] is JArray comps)
-                {
-                    components = comps;
-                }
-                else
-                {
-                    errors.Add("'components' property is missing or not an array.");
-                }
+                ValidateAgainstOfficialSchema(json, errors);
+            }
 
-                // Treat missing 'connections' as empty array (no connections is valid)
-                // but error if it exists and is not an array
-                if (root["connections"] == null || root["connections"]!.Type == JTokenType.Null)
-                {
-                    // Missing or null connections is valid - treat as empty array
-                    connections = new JArray();
-                }
-                else if (root["connections"] is JArray conns)
-                {
-                    connections = conns;
-                }
-                else
-                {
-                    errors.Add("'connections' property is not an array.");
-                }
-
-                if (components != null)
-                {
-                    for (int i = 0; i < components.Count; i++)
-                    {
-                        if (!(components[i] is JObject comp))
-                        {
-                            errors.Add($"components[{i}] is not a JSON object.");
-                            continue;
-                        }
-
-                        if (comp["name"] == null || comp["name"]!.Type == JTokenType.Null)
-                        {
-                            errors.Add($"components[{i}].name is missing or null.");
-                        }
-
-                        if (comp["id"] == null || comp["id"]!.Type != JTokenType.Integer)
-                        {
-                            errors.Add($"components[{i}].id is missing or not an integer.");
-                        }
-
-                        if (comp["componentGuid"] == null || comp["componentGuid"]!.Type == JTokenType.Null)
-                        {
-                            warnings.Add($"components[{i}].componentGuid is missing or null.");
-                        }
-                        else
-                        {
-                            var cg = comp["componentGuid"]!.ToString();
-                            if (!Guid.TryParse(cg, out _))
-                            {
-                                warnings.Add($"components[{i}].componentGuid '{cg}' is not a valid GUID.");
-                            }
-                        }
-
-                        // instanceGuid is now optional - only validate if present
-                        if (comp["instanceGuid"] != null && comp["instanceGuid"]!.Type != JTokenType.Null)
-                        {
-                            var ig = comp["instanceGuid"]!.ToString();
-                            if (!Guid.TryParse(ig, out _))
-                            {
-                                warnings.Add($"components[{i}].instanceGuid '{ig}' is not a valid GUID.");
-                            }
-                        }
-                    }
-                }
-
-                if (connections != null && components != null)
-                {
-                    // Build lookup for new integer id references
-                    var definedIntIds = new HashSet<int>();
-                    foreach (var token in components)
-                    {
-                        if (token is JObject compObj && compObj["id"]?.Type == JTokenType.Integer)
-                        {
-                            definedIntIds.Add(compObj["id"]!.Value<int>());
-                        }
-                    }
-
-                    for (int i = 0; i < connections.Count; i++)
-                    {
-                        if (!(connections[i] is JObject conn))
-                        {
-                            errors.Add($"connections[{i}] is not a JSON object.");
-                            continue;
-                        }
-
-                        foreach (var endPoint in new[] { "from", "to" })
-                        {
-                            if (!(conn[endPoint] is JObject ep))
-                            {
-                                errors.Add($"connections[{i}].{endPoint} is missing or not an object.");
-                                continue;
-                            }
-
-                            // New schema: require integer 'id' referencing components[].id
-                            if (ep["id"] == null || ep["id"]!.Type != JTokenType.Integer)
-                            {
-                                errors.Add($"connections[{i}].{endPoint}.id is missing or not an integer.");
-                                continue;
-                            }
-
-                            var intId = ep["id"]!.Value<int>();
-                            if (!definedIntIds.Contains(intId))
-                            {
-                                errors.Add($"connections[{i}].{endPoint}.id '{intId}' is not defined in components[].id.");
-                            }
-                        }
-                    }
-                }
+            // 2) Semantic checks not expressible in JSON Schema: connection endpoints must reference existing component IDs.
+            // Only run semantic checks if schema validation passed.
+            if (root != null && !errors.Any())
+            {
+                ValidateConnectionReferences(root, errors);
             }
 
             var sb = new StringBuilder();
@@ -209,6 +121,173 @@ namespace GhJSON.Core.Validation
             var result = !errors.Any();
             errorMessage = sb.Length > 0 ? sb.ToString().TrimEnd() : null;
             return result;
+        }
+
+        private static void ValidateAgainstOfficialSchema(string instanceJson, List<string> errors)
+        {
+            try
+            {
+                var schema = GetOfficialSchema();
+
+                var instance = JsonNode.Parse(instanceJson);
+                if (instance == null)
+                {
+                    errors.Add("Schema validation failed: Instance JSON parsed to null.");
+                    return;
+                }
+
+                var evaluation = schema.Evaluate(instance, new EvaluationOptions
+                {
+                    OutputFormat = OutputFormat.Hierarchical,
+                    RequireFormatValidation = true
+                });
+
+                if (!evaluation.IsValid)
+                {
+                    CollectSchemaErrors(evaluation, errors);
+                }
+            }
+            catch (Exception ex)
+            {
+                // If schema validation infrastructure fails, treat it as an error (otherwise we'd silently accept invalid docs).
+                errors.Add($"Schema validation failed: {ex.Message}");
+            }
+        }
+
+        private static JsonSchema GetOfficialSchema()
+        {
+            lock (SchemaLock)
+            {
+                if (_cachedOfficialSchema != null)
+                {
+                    return _cachedOfficialSchema;
+                }
+
+                // Try to fetch the official schema, but keep this deterministic by using a short timeout.
+                // If the fetch fails, we fall back to an embedded copy of the v1.0 schema.
+                try
+                {
+                    var schemaUrl = GetOfficialSchemaUrlFromAssemblyMetadata() ?? DefaultOfficialSchemaUrl;
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    var response = Http.Value.GetAsync(schemaUrl, cts.Token).GetAwaiter().GetResult();
+                    response.EnsureSuccessStatusCode();
+                    var schemaJson = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                    _cachedOfficialSchema = JsonSchema.FromText(schemaJson);
+                }
+                catch
+                {
+                    _cachedOfficialSchema = EmbeddedOfficialSchema.Value;
+                }
+
+                return _cachedOfficialSchema;
+            }
+        }
+
+        private static string? GetOfficialSchemaUrlFromAssemblyMetadata()
+        {
+            try
+            {
+                var assembly = typeof(GhJsonValidator).Assembly;
+                var attributes = assembly.GetCustomAttributes(typeof(AssemblyMetadataAttribute), inherit: false);
+                foreach (var attrObj in attributes)
+                {
+                    if (attrObj is AssemblyMetadataAttribute attr &&
+                        string.Equals(attr.Key, "GhJsonOfficialSchemaUrl", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return string.IsNullOrWhiteSpace(attr.Value) ? null : attr.Value;
+                    }
+                }
+            }
+            catch
+            {
+                // ignore and fall back
+            }
+
+            return null;
+        }
+
+        private static string ReadEmbeddedSchemaJson()
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream(EmbeddedSchemaResourceName);
+            if (stream == null)
+            {
+                throw new InvalidOperationException($"Embedded schema resource not found: '{EmbeddedSchemaResourceName}'.");
+            }
+
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+
+        private static void CollectSchemaErrors(EvaluationResults evaluation, List<string> errors)
+        {
+            if (evaluation.Errors != null)
+            {
+                foreach (var kv in evaluation.Errors)
+                {
+                    errors.Add($"Schema: {evaluation.InstanceLocation} - {kv.Key}: {kv.Value}");
+                }
+            }
+
+            if (evaluation.Details == null)
+            {
+                return;
+            }
+
+            foreach (var detail in evaluation.Details)
+            {
+                CollectSchemaErrors(detail, errors);
+            }
+        }
+
+        private static void ValidateConnectionReferences(JObject root, List<string> errors)
+        {
+            if (!(root["components"] is JArray components))
+            {
+                return;
+            }
+
+            // Treat missing 'connections' as empty array (schema allows it)
+            var connections = root["connections"] as JArray ?? new JArray();
+
+            var definedIntIds = new HashSet<int>();
+            foreach (var token in components)
+            {
+                if (token is JObject compObj && compObj["id"]?.Type == JTokenType.Integer)
+                {
+                    definedIntIds.Add(compObj["id"]!.Value<int>());
+                }
+            }
+
+            for (int i = 0; i < connections.Count; i++)
+            {
+                if (!(connections[i] is JObject conn))
+                {
+                    errors.Add($"connections[{i}] is not a JSON object.");
+                    continue;
+                }
+
+                foreach (var endPoint in new[] { "from", "to" })
+                {
+                    if (!(conn[endPoint] is JObject ep))
+                    {
+                        errors.Add($"connections[{i}].{endPoint} is missing or not an object.");
+                        continue;
+                    }
+
+                    if (ep["id"]?.Type != JTokenType.Integer)
+                    {
+                        // Schema already validates this; this is defensive.
+                        continue;
+                    }
+
+                    var intId = ep["id"]!.Value<int>();
+                    if (!definedIntIds.Contains(intId))
+                    {
+                        errors.Add($"connections[{i}].{endPoint}.id '{intId}' is not defined in components[].id.");
+                    }
+                }
+            }
         }
 
         /// <summary>

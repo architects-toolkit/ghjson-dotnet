@@ -33,12 +33,13 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeParameterSettings = true,
             IncludeGroups = true,
             IncludePersistentData = true,
-            IncludeSchemaProperties = true
+            IncludeSchemaProperties = true,
+            IncludeWarningsAndErrors = true
         };
 
         /// <summary>
         /// Gets lite serialization options with minimal output.
-        /// Excludes metadata, component state, parameter settings, groups, and persistent data.
+        /// Excludes metadata, component state, parameter settings, groups, persistent data, and warnings/errors.
         /// </summary>
         public static SerializationOptions Lite => new SerializationOptions
         {
@@ -48,7 +49,8 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeParameterSettings = false,
             IncludeGroups = false,
             IncludePersistentData = false,
-            IncludeSchemaProperties = false
+            IncludeSchemaProperties = false,
+            IncludeWarningsAndErrors = false
         };
 
         /// <summary>
@@ -64,7 +66,8 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeParameterSettings = true,
             IncludeGroups = true,
             IncludePersistentData = false,
-            IncludeSchemaProperties = true
+            IncludeSchemaProperties = true,
+            IncludeWarningsAndErrors = true
         };
 
         /// <summary>
@@ -100,11 +103,17 @@ namespace GhJSON.Grasshopper.Serialization
         public bool IncludePersistentData { get; set; } = true;
 
         /// <summary>
-        /// Gets or sets a value indicating whether to include schema properties (legacy format)
-        /// in <see cref="GhJSON.Core.Models.Components.ComponentProperties.SchemaProperties"/>.
+        /// Gets or sets a value indicating whether to include schema properties
+        /// in <see cref="GhJSON.Core.Models.Components.ComponentProperties.Properties"/>.
         /// These are component/param-specific properties beyond the core GhJSON schema.
         /// Default is true for Standard and Optimized, false for Lite.
         /// </summary>
         public bool IncludeSchemaProperties { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to include warnings and errors from components.
+        /// Default is true for Standard and Optimized, false for Lite.
+        /// </summary>
+        public bool IncludeWarningsAndErrors { get; set; } = true;
     }
 }

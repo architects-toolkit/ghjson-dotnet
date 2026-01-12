@@ -39,7 +39,11 @@ namespace GhJSON.Core.Tests.Models
             Assert.Null(settings.VariableName);
             Assert.Null(settings.Access);
             Assert.Null(settings.TypeHint);
-            Assert.Null(settings.AdditionalSettings);
+            Assert.Null(settings.Reverse);
+            Assert.Null(settings.Simplify);
+            Assert.Null(settings.Locked);
+            Assert.Null(settings.Invert);
+            Assert.Null(settings.Unitize);
         }
 
         [Fact]
@@ -58,11 +62,8 @@ namespace GhJSON.Core.Tests.Models
                 VariableName = "inputA",
                 Access = "item",
                 TypeHint = "double",
-                AdditionalSettings = new AdditionalParameterSettings
-                {
-                    Reverse = true,
-                    Simplify = false
-                }
+                Reverse = true,
+                Simplify = false
             };
 
             var json = JsonConvert.SerializeObject(original);
@@ -80,9 +81,8 @@ namespace GhJSON.Core.Tests.Models
             Assert.Equal("inputA", deserialized.VariableName);
             Assert.Equal("item", deserialized.Access);
             Assert.Equal("double", deserialized.TypeHint);
-            Assert.NotNull(deserialized.AdditionalSettings);
-            Assert.True(deserialized.AdditionalSettings.Reverse);
-            Assert.False(deserialized.AdditionalSettings.Simplify);
+            Assert.True(deserialized.Reverse);
+            Assert.False(deserialized.Simplify);
         }
 
         [Fact]

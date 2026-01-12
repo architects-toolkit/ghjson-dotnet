@@ -33,8 +33,7 @@ namespace GhJSON.Core.Tests.Models
             Assert.Null(state.VBCode);
             Assert.Null(state.Locked);
             Assert.Null(state.Hidden);
-            Assert.Null(state.Enabled);
-            Assert.Null(state.Preview);
+            Assert.Null(state.Selected);
             Assert.Null(state.Multiline);
             Assert.Null(state.Wrap);
             Assert.Null(state.Color);
@@ -134,24 +133,14 @@ namespace GhJSON.Core.Tests.Models
         {
             var state = new ComponentState
             {
-                Color = new Dictionary<string, int>
-                {
-                    { "R", 255 },
-                    { "G", 128 },
-                    { "B", 64 },
-                    { "A", 255 }
-                }
+                Color = "255,128,64,255" // ARGB format per schema
             };
 
             var json = JsonConvert.SerializeObject(state);
             var deserialized = JsonConvert.DeserializeObject<ComponentState>(json);
 
             Assert.NotNull(deserialized);
-            Assert.NotNull(deserialized.Color);
-            Assert.Equal(255, deserialized.Color["R"]);
-            Assert.Equal(128, deserialized.Color["G"]);
-            Assert.Equal(64, deserialized.Color["B"]);
-            Assert.Equal(255, deserialized.Color["A"]);
+            Assert.Equal("255,128,64,255", deserialized.Color);
         }
 
         [Fact]
@@ -159,20 +148,14 @@ namespace GhJSON.Core.Tests.Models
         {
             var state = new ComponentState
             {
-                Bounds = new Dictionary<string, float>
-                {
-                    { "width", 100.5f },
-                    { "height", 50.25f }
-                }
+                Bounds = "100x50" // WxH format per schema
             };
 
             var json = JsonConvert.SerializeObject(state);
             var deserialized = JsonConvert.DeserializeObject<ComponentState>(json);
 
             Assert.NotNull(deserialized);
-            Assert.NotNull(deserialized.Bounds);
-            Assert.Equal(100.5f, deserialized.Bounds["width"]);
-            Assert.Equal(50.25f, deserialized.Bounds["height"]);
+            Assert.Equal("100x50", deserialized.Bounds);
         }
 
         [Fact]

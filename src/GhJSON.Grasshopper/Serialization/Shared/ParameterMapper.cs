@@ -68,12 +68,55 @@ namespace GhJSON.Grasshopper.Serialization.Shared
                 hasSettings = true;
             }
 
-            // Extract additional settings (modifiers)
-            var additionalSettings = ExtractAdditionalSettings(param);
-            if (additionalSettings != null)
+            // Extract flattened parameter modifiers (per schema)
+            if (param.Reverse)
             {
-                settings.AdditionalSettings = additionalSettings;
+                settings.Reverse = true;
                 hasSettings = true;
+            }
+
+            if (param.Simplify)
+            {
+                settings.Simplify = true;
+                hasSettings = true;
+            }
+
+            // Extract Invert flag via reflection (for boolean parameters)
+            try
+            {
+                var invertProp = param.GetType().GetProperty("Invert");
+                if (invertProp != null && invertProp.CanRead)
+                {
+                    var invertValue = invertProp.GetValue(param) as bool?;
+                    if (invertValue == true)
+                    {
+                        settings.Invert = true;
+                        hasSettings = true;
+                    }
+                }
+            }
+            catch
+            {
+                // Property doesn't exist or can't be read
+            }
+
+            // Extract Unitize flag via reflection (for vector parameters)
+            try
+            {
+                var unitizeProp = param.GetType().GetProperty("Unitize");
+                if (unitizeProp != null && unitizeProp.CanRead)
+                {
+                    var unitizeValue = unitizeProp.GetValue(param) as bool?;
+                    if (unitizeValue == true)
+                    {
+                        settings.Unitize = true;
+                        hasSettings = true;
+                    }
+                }
+            }
+            catch
+            {
+                // Property doesn't exist or can't be read
             }
 
             // Extract Required/Optional property (only for inputs)
@@ -154,50 +197,6 @@ namespace GhJSON.Grasshopper.Serialization.Shared
         }
 
         /// <summary>
-        /// Extracts additional parameter settings (modifiers) from a Grasshopper parameter.
-        /// </summary>
-        private static AdditionalParameterSettings? ExtractAdditionalSettings(IGH_Param param)
-        {
-            var additionalSettings = new AdditionalParameterSettings();
-            bool hasAdditionalSettings = false;
-
-            // Extract Reverse flag (reverses list order)
-            if (param.Reverse)
-            {
-                additionalSettings.Reverse = true;
-                hasAdditionalSettings = true;
-            }
-
-            // Extract Simplify flag (simplifies data tree paths)
-            if (param.Simplify)
-            {
-                additionalSettings.Simplify = true;
-                hasAdditionalSettings = true;
-            }
-
-            // Extract Invert flag via reflection (for boolean parameters)
-            try
-            {
-                var invertProp = param.GetType().GetProperty("Invert");
-                if (invertProp != null && invertProp.CanRead)
-                {
-                    var invertValue = invertProp.GetValue(param) as bool?;
-                    if (invertValue == true)
-                    {
-                        additionalSettings.Invert = true;
-                        hasAdditionalSettings = true;
-                    }
-                }
-            }
-            catch
-            {
-                // Property doesn't exist or can't be read
-            }
-
-            return hasAdditionalSettings ? additionalSettings : null;
-        }
-
-        /// <summary>
         /// Applies parameter settings to a Grasshopper parameter.
         /// </summary>
         /// <param name="param">The parameter to apply settings to.</param>
@@ -222,34 +221,48 @@ namespace GhJSON.Grasshopper.Serialization.Shared
                 }
             }
 
-            // Apply additional settings
-            if (settings.AdditionalSettings != null)
+            // Apply flattened parameter modifiers (per schema)
+            if (settings.Reverse == true)
             {
-                if (settings.AdditionalSettings.Reverse == true)
-                {
-                    param.Reverse = true;
-                }
+                param.Reverse = true;
+            }
 
-                if (settings.AdditionalSettings.Simplify == true)
-                {
-                    param.Simplify = true;
-                }
+            if (settings.Simplify == true)
+            {
+                param.Simplify = true;
+            }
 
-                // Apply Invert via reflection
-                if (settings.AdditionalSettings.Invert == true)
+            // Apply Invert via reflection
+            if (settings.Invert == true)
+            {
+                try
                 {
-                    try
+                    var invertProp = param.GetType().GetProperty("Invert");
+                    if (invertProp != null && invertProp.CanWrite)
                     {
-                        var invertProp = param.GetType().GetProperty("Invert");
-                        if (invertProp != null && invertProp.CanWrite)
-                        {
-                            invertProp.SetValue(param, true);
-                        }
+                        invertProp.SetValue(param, true);
                     }
-                    catch
+                }
+                catch
+                {
+                    // Property doesn't exist or can't be written
+                }
+            }
+
+            // Apply Unitize via reflection
+            if (settings.Unitize == true)
+            {
+                try
+                {
+                    var unitizeProp = param.GetType().GetProperty("Unitize");
+                    if (unitizeProp != null && unitizeProp.CanWrite)
                     {
-                        // Property doesn't exist or can't be written
+                        unitizeProp.SetValue(param, true);
                     }
+                }
+                catch
+                {
+                    // Property doesn't exist or can't be written
                 }
             }
 

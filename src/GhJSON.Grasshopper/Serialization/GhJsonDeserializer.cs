@@ -208,9 +208,9 @@ namespace GhJSON.Grasshopper.Serialization
 
             // Apply schema properties first (legacy behavior)
             // so that componentState.value can rely on properties being present (e.g. ValueList ListItems).
-            if (options.ApplySchemaProperties && props.SchemaProperties != null && props.SchemaProperties.Count > 0)
+            if (options.ApplySchemaProperties && props.Properties != null && props.Properties.Count > 0)
             {
-                ApplySchemaProperties(obj, props.SchemaProperties);
+                ApplySchemaProperties(obj, props.Properties);
             }
 
             // Apply component state after script code/parameter rebuild to avoid re-generation.

@@ -33,19 +33,16 @@ namespace GhJSON.Core.Tests.Models
 
             Assert.Equal(string.Empty, props.Name);
             Assert.Null(props.Library);
-            Assert.Null(props.Type);
             Assert.Null(props.NickName);
             Assert.Equal(Guid.Empty, props.ComponentGuid);
             Assert.Null(props.InstanceGuid);
-            Assert.Null(props.Selected);
             Assert.Equal(0, props.Id);
-            Assert.Null(props.Params);
             Assert.Null(props.InputSettings);
             Assert.Null(props.OutputSettings);
             Assert.Null(props.ComponentState);
             Assert.Null(props.Warnings);
             Assert.Null(props.Errors);
-            Assert.Null(props.SchemaProperties);
+            Assert.Null(props.Properties);
         }
 
         [Fact]
@@ -109,14 +106,12 @@ namespace GhJSON.Core.Tests.Models
             {
                 Name = "Addition",
                 Library = "Math",
-                Type = "Operators",
                 NickName = "Add",
                 ComponentGuid = guid1,
                 InstanceGuid = guid2,
-                Selected = true,
                 Pivot = new CompactPosition(100.5f, 200.75f),
                 Id = 1,
-                Params = new Dictionary<string, object> { { "key", "value" } },
+                Properties = new Dictionary<string, object> { { "key", "value" } },
                 InputSettings = new List<ParameterSettings>
                 {
                     new ParameterSettings { ParameterName = "A" }
@@ -125,7 +120,7 @@ namespace GhJSON.Core.Tests.Models
                 {
                     new ParameterSettings { ParameterName = "Result" }
                 },
-                ComponentState = new ComponentState { Locked = true },
+                ComponentState = new ComponentState { Selected = true, Locked = true },
                 Warnings = new List<string> { "Test warning" },
                 Errors = new List<string> { "Test error" }
             };
@@ -136,16 +131,16 @@ namespace GhJSON.Core.Tests.Models
             Assert.NotNull(deserialized);
             Assert.Equal("Addition", deserialized.Name);
             Assert.Equal("Math", deserialized.Library);
-            Assert.Equal("Operators", deserialized.Type);
             Assert.Equal("Add", deserialized.NickName);
             Assert.Equal(guid1, deserialized.ComponentGuid);
             Assert.NotNull(deserialized.InstanceGuid);
             Assert.Equal(guid2, deserialized.InstanceGuid.Value);
-            Assert.True(deserialized.Selected);
             Assert.Equal(100.5f, deserialized.Pivot.X);
             Assert.Equal(200.75f, deserialized.Pivot.Y);
             Assert.Equal(1, deserialized.Id);
-            Assert.NotNull(deserialized.Params);
+            Assert.NotNull(deserialized.Properties);
+            Assert.NotNull(deserialized.ComponentState);
+            Assert.True(deserialized.ComponentState.Selected);
             Assert.NotNull(deserialized.InputSettings);
             Assert.Single(deserialized.InputSettings);
             Assert.NotNull(deserialized.OutputSettings);

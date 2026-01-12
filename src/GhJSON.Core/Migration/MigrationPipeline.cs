@@ -18,7 +18,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using GhJSON.Core.Migration.Migrators;
 using GhJSON.Core.Models.Document;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -71,8 +70,7 @@ namespace GhJSON.Core.Migration
         /// </summary>
         public void RegisterBuiltInMigrators()
         {
-            Register(new V0_9_to_V1_0_PivotMigrator());
-            Register(new V0_9_to_V1_0_PropertyMigrator());
+            // TODO: Register built-in migrators
         }
 
         /// <summary>

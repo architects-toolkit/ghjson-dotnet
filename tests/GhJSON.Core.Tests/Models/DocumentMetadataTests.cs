@@ -41,8 +41,8 @@ namespace GhJSON.Core.Tests.Models
             Assert.Null(metadata.ComponentCount);
             Assert.Null(metadata.ConnectionCount);
             Assert.Null(metadata.GroupCount);
-            Assert.Null(metadata.Plugin);
-            Assert.Null(metadata.PluginVersion);
+            Assert.Null(metadata.GeneratorName);
+            Assert.Null(metadata.GeneratorVersion);
         }
 
         [Fact]
@@ -63,8 +63,8 @@ namespace GhJSON.Core.Tests.Models
                 ComponentCount = 10,
                 ConnectionCount = 15,
                 GroupCount = 2,
-                Plugin = "SmartHopper",
-                PluginVersion = "1.2.4"
+                GeneratorName = "SmartHopper",
+                GeneratorVersion = "1.2.4"
             };
 
             var json = JsonConvert.SerializeObject(original);
@@ -91,8 +91,8 @@ namespace GhJSON.Core.Tests.Models
             Assert.Equal(10, deserialized.ComponentCount);
             Assert.Equal(15, deserialized.ConnectionCount);
             Assert.Equal(2, deserialized.GroupCount);
-            Assert.Equal("SmartHopper", deserialized.Plugin);
-            Assert.Equal("1.2.4", deserialized.PluginVersion);
+            Assert.Equal("SmartHopper", deserialized.GeneratorName);
+            Assert.Equal("1.2.4", deserialized.GeneratorVersion);
         }
 
         [Fact]

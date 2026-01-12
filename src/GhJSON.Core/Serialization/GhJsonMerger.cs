@@ -246,7 +246,7 @@ namespace GhJSON.Core.Serialization
                 Name = source.Name,
                 NickName = source.NickName,
                 Pivot = source.Pivot,
-                Params = source.Params,
+                Properties = source.Properties,
                 InputSettings = source.InputSettings,
                 OutputSettings = source.OutputSettings,
                 ComponentState = source.ComponentState

@@ -92,10 +92,10 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             {
             }
 
-            // Extract corner positions
+            // Extract corner positions as array of "x,y" strings per schema
             try
             {
-                var corners = new List<Dictionary<string, float>>();
+                var corners = new List<string>();
                 
                 // GH_Scribble has Corner1, Corner2, Corner3, Corner4 properties
                 var type = scribble.GetType();
@@ -109,11 +109,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                         var corner = prop.GetValue(scribble);
                         if (corner is PointF pt)
                         {
-                            corners.Add(new Dictionary<string, float>
-                            {
-                                { "x", pt.X },
-                                { "y", pt.Y }
-                            });
+                            corners.Add($"{pt.X},{pt.Y}");
                         }
                     }
                 }
@@ -171,7 +167,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 }
             }
 
-            // Apply corner positions
+            // Apply corner positions from "x,y" string format per schema
             if (state.Corners != null && state.Corners.Count >= 4)
             {
                 try
@@ -181,8 +177,11 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
 
                     for (int i = 0; i < Math.Min(cornerNames.Length, state.Corners.Count); i++)
                     {
-                        var cornerData = state.Corners[i];
-                        if (cornerData.TryGetValue("x", out var x) && cornerData.TryGetValue("y", out var y))
+                        var cornerStr = state.Corners[i];
+                        var parts = cornerStr.Split(',');
+                        if (parts.Length == 2 &&
+                            float.TryParse(parts[0], out var x) &&
+                            float.TryParse(parts[1], out var y))
                         {
                             var prop = type.GetProperty(cornerNames[i]);
                             if (prop != null && prop.CanWrite)

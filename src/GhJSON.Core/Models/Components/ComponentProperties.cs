@@ -43,13 +43,6 @@ namespace GhJSON.Core.Models.Components
         public string? Library { get; set; }
 
         /// <summary>
-        /// Gets or sets the component type/subcategory.
-        /// </summary>
-        [JsonProperty("type", NullValueHandling = NullValueHandling.Ignore)]
-        [JsonConverter(typeof(EmptyStringIgnoreConverter))]
-        public string? Type { get; set; }
-
-        /// <summary>
         /// Gets or sets the nickname of the component.
         /// </summary>
         [JsonProperty("nickName", NullValueHandling = NullValueHandling.Ignore)]
@@ -70,12 +63,6 @@ namespace GhJSON.Core.Models.Components
         public Guid? InstanceGuid { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the component is currently selected in the Grasshopper canvas.
-        /// </summary>
-        [JsonProperty("selected", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? Selected { get; set; }
-
-        /// <summary>
         /// Gets or sets the pivot point of the component on the canvas.
         /// Uses compact string format "X,Y" instead of object format for optimization.
         /// </summary>
@@ -89,12 +76,6 @@ namespace GhJSON.Core.Models.Components
         [JsonProperty("id")]
         [JsonRequired]
         public int Id { get; set; }
-
-        /// <summary>
-        /// Gets or sets simple key-value pairs for basic component properties.
-        /// </summary>
-        [JsonProperty("params", NullValueHandling = NullValueHandling.Ignore)]
-        public Dictionary<string, object>? Params { get; set; }
 
         /// <summary>
         /// Gets or sets the input parameter settings array.
@@ -127,10 +108,10 @@ namespace GhJSON.Core.Models.Components
         public List<string>? Errors { get; set; }
 
         /// <summary>
-        /// Gets or sets schema-specific properties (legacy format).
+        /// Gets or sets simple key-value pairs for additional component properties.
         /// </summary>
         [JsonProperty("properties", NullValueHandling = NullValueHandling.Ignore)]
-        public Dictionary<string, object>? SchemaProperties { get; set; }
+        public Dictionary<string, object>? Properties { get; set; }
 
         /// <summary>
         /// Gets a value indicating whether the component has any validation errors or warnings.

@@ -150,11 +150,33 @@ namespace GhJSON.Grasshopper.Serialization.ScriptComponents
                 settings.DataMapping = param.DataMapping.ToString();
             }
 
-            // Extract additional settings (Reverse, Simplify, etc.)
-            var additionalSettings = ExtractAdditionalSettings(param);
-            if (additionalSettings != null)
+            // Extract flattened parameter modifiers (per schema)
+            if (param.Reverse)
             {
-                settings.AdditionalSettings = additionalSettings;
+                settings.Reverse = true;
+            }
+
+            if (param.Simplify)
+            {
+                settings.Simplify = true;
+            }
+
+            // Extract Invert flag via reflection (for boolean parameters)
+            try
+            {
+                var invertProp = param.GetType().GetProperty("Invert");
+                if (invertProp != null && invertProp.CanRead)
+                {
+                    var invertValue = invertProp.GetValue(param) as bool?;
+                    if (invertValue == true)
+                    {
+                        settings.Invert = true;
+                    }
+                }
+            }
+            catch
+            {
+                // Property doesn't exist or can't be read
             }
 
             // Try to extract type hint from script parameter
@@ -204,50 +226,6 @@ namespace GhJSON.Grasshopper.Serialization.ScriptComponents
         }
 
         /// <summary>
-        /// Extracts additional parameter settings (modifiers) from a parameter.
-        /// </summary>
-        private static AdditionalParameterSettings? ExtractAdditionalSettings(IGH_Param param)
-        {
-            var additionalSettings = new AdditionalParameterSettings();
-            bool hasAdditionalSettings = false;
-
-            // Extract Reverse flag
-            if (param.Reverse)
-            {
-                additionalSettings.Reverse = true;
-                hasAdditionalSettings = true;
-            }
-
-            // Extract Simplify flag
-            if (param.Simplify)
-            {
-                additionalSettings.Simplify = true;
-                hasAdditionalSettings = true;
-            }
-
-            // Extract Invert flag via reflection
-            try
-            {
-                var invertProp = param.GetType().GetProperty("Invert");
-                if (invertProp != null && invertProp.CanRead)
-                {
-                    var invertValue = invertProp.GetValue(param) as bool?;
-                    if (invertValue == true)
-                    {
-                        additionalSettings.Invert = true;
-                        hasAdditionalSettings = true;
-                    }
-                }
-            }
-            catch
-            {
-                // Property doesn't exist or can't be read
-            }
-
-            return hasAdditionalSettings ? additionalSettings : null;
-        }
-
-        /// <summary>
         /// Applies parameter settings to a script parameter.
         /// </summary>
         /// <param name="param">The parameter to apply settings to.</param>
@@ -282,17 +260,31 @@ namespace GhJSON.Grasshopper.Serialization.ScriptComponents
                 }
             }
 
-            // Apply additional settings
-            if (settings.AdditionalSettings != null)
+            // Apply flattened parameter modifiers (per schema)
+            if (settings.Reverse == true)
             {
-                if (settings.AdditionalSettings.Reverse == true)
-                {
-                    param.Reverse = true;
-                }
+                param.Reverse = true;
+            }
 
-                if (settings.AdditionalSettings.Simplify == true)
+            if (settings.Simplify == true)
+            {
+                param.Simplify = true;
+            }
+
+            // Apply Invert via reflection
+            if (settings.Invert == true)
+            {
+                try
                 {
-                    param.Simplify = true;
+                    var invertProp = param.GetType().GetProperty("Invert");
+                    if (invertProp != null && invertProp.CanWrite)
+                    {
+                        invertProp.SetValue(param, true);
+                    }
+                }
+                catch
+                {
+                    // Property doesn't exist or can't be written
                 }
             }
 

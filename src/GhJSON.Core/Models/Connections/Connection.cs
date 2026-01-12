@@ -33,10 +33,10 @@ namespace GhJSON.Core.Models.Connections
 
         /// <summary>
         /// Gets or sets the name of the parameter on the component.
+        /// Optional when using paramIndex.
         /// </summary>
-        [JsonProperty("paramName", Order = 2)]
-        [JsonRequired]
-        public string ParamName { get; set; } = string.Empty;
+        [JsonProperty("paramName", NullValueHandling = NullValueHandling.Ignore, Order = 2)]
+        public string? ParamName { get; set; }
 
         /// <summary>
         /// Gets or sets the zero-based index of the parameter.
@@ -46,12 +46,12 @@ namespace GhJSON.Core.Models.Connections
         public int? ParamIndex { get; set; }
 
         /// <summary>
-        /// Checks if the connection has valid component ID and parameter name.
+        /// Checks if the connection has valid component ID and either parameter name or index.
         /// </summary>
-        /// <returns>True if the connection has a valid ID and parameter name.</returns>
+        /// <returns>True if the connection has a valid ID and either parameter name or index.</returns>
         public bool IsValid()
         {
-            return this.Id > 0 && !string.IsNullOrEmpty(this.ParamName);
+            return this.Id > 0 && (!string.IsNullOrEmpty(this.ParamName) || this.ParamIndex.HasValue);
         }
     }
 }

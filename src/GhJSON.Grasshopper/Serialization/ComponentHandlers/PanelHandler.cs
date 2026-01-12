@@ -80,14 +80,14 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 hasState = true;
             }
 
-            // Extract panel color
+            // Extract panel color as ARGB string format per schema
             try
             {
                 var panelColor = panel.Properties?.Colour;
                 if (panelColor.HasValue)
                 {
-                    state.AdditionalProperties ??= new Dictionary<string, object>();
-                    state.AdditionalProperties["color"] = DataTypeSerializer.Serialize(panelColor.Value);
+                    var c = panelColor.Value;
+                    state.Color = $"{c.A},{c.R},{c.G},{c.B}";
                     hasState = true;
                 }
             }
@@ -96,15 +96,13 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 Debug.WriteLine($"[PanelHandler] Error extracting color: {ex.Message}");
             }
 
-            // Extract panel bounds
+            // Extract panel bounds as WxH string format per schema
             try
             {
                 var bounds = panel.Attributes?.Bounds;
                 if (bounds.HasValue && !bounds.Value.IsEmpty)
                 {
-                    state.AdditionalProperties ??= new Dictionary<string, object>();
-                    var boundsTuple = (width: (double)bounds.Value.Width, height: (double)bounds.Value.Height);
-                    state.AdditionalProperties["bounds"] = DataTypeSerializer.Serialize(boundsTuple);
+                    state.Bounds = $"{bounds.Value.Width}x{bounds.Value.Height}";
                     hasState = true;
                 }
             }
@@ -195,27 +193,47 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 previewObj.Hidden = state.Hidden.Value;
             }
 
-            // Apply color from AdditionalProperties
-            if (state.AdditionalProperties != null &&
-                state.AdditionalProperties.TryGetValue("color", out var colorObj) &&
-                colorObj is string colorStr &&
-                DataTypeSerializer.TryDeserialize("Color", colorStr, out var deserialized) &&
-                deserialized is Color color)
+            // Apply color from ARGB string format per schema
+            if (!string.IsNullOrEmpty(state.Color))
             {
-                panel.Properties.Colour = color;
+                try
+                {
+                    var parts = state.Color.Split(',');
+                    if (parts.Length == 4 &&
+                        int.TryParse(parts[0], out var a) &&
+                        int.TryParse(parts[1], out var r) &&
+                        int.TryParse(parts[2], out var g) &&
+                        int.TryParse(parts[3], out var b))
+                    {
+                        panel.Properties.Colour = Color.FromArgb(a, r, g, b);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error applying color: {ex.Message}");
+                }
             }
 
-            // Apply bounds from AdditionalProperties
-            if (state.AdditionalProperties != null &&
-                state.AdditionalProperties.TryGetValue("bounds", out var boundsObj) &&
-                boundsObj is string boundsStr &&
-                DataTypeSerializer.TryDeserialize("Bounds", boundsStr, out var deserializedBounds) &&
-                deserializedBounds is ValueTuple<double, double> boundsTuple)
+            // Apply bounds from WxH string format per schema
+            if (!string.IsNullOrEmpty(state.Bounds))
             {
-                var attr = panel.Attributes;
-                if (attr != null)
+                try
                 {
-                    attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, (float)boundsTuple.Item1, (float)boundsTuple.Item2);
+                    var parts = state.Bounds.Split('x');
+                    if (parts.Length == 2 &&
+                        float.TryParse(parts[0], out var width) &&
+                        float.TryParse(parts[1], out var height))
+                    {
+                        var attr = panel.Attributes;
+                        if (attr != null)
+                        {
+                            attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, width, height);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error applying bounds: {ex.Message}");
                 }
             }
 

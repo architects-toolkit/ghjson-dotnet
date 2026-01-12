@@ -158,19 +158,13 @@ namespace GhJSON.Grasshopper.Serialization
                 Pivot = new CompactPosition(pivot.X, pivot.Y)
             };
 
-            // Only include Selected when true (legacy behavior)
-            if (obj.Attributes?.Selected == true)
-            {
-                props.Selected = true;
-            }
-
             // Schema properties
             if (options.IncludeSchemaProperties)
             {
                 var schemaProps = propertyManager.ExtractProperties(obj);
                 if (schemaProps.Count > 0)
                 {
-                    props.SchemaProperties = schemaProps;
+                    props.Properties = schemaProps;
                 }
             }
 
@@ -179,6 +173,13 @@ namespace GhJSON.Grasshopper.Serialization
             {
                 var handler = handlerRegistry.GetHandler(obj);
                 props.ComponentState = handler.ExtractState(obj);
+
+                // Move 'selected' to componentState per schema
+                if (obj.Attributes?.Selected == true)
+                {
+                    props.ComponentState ??= new ComponentState();
+                    props.ComponentState.Selected = true;
+                }
             }
 
             // Parameter settings
@@ -197,7 +198,69 @@ namespace GhJSON.Grasshopper.Serialization
                 }
             }
 
+            // Extract warnings and errors (only for Standard/Optimized, not Lite)
+            if (options.IncludeWarningsAndErrors)
+            {
+                ExtractWarningsAndErrors(obj, props);
+            }
+
             return props;
+        }
+
+        private static void ExtractWarningsAndErrors(IGH_ActiveObject obj, ComponentProperties props)
+        {
+            try
+            {
+                // Extract runtime messages from the component
+                if (obj is IGH_Component component)
+                {
+                    var warnings = new List<string>();
+                    var errors = new List<string>();
+
+                    foreach (var msg in component.RuntimeMessages(GH_RuntimeMessageLevel.Warning))
+                    {
+                        if (!string.IsNullOrWhiteSpace(msg))
+                            warnings.Add(msg);
+                    }
+
+                    foreach (var msg in component.RuntimeMessages(GH_RuntimeMessageLevel.Error))
+                    {
+                        if (!string.IsNullOrWhiteSpace(msg))
+                            errors.Add(msg);
+                    }
+
+                    if (warnings.Count > 0)
+                        props.Warnings = warnings;
+                    if (errors.Count > 0)
+                        props.Errors = errors;
+                }
+                else if (obj is IGH_Param param)
+                {
+                    var warnings = new List<string>();
+                    var errors = new List<string>();
+
+                    foreach (var msg in param.RuntimeMessages(GH_RuntimeMessageLevel.Warning))
+                    {
+                        if (!string.IsNullOrWhiteSpace(msg))
+                            warnings.Add(msg);
+                    }
+
+                    foreach (var msg in param.RuntimeMessages(GH_RuntimeMessageLevel.Error))
+                    {
+                        if (!string.IsNullOrWhiteSpace(msg))
+                            errors.Add(msg);
+                    }
+
+                    if (warnings.Count > 0)
+                        props.Warnings = warnings;
+                    if (errors.Count > 0)
+                        props.Errors = errors;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[GhJsonSerializer] Error extracting warnings/errors: {ex.Message}");
+            }
         }
 
         private static void ExtractGroupInformation(
@@ -216,11 +279,13 @@ namespace GhJSON.Grasshopper.Serialization
 
                 document.Groups = new List<GroupInfo>();
 
+                int groupId = 1000; // Start group IDs at 1000 to avoid collision with component IDs
                 foreach (var group in groups)
                 {
                     var groupInfo = new GroupInfo
                     {
                         InstanceGuid = group.InstanceGuid,
+                        Id = groupId++,
                         // Grasshopper groups use "Group" as the default title. We only want to
                         // serialize an explicit name when the user has actually set one.
                         Name = string.IsNullOrWhiteSpace(group.NickName) ||
@@ -623,11 +688,38 @@ namespace GhJSON.Grasshopper.Serialization
 
         private static DocumentMetadata CreateMetadata(List<IGH_ActiveObject> objects)
         {
-            return new DocumentMetadata
+            var metadata = new DocumentMetadata
             {
                 ComponentCount = objects.Count,
-                PluginVersion = "1.0.0"
+                GeneratorName = "GhJSON.Grasshopper",
+                GeneratorVersion = GetAssemblyVersion(),
+                Modified = DateTime.UtcNow.ToString("o") // ISO 8601 format
             };
+
+            // Try to get Rhino/Grasshopper version info
+            try
+            {
+                metadata.RhinoVersion = Rhino.RhinoApp.Version.ToString();
+            }
+            catch
+            {
+            }
+
+            return metadata;
+        }
+
+        private static string GetAssemblyVersion()
+        {
+            try
+            {
+                var assembly = typeof(GhJsonSerializer).Assembly;
+                var version = assembly.GetName().Version;
+                return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
+            }
+            catch
+            {
+                return "1.0.0";
+            }
         }
     }
 }

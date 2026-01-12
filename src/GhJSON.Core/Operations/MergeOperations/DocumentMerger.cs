@@ -195,11 +195,12 @@ namespace GhJSON.Core.Operations.MergeOperations
                 ComponentGuid = source.ComponentGuid,
                 InstanceGuid = source.InstanceGuid,
                 Pivot = source.Pivot,
-                Selected = source.Selected,
                 ComponentState = source.ComponentState,
                 InputSettings = source.InputSettings,
                 OutputSettings = source.OutputSettings,
-                SchemaProperties = source.SchemaProperties
+                Properties = source.Properties,
+                Warnings = source.Warnings,
+                Errors = source.Errors
             };
         }
 

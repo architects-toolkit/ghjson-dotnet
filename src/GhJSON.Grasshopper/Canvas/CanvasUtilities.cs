@@ -186,7 +186,11 @@ namespace GhJSON.Grasshopper.Canvas
                 throw new InvalidOperationException("No active Grasshopper document");
             }
 
-            obj.CreateAttributes();
+            if (obj.Attributes == null)
+            {
+                obj.CreateAttributes();
+            }
+
             obj.Attributes.Pivot = position;
             document.AddObject(obj, false);
 

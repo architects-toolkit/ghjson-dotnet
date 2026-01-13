@@ -163,6 +163,74 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             {
             }
 
+            // Extract font
+            try
+            {
+                var font = panel.Properties?.Font;
+                if (font != null)
+                {
+                    var fontDict = new Dictionary<string, object>();
+
+                    if (!string.Equals(font.Name, "Courier New", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fontDict["name"] = font.Name;
+                    }
+
+                    if (font.Bold)
+                    {
+                        fontDict["bold"] = true;
+                    }
+
+                    if (font.Italic)
+                    {
+                        fontDict["italic"] = true;
+                    }
+
+                    // Always include size when emitting font.
+                    // If the only thing we have is the default family/style and size, we omit the entire font object.
+                    if (fontDict.Count > 0)
+                    {
+                        fontDict["size"] = font.Size;
+                        state.Font = fontDict;
+                        hasState = true;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            // Extract alignment (store as int per GH enum)
+            try
+            {
+                var align = panel.Properties?.Alignment;
+                if (align.HasValue)
+                {
+                    var alignmentValue = (int)align.Value;
+                    if (alignmentValue != 0)
+                    {
+                        state.Alignment = alignmentValue;
+                        hasState = true;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            // Extract special codes
+            try
+            {
+                if (panel.Properties?.SpecialCodes == true)
+                {
+                    state.SpecialCodes = true;
+                    hasState = true;
+                }
+            }
+            catch
+            {
+            }
+
             return hasState ? state : null;
         }
 
@@ -259,6 +327,47 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             if (state.DrawPaths.HasValue)
             {
                 panel.Properties.DrawPaths = state.DrawPaths.Value;
+            }
+
+            // Apply font
+            if (state.Font != null)
+            {
+                try
+                {
+                    var name = state.Font.TryGetValue("name", out var n) ? n?.ToString() : null;
+                    var size = state.Font.TryGetValue("size", out var s) && float.TryParse(s?.ToString(), out var fs) ? fs : (float?)null;
+                    var bold = state.Font.TryGetValue("bold", out var b) && bool.TryParse(b?.ToString(), out var fb) && fb;
+                    var italic = state.Font.TryGetValue("italic", out var i) && bool.TryParse(i?.ToString(), out var fi) && fi;
+
+                    if (!string.IsNullOrEmpty(name) && size.HasValue)
+                    {
+                        var style = System.Drawing.FontStyle.Regular;
+                        if (bold) style |= System.Drawing.FontStyle.Bold;
+                        if (italic) style |= System.Drawing.FontStyle.Italic;
+                        panel.Properties.Font = new System.Drawing.Font(name, size.Value, style);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            // Apply alignment
+            if (state.Alignment.HasValue)
+            {
+                try
+                {
+                    panel.Properties.Alignment = (GH_Panel.Alignment)state.Alignment.Value;
+                }
+                catch
+                {
+                }
+            }
+
+            // Apply special codes
+            if (state.SpecialCodes.HasValue)
+            {
+                panel.Properties.SpecialCodes = state.SpecialCodes.Value;
             }
 
             // Apply value

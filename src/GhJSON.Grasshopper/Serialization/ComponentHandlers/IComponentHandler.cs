@@ -30,18 +30,6 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     public interface IComponentHandler
     {
         /// <summary>
-        /// Gets the component GUIDs this handler supports.
-        /// Return empty to rely on <see cref="SupportedTypes"/> only.
-        /// </summary>
-        IEnumerable<Guid> SupportedComponentGuids { get; }
-
-        /// <summary>
-        /// Gets the .NET types this handler supports.
-        /// Return empty to rely on <see cref="SupportedComponentGuids"/> only.
-        /// </summary>
-        IEnumerable<Type> SupportedTypes { get; }
-
-        /// <summary>
         /// Gets the priority for handler selection. Higher values take precedence.
         /// Use 100 for specific handlers, 0 for the default handler.
         /// </summary>

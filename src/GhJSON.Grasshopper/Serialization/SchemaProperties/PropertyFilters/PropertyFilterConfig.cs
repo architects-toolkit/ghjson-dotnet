@@ -72,96 +72,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             "DisplayName",
         };
 
-        public static readonly Dictionary<ComponentCategory, HashSet<string>> CategoryProperties = new()
-        {
-            [ComponentCategory.Panel] = new()
-            {
-                "Font",
-                "Alignment",
-                "Multiline",
-                "DrawIndices",
-                "DrawPaths",
-                "SpecialCodes",
-            },
-            [ComponentCategory.Scribble] = new()
-            {
-                "Text",
-                "Font",
-                "Corners",
-            },
-            [ComponentCategory.Slider] = new()
-            {
-                "Minimum",
-                "Maximum",
-                "Range",
-                "Decimals",
-                "Limit",
-                "DisplayFormat",
-            },
-            [ComponentCategory.MultidimensionalSlider] = new()
-            {
-                "SliderMode",
-                "XInterval",
-                "YInterval",
-                "ZInterval",
-                "X",
-                "Y",
-                "Z",
-            },
-            [ComponentCategory.ValueList] = new()
-            {
-                "ListMode",
-                "ListItems",
-                "SelectedIndices",
-            },
-            [ComponentCategory.Button] = new()
-            {
-                "ExpressionNormal",
-                "ExpressionPressed",
-            },
-            [ComponentCategory.BooleanToggle] = new(),
-            [ComponentCategory.ColourSwatch] = new(),
-            [ComponentCategory.Script] = new()
-            {
-                "Script",
-                "MarshInputs",
-                "MarshOutputs",
-                "VariableName",
-            },
-            [ComponentCategory.GeometryPipeline] = new()
-            {
-                "LayerFilter",
-                "NameFilter",
-                "TypeFilter",
-                "IncludeLocked",
-                "IncludeHidden",
-                "GroupByLayer",
-                "GroupByType",
-            },
-            [ComponentCategory.GraphMapper] = new()
-            {
-                "GraphType",
-            },
-            [ComponentCategory.PathMapper] = new()
-            {
-                "Lexers",
-            },
-            [ComponentCategory.ColorWheel] = new()
-            {
-                "State",
-            },
-            [ComponentCategory.DataRecorder] = new()
-            {
-                "DataLimit",
-                "RecordData",
-            },
-            [ComponentCategory.ItemPicker] = new()
-            {
-                "TreePath",
-                "TreeIndex",
-            },
-        };
-
         public static readonly Dictionary<SerializationContext, PropertyFilterRule> ContextRules = new()
         {
             [SerializationContext.Standard] = new()
@@ -169,14 +79,12 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
                 IncludeCore = true,
                 IncludeParameters = true,
                 IncludeComponents = true,
-                IncludeCategories = ComponentCategory.Essential | ComponentCategory.UI,
             },
             [SerializationContext.Optimized] = new()
             {
                 IncludeCore = true,
                 IncludeParameters = true,
                 IncludeComponents = true,
-                IncludeCategories = ComponentCategory.Essential | ComponentCategory.UI,
                 AdditionalExcludes = new() { "PersistentData" },
             },
             [SerializationContext.Lite] = new()
@@ -184,7 +92,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
                 IncludeCore = true,
                 IncludeParameters = true,
                 IncludeComponents = false,
-                IncludeCategories = ComponentCategory.Essential,
                 AdditionalExcludes = new()
                 {
                     "ComponentGuid", "InstanceGuid", "Selected", "DisplayName",
@@ -193,33 +100,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
                 },
             },
         };
-    }
-
-    [Flags]
-    public enum ComponentCategory
-    {
-        None = 0,
-        Panel = 1 << 0,
-        Scribble = 1 << 1,
-        Slider = 1 << 2,
-        MultidimensionalSlider = 1 << 3,
-        ValueList = 1 << 4,
-        Button = 1 << 5,
-        BooleanToggle = 1 << 6,
-        ColourSwatch = 1 << 7,
-        Script = 1 << 8,
-        GeometryPipeline = 1 << 9,
-        GraphMapper = 1 << 10,
-        PathMapper = 1 << 11,
-        ColorWheel = 1 << 12,
-        DataRecorder = 1 << 13,
-        ItemPicker = 1 << 14,
-
-        Essential = Panel | Scribble | Slider | ValueList | Script,
-        UI = Panel | Scribble | Button | BooleanToggle | ColourSwatch | ColorWheel,
-        Data = ValueList | DataRecorder | ItemPicker,
-        Advanced = GeometryPipeline | GraphMapper | PathMapper,
-        All = ~None,
     }
 
     public enum SerializationContext
@@ -234,7 +114,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
         public bool IncludeCore { get; set; } = true;
         public bool IncludeParameters { get; set; } = true;
         public bool IncludeComponents { get; set; } = true;
-        public ComponentCategory IncludeCategories { get; set; } = ComponentCategory.All;
         public HashSet<string> AdditionalIncludes { get; set; } = new();
         public HashSet<string> AdditionalExcludes { get; set; } = new();
     }

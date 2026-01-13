@@ -198,7 +198,6 @@ namespace GhJSON.Core.Operations.MergeOperations
                 ComponentState = source.ComponentState,
                 InputSettings = source.InputSettings,
                 OutputSettings = source.OutputSettings,
-                Properties = source.Properties,
                 Warnings = source.Warnings,
                 Errors = source.Errors
             };

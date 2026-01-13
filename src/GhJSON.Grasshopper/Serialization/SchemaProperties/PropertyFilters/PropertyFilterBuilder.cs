@@ -45,7 +45,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             builder._rule.IncludeCore = baseRule.IncludeCore;
             builder._rule.IncludeParameters = baseRule.IncludeParameters;
             builder._rule.IncludeComponents = baseRule.IncludeComponents;
-            builder._rule.IncludeCategories = baseRule.IncludeCategories;
             builder._rule.AdditionalIncludes.UnionWith(baseRule.AdditionalIncludes);
             builder._rule.AdditionalExcludes.UnionWith(baseRule.AdditionalExcludes);
 
@@ -68,34 +67,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
         {
             _rule.IncludeComponents = include;
             return this;
-        }
-
-        public PropertyFilterBuilder WithCategories(ComponentCategory categories)
-        {
-            _rule.IncludeCategories = categories;
-            return this;
-        }
-
-        public PropertyFilterBuilder AddCategories(ComponentCategory categories)
-        {
-            _rule.IncludeCategories |= categories;
-            return this;
-        }
-
-        public PropertyFilterBuilder RemoveCategories(ComponentCategory categories)
-        {
-            _rule.IncludeCategories &= ~categories;
-            return this;
-        }
-
-        public PropertyFilterBuilder WithEssentialCategories()
-        {
-            return WithCategories(ComponentCategory.Essential);
-        }
-
-        public PropertyFilterBuilder WithUICategories()
-        {
-            return WithCategories(ComponentCategory.UI);
         }
 
         public PropertyFilterBuilder Include(params string[] propertyNames)
@@ -135,7 +106,7 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             return WithCore(true)
                 .WithParameters(false)
                 .WithComponents(false)
-                .WithCategories(ComponentCategory.None);
+                ;
         }
 
         public PropertyFilterBuilder Maximum()
@@ -143,7 +114,7 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             return WithCore(true)
                 .WithParameters(true)
                 .WithComponents(true)
-                .WithCategories(ComponentCategory.All);
+                ;
         }
 
         public PropertyFilterBuilder Configure(Action<PropertyFilterRule> configureAction)
@@ -159,7 +130,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
                 IncludeCore = _rule.IncludeCore,
                 IncludeParameters = _rule.IncludeParameters,
                 IncludeComponents = _rule.IncludeComponents,
-                IncludeCategories = _rule.IncludeCategories,
                 AdditionalIncludes = new HashSet<string>(_rule.AdditionalIncludes),
                 AdditionalExcludes = new HashSet<string>(_rule.AdditionalExcludes)
             };
@@ -168,11 +138,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
         public PropertyFilter BuildFilter()
         {
             return PropertyFilter.CreateCustom(Build());
-        }
-
-        public SchemaProperties.PropertyManagerV2 BuildManager()
-        {
-            return SchemaProperties.PropertyManagerV2.CreateCustom(Build());
         }
     }
 
@@ -183,7 +148,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             return builder.WithCore(true)
                 .WithParameters(true)
                 .WithComponents(true)
-                .WithEssentialCategories()
                 .Exclude("VolatileData", "IsValid", "TypeDescription");
         }
 

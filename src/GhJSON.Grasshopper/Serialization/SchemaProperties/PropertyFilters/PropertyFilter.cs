@@ -18,8 +18,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using GhJSON.Grasshopper.Serialization.ScriptComponents;
-using Grasshopper.Kernel.Special;
 
 namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
 {
@@ -61,30 +59,12 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
                 return true;
             }
 
-            var category = GetComponentCategory(sourceObject);
-            if (category != ComponentCategory.None && _rule.IncludeCategories.HasFlag(category))
-            {
-                if (PropertyFilterConfig.CategoryProperties.TryGetValue(category, out var categoryProps))
-                {
-                    return categoryProps.Contains(propertyName);
-                }
-            }
-
             return false;
         }
 
         public HashSet<string> GetAllowedProperties(object sourceObject)
         {
             var result = new HashSet<string>(_allowedProperties);
-
-            var category = GetComponentCategory(sourceObject);
-            if (category != ComponentCategory.None && _rule.IncludeCategories.HasFlag(category))
-            {
-                if (PropertyFilterConfig.CategoryProperties.TryGetValue(category, out var categoryProps))
-                {
-                    result.UnionWith(categoryProps);
-                }
-            }
 
             result.ExceptWith(PropertyFilterConfig.GlobalBlacklist);
             result.ExceptWith(_rule.AdditionalExcludes);
@@ -99,7 +79,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             filter._rule.IncludeCore = customRule.IncludeCore;
             filter._rule.IncludeParameters = customRule.IncludeParameters;
             filter._rule.IncludeComponents = customRule.IncludeComponents;
-            filter._rule.IncludeCategories = customRule.IncludeCategories;
             filter._rule.AdditionalIncludes.UnionWith(customRule.AdditionalIncludes);
             filter._rule.AdditionalExcludes.UnionWith(customRule.AdditionalExcludes);
 
@@ -128,30 +107,6 @@ namespace GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters
             return properties;
         }
 
-        private static ComponentCategory GetComponentCategory(object obj)
-        {
-            // Script components (prefer GUID-based check)
-            if (obj is global::Grasshopper.Kernel.IGH_ActiveObject ao && ScriptComponentFactory.IsScriptComponent(ao))
-                return ComponentCategory.Script;
-
-            return obj switch
-            {
-                GH_Panel => ComponentCategory.Panel,
-                GH_Scribble => ComponentCategory.Scribble,
-                GH_NumberSlider => ComponentCategory.Slider,
-                GH_MultiDimensionalSlider => ComponentCategory.MultidimensionalSlider,
-                GH_ValueList => ComponentCategory.ValueList,
-                GH_ButtonObject => ComponentCategory.Button,
-                GH_BooleanToggle => ComponentCategory.BooleanToggle,
-                GH_ColourSwatch => ComponentCategory.ColourSwatch,
-                GH_GeometryPipeline => ComponentCategory.GeometryPipeline,
-                GH_GraphMapper => ComponentCategory.GraphMapper,
-                GH_PathMapper => ComponentCategory.PathMapper,
-                GH_ColourWheel => ComponentCategory.ColorWheel,
-                GH_DataRecorder => ComponentCategory.DataRecorder,
-                _ => ComponentCategory.None
-            };
-        }
     }
 
     public static class PropertyFilterExtensions

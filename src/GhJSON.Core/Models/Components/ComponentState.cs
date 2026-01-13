@@ -111,10 +111,11 @@ namespace GhJSON.Core.Models.Components
         public string? ListMode { get; set; }
 
         /// <summary>
-        /// Gets or sets the indices of selected items in a value list.
+        /// Gets or sets the list items for value list components.
+        /// Each item contains Name, Expression, and optionally Selected state.
         /// </summary>
-        [JsonProperty("selectedIndices", NullValueHandling = NullValueHandling.Ignore)]
-        public List<int>? SelectedIndices { get; set; }
+        [JsonProperty("listItems", NullValueHandling = NullValueHandling.Ignore)]
+        public List<ValueListItem>? ListItems { get; set; }
 
         /// <summary>
         /// Gets or sets font configuration for text components.
@@ -142,10 +143,16 @@ namespace GhJSON.Core.Models.Components
         public bool? DrawPaths { get; set; }
 
         /// <summary>
-        /// Gets or sets the alignment for panel text.
+        /// Gets or sets the alignment (for panels).
         /// </summary>
         [JsonProperty("alignment", NullValueHandling = NullValueHandling.Ignore)]
         public int? Alignment { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether to interpret panel text as special codes (for panels).
+        /// </summary>
+        [JsonProperty("specialCodes", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? SpecialCodes { get; set; }
 
         /// <summary>
         /// Gets or sets the bounds (size) for panels and other UI components.

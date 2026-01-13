@@ -113,12 +113,6 @@ namespace GhJSON.Core.Models.Components
         public List<string>? Errors { get; set; }
 
         /// <summary>
-        /// Gets or sets simple key-value pairs for additional component properties.
-        /// </summary>
-        [JsonProperty("properties", NullValueHandling = NullValueHandling.Ignore)]
-        public Dictionary<string, object>? Properties { get; set; }
-
-        /// <summary>
         /// Gets a value indicating whether the component has any validation errors or warnings.
         /// </summary>
         [JsonIgnore]

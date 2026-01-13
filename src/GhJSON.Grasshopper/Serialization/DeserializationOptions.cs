@@ -40,7 +40,7 @@ namespace GhJSON.Grasshopper.Serialization
             ValidateComponentTypes = true,
             ReplaceIntegerIds = true,
             PreserveInstanceGuids = false,
-            ApplySchemaProperties = true
+            ApplyAdditionalProperties = true
         };
 
         /// <summary>
@@ -58,7 +58,7 @@ namespace GhJSON.Grasshopper.Serialization
             ValidateComponentTypes = true,
             ReplaceIntegerIds = true,
             PreserveInstanceGuids = false,
-            ApplySchemaProperties = true
+            ApplyAdditionalProperties = true
         };
 
         /// <summary>
@@ -76,7 +76,7 @@ namespace GhJSON.Grasshopper.Serialization
             ValidateComponentTypes = true,
             ReplaceIntegerIds = true,
             PreserveInstanceGuids = false,
-            ApplySchemaProperties = false
+            ApplyAdditionalProperties = false
         };
 
         /// <summary>
@@ -90,11 +90,11 @@ namespace GhJSON.Grasshopper.Serialization
         public bool ApplyParameterSettings { get; set; } = true;
 
         /// <summary>
-        /// Gets or sets a value indicating whether to apply schema properties (legacy format)
-        /// from <see cref="GhJSON.Core.Models.Components.ComponentProperties.SchemaProperties"/>.
+        /// Gets or sets a value indicating whether schema properties should be applied
+        /// from <see cref="GhJSON.Core.Models.Components.ComponentState.AdditionalProperties"/>.
         /// These are component/param-specific properties beyond the core GhJSON schema.
         /// </summary>
-        public bool ApplySchemaProperties { get; set; } = true;
+        public bool ApplyAdditionalProperties { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to inject type hints into script component code.

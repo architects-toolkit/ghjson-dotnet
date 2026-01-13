@@ -33,7 +33,7 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeParameterSettings = true,
             IncludeGroups = true,
             IncludePersistentData = true,
-            IncludeSchemaProperties = true,
+            IncludeAdditionalProperties = true,
             IncludeWarningsAndErrors = true
         };
 
@@ -49,7 +49,7 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeParameterSettings = false,
             IncludeGroups = false,
             IncludePersistentData = false,
-            IncludeSchemaProperties = false,
+            IncludeAdditionalProperties = false,
             IncludeWarningsAndErrors = false
         };
 
@@ -66,7 +66,7 @@ namespace GhJSON.Grasshopper.Serialization
             IncludeParameterSettings = true,
             IncludeGroups = true,
             IncludePersistentData = false,
-            IncludeSchemaProperties = true,
+            IncludeAdditionalProperties = true,
             IncludeWarningsAndErrors = true
         };
 
@@ -104,11 +104,11 @@ namespace GhJSON.Grasshopper.Serialization
 
         /// <summary>
         /// Gets or sets a value indicating whether to include schema properties
-        /// in <see cref="GhJSON.Core.Models.Components.ComponentProperties.Properties"/>.
+        /// in <see cref="GhJSON.Core.Models.Components.ComponentState.AdditionalProperties"/>.
         /// These are component/param-specific properties beyond the core GhJSON schema.
         /// Default is true for Standard and Optimized, false for Lite.
         /// </summary>
-        public bool IncludeSchemaProperties { get; set; } = true;
+        public bool IncludeAdditionalProperties { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to include warnings and errors from components.

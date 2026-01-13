@@ -865,7 +865,7 @@ namespace GhJSON.Grasshopper
         /// <summary>
         /// Gets or sets whether to apply schema properties.
         /// </summary>
-        public bool ApplySchemaProperties { get; set; } = true;
+        public bool ApplyAdditionalProperties { get; set; } = true;
 
         /// <summary>
         /// Gets or sets whether to apply parameter settings.
@@ -893,7 +893,7 @@ namespace GhJSON.Grasshopper
             {
                 PreserveInstanceGuids = this.PreserveInstanceGuids,
                 ApplyComponentState = this.ApplyComponentState,
-                ApplySchemaProperties = this.ApplySchemaProperties,
+                ApplyAdditionalProperties = this.ApplyAdditionalProperties,
                 ApplyParameterSettings = this.ApplyParameterSettings
             };
         }

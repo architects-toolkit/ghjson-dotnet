@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Property Handling Architecture Documentation**: Added comprehensive documentation at `docs/Architecture/PropertyHandling.md` explaining the three-tier property system (ComponentHandlerRegistry, DataTypeRegistry, PropertyManagerV2) and their separation of concerns.
+
 - **Official JSON Schema validation**: `GhJSON.Core.Validation.GhJsonValidator` now validates GhJSON documents against the official v1.0 JSON Schema (`https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json`) with an embedded offline fallback.
 
 - **Test Coverage Analysis**: Analyzed existing test suite for schema compliance and feature coverage
@@ -48,6 +50,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ScriptHandler` - Script components (C#/Python/VB code, standard output visibility)
   - `DefaultComponentHandler` - Fallback for generic locked/hidden state
 - **Serializer/Deserializer integration**:
+
+### Changed
+
+- **Legacy Property System Removal**: Complete migration from legacy PropertyHandlerRegistry to ComponentHandlers
+  - Removed `PropertyHandlerRegistry.cs`, `SpecializedPropertyHandlers.cs`, and `IPropertyHandler.cs`
+  - Created `GenericPropertyManager.cs` - simplified static utility for generic properties
+  - PropertyManagerV2 now uses GenericPropertyManager instead of PropertyHandlerRegistry
+  - PropertyFilterConfig simplified - all component categories removed (now handled by ComponentHandlers)
+  - ValueListHandler now handles ListItems serialization/deserialization (migrated from ValueListItemsPropertyHandler)
+  - Added `ValueListItem` model class in GhJSON.Core for structured list item serialization
+  - ComponentState extended with `ListItems` property for ValueList components
+
+- **Property Duplication Cleanup**: Removed component-specific properties from PropertyFilterConfig that are now handled by ComponentHandlers
+  - Slider properties (Minimum, Maximum, Range, Decimals, Limit, DisplayFormat) removed from PropertyFilter - handled by SliderHandler via ComponentState
+  - ValueList properties (ListMode, ListItems, SelectedIndices) removed from PropertyFilter - handled by ValueListHandler via ComponentState
+  - Script properties (Script, MarshInputs, MarshOutputs, VariableName) removed from PropertyFilter - handled by ScriptHandler via ComponentState
+  - This eliminates duplication between the Properties dictionary and ComponentState object
   - `GhJsonSerializer.Serialize()` accepts optional `ComponentHandlerRegistry`
   - `GhJsonDeserializer.Deserialize()` accepts optional `ComponentHandlerRegistry`
   - Default registry used when not specified

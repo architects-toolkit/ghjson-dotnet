@@ -182,6 +182,17 @@ namespace GhJSON.Grasshopper.Serialization
                 }
             }
 
+            // Avoid duplication: when a componentState.value exists, PersistentData becomes redundant and can be user-noise.
+            if (props.ComponentState?.Value != null && props.Properties != null)
+            {
+                props.Properties.Remove("PersistentData");
+
+                if (props.Properties.Count == 0)
+                {
+                    props.Properties = null;
+                }
+            }
+
             // Parameter settings
             if (options.IncludeParameterSettings && obj is IGH_Component component)
             {

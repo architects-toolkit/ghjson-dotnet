@@ -22,6 +22,7 @@ using System.Linq;
 using GhJSON.Core.Models.Components;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
+using CoreValueListItem = GhJSON.Core.Models.Components.ValueListItem;
 
 namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
 {
@@ -93,28 +94,29 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             {
             }
 
-            // Extract selected indices (for CheckList mode)
-            if (valueList.ListMode == GH_ValueListMode.CheckList)
+            // Extract list items
+            try
             {
-                try
+                if (valueList.ListItems != null && valueList.ListItems.Count > 0)
                 {
-                    var selectedIndices = new List<int>();
-                    for (int i = 0; i < valueList.ListItems.Count; i++)
+                    var items = new List<CoreValueListItem>();
+                    foreach (var item in valueList.ListItems)
                     {
-                        if (valueList.ListItems[i].Selected)
+                        items.Add(new CoreValueListItem
                         {
-                            selectedIndices.Add(i);
-                        }
+                            Name = item.Name,
+                            Expression = item.Expression,
+                            Selected = item.Selected
+                        });
                     }
-                    if (selectedIndices.Count > 0)
-                    {
-                        state.SelectedIndices = selectedIndices;
-                        hasState = true;
-                    }
+
+                    state.ListItems = items;
+                    hasState = true;
                 }
-                catch
-                {
-                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[ValueListHandler] Error extracting list items: {ex.Message}");
             }
 
             return hasState ? state : null;
@@ -154,7 +156,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 valueList.Hidden = state.Hidden.Value;
             }
 
-            // Apply list mode
+            // Apply list mode first (before list items)
             if (!string.IsNullOrEmpty(state.ListMode))
             {
                 try
@@ -170,22 +172,54 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 }
             }
 
-            // Apply selected indices (for CheckList mode)
-            if (valueList.ListMode == GH_ValueListMode.CheckList && state.SelectedIndices != null)
+            // Apply list items
+            if (state.ListItems != null && state.ListItems.Count > 0)
             {
                 try
                 {
-                    for (int i = 0; i < valueList.ListItems.Count; i++)
+                    valueList.ListItems.Clear();
+                    int firstSelectedIndex = -1;
+                    int index = 0;
+
+                    foreach (var item in state.ListItems)
                     {
-                        valueList.ListItems[i].Selected = state.SelectedIndices.Contains(i);
+                        if (!string.IsNullOrEmpty(item.Name) && !string.IsNullOrEmpty(item.Expression))
+                        {
+                            var ghItem = new GH_ValueListItem(item.Name, item.Expression)
+                            {
+                                Selected = item.Selected
+                            };
+                            valueList.ListItems.Add(ghItem);
+
+                            if (item.Selected && firstSelectedIndex == -1)
+                            {
+                                firstSelectedIndex = index;
+                            }
+
+                            index++;
+                        }
+                    }
+
+                    // Ensure at least one item is selected for non-CheckList modes
+                    bool anySelected = valueList.ListItems.Any(it => it.Selected);
+                    if (!anySelected && valueList.ListItems.Count > 0)
+                    {
+                        valueList.SelectItem(0);
+                    }
+                    else if (anySelected && valueList.ListMode != GH_ValueListMode.CheckList)
+                    {
+                        int idxSel = firstSelectedIndex >= 0 ? firstSelectedIndex : valueList.ListItems.FindIndex(it => it.Selected);
+                        if (idxSel < 0) idxSel = 0;
+                        valueList.SelectItem(idxSel);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[ValueListHandler] Error applying selected indices: {ex.Message}");
+                    Debug.WriteLine($"[ValueListHandler] Error applying list items: {ex.Message}");
                 }
             }
-            else if (state.Value != null)
+
+            if (state.Value != null)
             {
                 // Apply single value selection for non-CheckList modes
                 ApplyValue(obj, state.Value);
@@ -199,7 +233,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
                 return;
 
             // Don't apply single value selection for CheckList mode
-            // (selections are handled via SelectedIndices in ApplyState)
+            // (selections are handled via ListItems[].Selected in ApplyState)
             if (valueList.ListMode == GH_ValueListMode.CheckList)
                 return;
 

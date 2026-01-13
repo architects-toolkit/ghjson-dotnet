@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,16 +17,15 @@
 
 using System;
 using System.Globalization;
-using GhJSON.Core.Serialization.DataTypes;
 using Rhino.Geometry;
 
 namespace GhJSON.Grasshopper.Serialization.DataTypes
 {
     /// <summary>
-    /// Serializer for Rhino.Geometry.Line type.
-    /// Format: "line2p:x1,y1,z1;x2,y2,z2" (e.g., "line2p:0,0,0;10,10,10").
+    /// Serializer for Line values.
+    /// Format: line2p:x1,y1,z1;x2,y2,z2
     /// </summary>
-    public class LineSerializer : IDataTypeSerializer
+    internal sealed class LineSerializer : IDataTypeSerializer<Line>
     {
         /// <inheritdoc/>
         public string TypeName => "Line";
@@ -35,55 +34,66 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
         public Type TargetType => typeof(Line);
 
         /// <inheritdoc/>
-        public string Serialize(object value)
-        {
-            if (value is Line line)
-            {
-                return $"line2p:{line.From.X.ToString(CultureInfo.InvariantCulture)},{line.From.Y.ToString(CultureInfo.InvariantCulture)},{line.From.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{line.To.X.ToString(CultureInfo.InvariantCulture)},{line.To.Y.ToString(CultureInfo.InvariantCulture)},{line.To.Z.ToString(CultureInfo.InvariantCulture)}";
-            }
+        public string Prefix => "line2p";
 
-            throw new ArgumentException($"Value must be of type Line, got {value?.GetType().Name ?? "null"}");
+        /// <inheritdoc/>
+        public string Serialize(Line value)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}:{1},{2},{3};{4},{5},{6}",
+                this.Prefix,
+                value.From.X, value.From.Y, value.From.Z,
+                value.To.X, value.To.Y, value.To.Z);
         }
 
         /// <inheritdoc/>
-        public object Deserialize(string value)
+        string IDataTypeSerializer.Serialize(object value)
         {
-            if (!Validate(value))
-            {
-                throw new FormatException($"Invalid Line format: '{value}'. Expected format: 'line2p:x1,y1,z1;x2,y2,z2' with valid doubles.");
-            }
-
-            var valueWithoutPrefix = value.Substring(value.IndexOf(':') + 1);
-            var points = valueWithoutPrefix.Split(';');
-            var fromParts = points[0].Split(',');
-            var toParts = points[1].Split(',');
-
-            double x1 = double.Parse(fromParts[0], CultureInfo.InvariantCulture);
-            double y1 = double.Parse(fromParts[1], CultureInfo.InvariantCulture);
-            double z1 = double.Parse(fromParts[2], CultureInfo.InvariantCulture);
-            double x2 = double.Parse(toParts[0], CultureInfo.InvariantCulture);
-            double y2 = double.Parse(toParts[1], CultureInfo.InvariantCulture);
-            double z2 = double.Parse(toParts[2], CultureInfo.InvariantCulture);
-
-            return new Line(new Point3d(x1, y1, z1), new Point3d(x2, y2, z2));
+            return this.Serialize((Line)value);
         }
 
         /// <inheritdoc/>
-        public bool Validate(string value)
+        public Line Deserialize(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (!this.IsValid(value))
+            {
+                throw new ArgumentException($"Invalid Line format: {value}");
+            }
+
+            var data = value.Substring(this.Prefix.Length + 1);
+            var points = data.Split(';');
+            var from = points[0].Split(',');
+            var to = points[1].Split(',');
+
+            return new Line(
+                new Point3d(
+                    double.Parse(from[0], CultureInfo.InvariantCulture),
+                    double.Parse(from[1], CultureInfo.InvariantCulture),
+                    double.Parse(from[2], CultureInfo.InvariantCulture)),
+                new Point3d(
+                    double.Parse(to[0], CultureInfo.InvariantCulture),
+                    double.Parse(to[1], CultureInfo.InvariantCulture),
+                    double.Parse(to[2], CultureInfo.InvariantCulture)));
+        }
+
+        /// <inheritdoc/>
+        object IDataTypeSerializer.Deserialize(string value)
+        {
+            return this.Deserialize(value);
+        }
+
+        /// <inheritdoc/>
+        public bool IsValid(string value)
+        {
+            if (string.IsNullOrEmpty(value) ||
+                !value.StartsWith($"{this.Prefix}:", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            if (!value.StartsWith("line2p:"))
-            {
-                return false;
-            }
-
-            var valueWithoutPrefix = value.Substring(7); // "line2p:".Length
-            var points = valueWithoutPrefix.Split(';');
+            var data = value.Substring(this.Prefix.Length + 1);
+            var points = data.Split(';');
             if (points.Length != 2)
             {
                 return false;
@@ -91,15 +101,15 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
 
             foreach (var point in points)
             {
-                var parts = point.Split(',');
-                if (parts.Length != 3)
+                var coords = point.Split(',');
+                if (coords.Length != 3)
                 {
                     return false;
                 }
 
-                foreach (var part in parts)
+                foreach (var coord in coords)
                 {
-                    if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    if (!double.TryParse(coord, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                     {
                         return false;
                     }

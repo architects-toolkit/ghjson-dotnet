@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,363 +17,228 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Reflection;
-using System.Text;
-using System.Text.Json.Nodes;
-using System.Threading;
-using Json.Schema;
-using Newtonsoft.Json;
+using GhJSON.Core.SchemaModels;
 using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Core.Validation
 {
     /// <summary>
-    /// Utilities to validate GhJSON format.
+    /// Validates GhJSON documents against the schema and performs structural validation.
     /// </summary>
-    public static class GhJsonValidator
+    internal static class GhJsonValidator
     {
-        private const string DefaultOfficialSchemaUrl = "https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json";
-
-        private const string EmbeddedSchemaResourceName = "GhJSON.Core.Validation.ghjson.schema.v1.0.ghjson.schema.json";
-
-        private static readonly Lazy<JsonSchema> EmbeddedOfficialSchema = new Lazy<JsonSchema>(() =>
-            JsonSchema.FromText(ReadEmbeddedSchemaJson()));
-
-        private static readonly Lazy<HttpClient> Http = new Lazy<HttpClient>(() => new HttpClient());
-
-        private static readonly object SchemaLock = new object();
-        private static JsonSchema? _cachedOfficialSchema;
-
         /// <summary>
-        /// Validates that the given JSON string conforms to the expected GhJSON document format.
+        /// Validates a GhJSON document.
         /// </summary>
-        /// <param name="json">The JSON string to validate.</param>
-        /// <param name="errorMessage">Aggregated error, warning and info messages; null if no issues.</param>
-        /// <returns>True if no errors; otherwise false.</returns>
-        public static bool Validate(string json, out string? errorMessage)
+        /// <param name="document">The document to validate.</param>
+        /// <param name="level">The validation level.</param>
+        /// <returns>The validation result.</returns>
+        public static ValidationResult Validate(GhJsonDocument document, ValidationLevel level = ValidationLevel.Standard)
         {
-            var errors = new List<string>();
-            var warnings = new List<string>();
-            var infos = new List<string>();
+            var result = new ValidationResult { IsValid = true };
 
-            if (string.IsNullOrWhiteSpace(json))
+            // Basic structure validation
+            ValidateComponents(document, result);
+
+            if (level >= ValidationLevel.Standard)
             {
-                errors.Add("JSON input is null or empty.");
+                // Connection reference integrity
+                ValidateConnections(document, result);
+
+                // Group reference integrity
+                ValidateGroups(document, result);
             }
 
-            JObject? root = null;
-            if (!errors.Any())
+            if (level >= ValidationLevel.Strict)
             {
-                try
-                {
-                    root = JObject.Parse(json);
-                }
-                catch (JsonReaderException ex)
-                {
-                    errors.Add($"Invalid JSON: {ex.Message}");
-                }
+                // Additional semantic validation
+                ValidateSemantics(document, result);
             }
 
-            // 1) Validate against the official JSON Schema (source of truth)
-            if (root != null)
-            {
-                ValidateAgainstOfficialSchema(json, errors);
-            }
-
-            // 2) Semantic checks not expressible in JSON Schema: connection endpoints must reference existing component IDs.
-            // Only run semantic checks if schema validation passed.
-            if (root != null && !errors.Any())
-            {
-                ValidateConnectionReferences(root, errors);
-            }
-
-            var sb = new StringBuilder();
-            if (errors.Any())
-            {
-                sb.AppendLine("Errors:");
-                foreach (var e in errors)
-                {
-                    sb.AppendLine($"- {e}");
-                }
-            }
-
-            if (warnings.Any())
-            {
-                sb.AppendLine("Warnings:");
-                foreach (var w in warnings)
-                {
-                    sb.AppendLine($"- {w}");
-                }
-            }
-
-            if (infos.Any())
-            {
-                sb.AppendLine("Information:");
-                foreach (var info in infos)
-                {
-                    sb.AppendLine($"- {info}");
-                }
-            }
-
-            var result = !errors.Any();
-            errorMessage = sb.Length > 0 ? sb.ToString().TrimEnd() : null;
+            result.IsValid = !result.HasErrors;
             return result;
         }
 
-        private static void ValidateAgainstOfficialSchema(string instanceJson, List<string> errors)
+        /// <summary>
+        /// Validates a JSON string as a GhJSON document.
+        /// </summary>
+        /// <param name="json">The JSON string to validate.</param>
+        /// <param name="level">The validation level.</param>
+        /// <returns>The validation result.</returns>
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard)
         {
             try
             {
-                var schema = GetOfficialSchema();
-
-                var instance = JsonNode.Parse(instanceJson);
-                if (instance == null)
-                {
-                    errors.Add("Schema validation failed: Instance JSON parsed to null.");
-                    return;
-                }
-
-                var evaluation = schema.Evaluate(instance, new EvaluationOptions
-                {
-                    OutputFormat = OutputFormat.Hierarchical,
-                    RequireFormatValidation = true
-                });
-
-                if (!evaluation.IsValid)
-                {
-                    CollectSchemaErrors(evaluation, errors);
-                }
+                var document = Serialization.GhJsonSerializer.Deserialize(json);
+                return Validate(document, level);
             }
             catch (Exception ex)
             {
-                // If schema validation infrastructure fails, treat it as an error (otherwise we'd silently accept invalid docs).
-                errors.Add($"Schema validation failed: {ex.Message}");
+                return ValidationResult.Failure($"Invalid JSON: {ex.Message}");
             }
         }
 
-        private static JsonSchema GetOfficialSchema()
+        private static void ValidateComponents(GhJsonDocument document, ValidationResult result)
         {
-            lock (SchemaLock)
+            if (document.Components == null || document.Components.Count == 0)
             {
-                if (_cachedOfficialSchema != null)
-                {
-                    return _cachedOfficialSchema;
-                }
-
-                // Try to fetch the official schema, but keep this deterministic by using a short timeout.
-                // If the fetch fails, we fall back to an embedded copy of the v1.0 schema.
-                try
-                {
-                    var schemaUrl = GetOfficialSchemaUrlFromAssemblyMetadata() ?? DefaultOfficialSchemaUrl;
-                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-                    var response = Http.Value.GetAsync(schemaUrl, cts.Token).GetAwaiter().GetResult();
-                    response.EnsureSuccessStatusCode();
-                    var schemaJson = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                    _cachedOfficialSchema = JsonSchema.FromText(schemaJson);
-                }
-                catch
-                {
-                    _cachedOfficialSchema = EmbeddedOfficialSchema.Value;
-                }
-
-                return _cachedOfficialSchema;
+                result.Warnings.Add(new ValidationMessage("Document has no components"));
+                return;
             }
-        }
 
-        private static string? GetOfficialSchemaUrlFromAssemblyMetadata()
-        {
-            try
+            var ids = new HashSet<int>();
+
+            for (var i = 0; i < document.Components.Count; i++)
             {
-                var assembly = typeof(GhJsonValidator).Assembly;
-                var attributes = assembly.GetCustomAttributes(typeof(AssemblyMetadataAttribute), inherit: false);
-                foreach (var attrObj in attributes)
+                var component = document.Components[i];
+                var path = $"components[{i}]";
+
+                // Check identification requirements (name+id, name+instanceGuid, componentGuid+id, or componentGuid+instanceGuid)
+                var hasName = !string.IsNullOrEmpty(component.Name);
+                var hasComponentGuid = component.ComponentGuid.HasValue && component.ComponentGuid != Guid.Empty;
+                var hasId = component.Id.HasValue;
+                var hasInstanceGuid = component.InstanceGuid.HasValue && component.InstanceGuid != Guid.Empty;
+
+                if (!hasName && !hasComponentGuid)
                 {
-                    if (attrObj is AssemblyMetadataAttribute attr &&
-                        string.Equals(attr.Key, "GhJsonOfficialSchemaUrl", StringComparison.OrdinalIgnoreCase))
+                    result.Errors.Add(new ValidationMessage(
+                        "Component must have either 'name' or 'componentGuid'", path));
+                }
+
+                if (!hasId && !hasInstanceGuid)
+                {
+                    result.Errors.Add(new ValidationMessage(
+                        "Component must have either 'id' or 'instanceGuid'", path));
+                }
+
+                // Check unique IDs
+                if (hasId)
+                {
+                    if (!ids.Add(component.Id!.Value))
                     {
-                        return string.IsNullOrWhiteSpace(attr.Value) ? null : attr.Value;
+                        result.Errors.Add(new ValidationMessage(
+                            $"Duplicate component ID: {component.Id}", path));
+                    }
+
+                    if (component.Id!.Value < 1)
+                    {
+                        result.Errors.Add(new ValidationMessage(
+                            $"Component ID must be >= 1, got {component.Id}", path));
                     }
                 }
             }
-            catch
-            {
-                // ignore and fall back
-            }
-
-            return null;
         }
 
-        private static string ReadEmbeddedSchemaJson()
+        private static void ValidateConnections(GhJsonDocument document, ValidationResult result)
         {
-            var assembly = Assembly.GetExecutingAssembly();
-            using var stream = assembly.GetManifestResourceStream(EmbeddedSchemaResourceName);
-            if (stream == null)
-            {
-                throw new InvalidOperationException($"Embedded schema resource not found: '{EmbeddedSchemaResourceName}'.");
-            }
-
-            using var reader = new StreamReader(stream);
-            return reader.ReadToEnd();
-        }
-
-        private static void CollectSchemaErrors(EvaluationResults evaluation, List<string> errors)
-        {
-            if (evaluation.Errors != null)
-            {
-                foreach (var kv in evaluation.Errors)
-                {
-                    errors.Add($"Schema: {evaluation.InstanceLocation} - {kv.Key}: {kv.Value}");
-                }
-            }
-
-            if (evaluation.Details == null)
+            if (document.Connections == null || document.Connections.Count == 0)
             {
                 return;
             }
 
-            foreach (var detail in evaluation.Details)
+            var validIds = new HashSet<int>(
+                document.Components
+                    .Where(c => c.Id.HasValue)
+                    .Select(c => c.Id!.Value));
+
+            for (var i = 0; i < document.Connections.Count; i++)
             {
-                CollectSchemaErrors(detail, errors);
+                var connection = document.Connections[i];
+                var path = $"connections[{i}]";
+
+                // Validate from endpoint
+                if (!validIds.Contains(connection.From.Id))
+                {
+                    result.Errors.Add(new ValidationMessage(
+                        $"Connection 'from' references non-existent component ID: {connection.From.Id}",
+                        $"{path}.from"));
+                }
+
+                if (string.IsNullOrEmpty(connection.From.ParamName) && !connection.From.ParamIndex.HasValue)
+                {
+                    result.Errors.Add(new ValidationMessage(
+                        "Connection 'from' must have either 'paramName' or 'paramIndex'",
+                        $"{path}.from"));
+                }
+
+                // Validate to endpoint
+                if (!validIds.Contains(connection.To.Id))
+                {
+                    result.Errors.Add(new ValidationMessage(
+                        $"Connection 'to' references non-existent component ID: {connection.To.Id}",
+                        $"{path}.to"));
+                }
+
+                if (string.IsNullOrEmpty(connection.To.ParamName) && !connection.To.ParamIndex.HasValue)
+                {
+                    result.Errors.Add(new ValidationMessage(
+                        "Connection 'to' must have either 'paramName' or 'paramIndex'",
+                        $"{path}.to"));
+                }
             }
         }
 
-        private static void ValidateConnectionReferences(JObject root, List<string> errors)
+        private static void ValidateGroups(GhJsonDocument document, ValidationResult result)
         {
-            if (!(root["components"] is JArray components))
+            if (document.Groups == null || document.Groups.Count == 0)
             {
                 return;
             }
 
-            // Treat missing 'connections' as empty array (schema allows it)
-            var connections = root["connections"] as JArray ?? new JArray();
+            var validIds = new HashSet<int>(
+                document.Components
+                    .Where(c => c.Id.HasValue)
+                    .Select(c => c.Id!.Value));
 
-            var definedIntIds = new HashSet<int>();
-            foreach (var token in components)
+            for (var i = 0; i < document.Groups.Count; i++)
             {
-                if (token is JObject compObj && compObj["id"]?.Type == JTokenType.Integer)
-                {
-                    definedIntIds.Add(compObj["id"]!.Value<int>());
-                }
-            }
+                var group = document.Groups[i];
+                var path = $"groups[{i}]";
 
-            for (int i = 0; i < connections.Count; i++)
-            {
-                if (!(connections[i] is JObject conn))
+                // Check group has identification
+                if (!group.Id.HasValue && !group.InstanceGuid.HasValue)
                 {
-                    errors.Add($"connections[{i}] is not a JSON object.");
-                    continue;
+                    result.Errors.Add(new ValidationMessage(
+                        "Group must have either 'id' or 'instanceGuid'", path));
                 }
 
-                foreach (var endPoint in new[] { "from", "to" })
+                // Validate member references
+                foreach (var memberId in group.Members)
                 {
-                    if (!(conn[endPoint] is JObject ep))
+                    if (!validIds.Contains(memberId))
                     {
-                        errors.Add($"connections[{i}].{endPoint} is missing or not an object.");
-                        continue;
-                    }
-
-                    if (ep["id"]?.Type != JTokenType.Integer)
-                    {
-                        // Schema already validates this; this is defensive.
-                        continue;
-                    }
-
-                    var intId = ep["id"]!.Value<int>();
-                    if (!definedIntIds.Contains(intId))
-                    {
-                        errors.Add($"connections[{i}].{endPoint}.id '{intId}' is not defined in components[].id.");
+                        result.Errors.Add(new ValidationMessage(
+                            $"Group member references non-existent component ID: {memberId}",
+                            $"{path}.members"));
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// Validates a GhJSON document and returns a structured validation result.
-        /// </summary>
-        /// <param name="json">The JSON string to validate.</param>
-        /// <returns>A ValidationResult containing all errors, warnings, and info messages.</returns>
-        public static ValidationResult ValidateDetailed(string json)
+        private static void ValidateSemantics(GhJsonDocument document, ValidationResult result)
         {
-            Validate(json, out var message);
-            return ValidationResult.Parse(message);
-        }
-    }
-
-    /// <summary>
-    /// Result of a GhJSON validation operation.
-    /// </summary>
-    public class ValidationResult
-    {
-        /// <summary>
-        /// Gets the list of errors.
-        /// </summary>
-        public List<string> Errors { get; } = new List<string>();
-
-        /// <summary>
-        /// Gets the list of warnings.
-        /// </summary>
-        public List<string> Warnings { get; } = new List<string>();
-
-        /// <summary>
-        /// Gets the list of informational messages.
-        /// </summary>
-        public List<string> Info { get; } = new List<string>();
-
-        /// <summary>
-        /// Gets a value indicating whether the validation passed (no errors).
-        /// </summary>
-        public bool IsValid => Errors.Count == 0;
-
-        /// <summary>
-        /// Parses a validation message string into a ValidationResult.
-        /// </summary>
-        internal static ValidationResult Parse(string? message)
-        {
-            var result = new ValidationResult();
-
-            if (string.IsNullOrWhiteSpace(message))
+            // Check for orphaned components (no connections)
+            if (document.Connections != null && document.Connections.Count > 0)
             {
-                return result;
-            }
+                var connectedIds = new HashSet<int>();
+                foreach (var conn in document.Connections)
+                {
+                    connectedIds.Add(conn.From.Id);
+                    connectedIds.Add(conn.To.Id);
+                }
 
-            var currentSection = "";
-            foreach (var line in message!.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var trimmed = line.Trim();
-                if (trimmed == "Errors:")
+                for (var i = 0; i < document.Components.Count; i++)
                 {
-                    currentSection = "errors";
-                }
-                else if (trimmed == "Warnings:")
-                {
-                    currentSection = "warnings";
-                }
-                else if (trimmed == "Information:")
-                {
-                    currentSection = "info";
-                }
-                else if (trimmed.StartsWith("- "))
-                {
-                    var msg = trimmed.Substring(2);
-                    switch (currentSection)
+                    var component = document.Components[i];
+                    if (component.Id.HasValue && !connectedIds.Contains(component.Id.Value))
                     {
-                        case "errors":
-                            result.Errors.Add(msg);
-                            break;
-                        case "warnings":
-                            result.Warnings.Add(msg);
-                            break;
-                        case "info":
-                            result.Info.Add(msg);
-                            break;
+                        result.Info.Add(new ValidationMessage(
+                            $"Component '{component.Name ?? component.ComponentGuid?.ToString() ?? "unknown"}' has no connections",
+                            $"components[{i}]"));
                     }
                 }
             }
-
-            return result;
         }
     }
 }

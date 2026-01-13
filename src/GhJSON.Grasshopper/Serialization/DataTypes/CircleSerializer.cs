@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,16 +17,15 @@
 
 using System;
 using System.Globalization;
-using GhJSON.Core.Serialization.DataTypes;
 using Rhino.Geometry;
 
 namespace GhJSON.Grasshopper.Serialization.DataTypes
 {
     /// <summary>
-    /// Serializer for Rhino.Geometry.Circle type.
-    /// Format: "circleCNRS:cx,cy,cz;nx,ny,nz;r;sx,sy,sz" (center + normal + radius + start point).
+    /// Serializer for Circle values.
+    /// Format: circleCNRS:cx,cy,cz;nx,ny,nz;r;sx,sy,sz
     /// </summary>
-    public class CircleSerializer : IDataTypeSerializer
+    internal sealed class CircleSerializer : IDataTypeSerializer<Circle>
     {
         /// <inheritdoc/>
         public string TypeName => "Circle";
@@ -35,152 +34,86 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
         public Type TargetType => typeof(Circle);
 
         /// <inheritdoc/>
-        public string Serialize(object value)
+        public string Prefix => "circleCNRS";
+
+        /// <inheritdoc/>
+        public string Serialize(Circle value)
         {
-            if (value is Circle circle)
-            {
-                // Calculate start point (point on circle at angle 0 in the circle's coordinate system)
-                var startPoint = circle.Center + circle.Plane.XAxis * circle.Radius;
-
-                return $"circleCNRS:{circle.Center.X.ToString(CultureInfo.InvariantCulture)},{circle.Center.Y.ToString(CultureInfo.InvariantCulture)},{circle.Center.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{circle.Normal.X.ToString(CultureInfo.InvariantCulture)},{circle.Normal.Y.ToString(CultureInfo.InvariantCulture)},{circle.Normal.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{circle.Radius.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{startPoint.X.ToString(CultureInfo.InvariantCulture)},{startPoint.Y.ToString(CultureInfo.InvariantCulture)},{startPoint.Z.ToString(CultureInfo.InvariantCulture)}";
-            }
-
-            throw new ArgumentException($"Value must be of type Circle, got {value?.GetType().Name ?? "null"}");
+            var startPoint = value.PointAt(0);
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}:{1},{2},{3};{4},{5},{6};{7};{8},{9},{10}",
+                this.Prefix,
+                value.Center.X, value.Center.Y, value.Center.Z,
+                value.Normal.X, value.Normal.Y, value.Normal.Z,
+                value.Radius,
+                startPoint.X, startPoint.Y, startPoint.Z);
         }
 
         /// <inheritdoc/>
-        public object Deserialize(string value)
+        string IDataTypeSerializer.Serialize(object value)
         {
-            if (!Validate(value))
+            return this.Serialize((Circle)value);
+        }
+
+        /// <inheritdoc/>
+        public Circle Deserialize(string value)
+        {
+            if (!this.IsValid(value))
             {
-                throw new FormatException($"Invalid Circle format: '{value}'. Expected format: 'circleCNRS:cx,cy,cz;nx,ny,nz;r;sx,sy,sz' with valid doubles and r > 0.");
+                throw new ArgumentException($"Invalid Circle format: {value}");
             }
 
-            var valueWithoutPrefix = value.Substring(value.IndexOf(':') + 1);
-            var parts = valueWithoutPrefix.Split(';');
-            var centerParts = parts[0].Split(',');
-            var normalParts = parts[1].Split(',');
-            var startParts = parts[3].Split(',');
-            double r = double.Parse(parts[2], CultureInfo.InvariantCulture);
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            var center = parts[0].Split(',');
+            var normal = parts[1].Split(',');
+            var radius = double.Parse(parts[2], CultureInfo.InvariantCulture);
+            var start = parts[3].Split(',');
 
-            // Parse center
-            var center = new Point3d(
-                double.Parse(centerParts[0], CultureInfo.InvariantCulture),
-                double.Parse(centerParts[1], CultureInfo.InvariantCulture),
-                double.Parse(centerParts[2], CultureInfo.InvariantCulture)
-            );
+            var centerPt = new Point3d(
+                double.Parse(center[0], CultureInfo.InvariantCulture),
+                double.Parse(center[1], CultureInfo.InvariantCulture),
+                double.Parse(center[2], CultureInfo.InvariantCulture));
 
-            // Parse normal
-            var normal = new Vector3d(
-                double.Parse(normalParts[0], CultureInfo.InvariantCulture),
-                double.Parse(normalParts[1], CultureInfo.InvariantCulture),
-                double.Parse(normalParts[2], CultureInfo.InvariantCulture)
-            );
+            var normalVec = new Vector3d(
+                double.Parse(normal[0], CultureInfo.InvariantCulture),
+                double.Parse(normal[1], CultureInfo.InvariantCulture),
+                double.Parse(normal[2], CultureInfo.InvariantCulture));
 
-            // Parse start point
-            var startPoint = new Point3d(
-                double.Parse(startParts[0], CultureInfo.InvariantCulture),
-                double.Parse(startParts[1], CultureInfo.InvariantCulture),
-                double.Parse(startParts[2], CultureInfo.InvariantCulture)
-            );
+            var startPt = new Point3d(
+                double.Parse(start[0], CultureInfo.InvariantCulture),
+                double.Parse(start[1], CultureInfo.InvariantCulture),
+                double.Parse(start[2], CultureInfo.InvariantCulture));
 
-            // Calculate X-axis from center to start point
-            var xAxis = startPoint - center;
+            // Create plane from center, normal, and start point
+            var xAxis = startPt - centerPt;
             xAxis.Unitize();
-
-            // Normalize the normal vector
-            normal.Unitize();
-
-            // Calculate Y-axis as cross product of normal and X-axis
-            var yAxis = Vector3d.CrossProduct(normal, xAxis);
+            var yAxis = Vector3d.CrossProduct(normalVec, xAxis);
             yAxis.Unitize();
+            var plane = new Plane(centerPt, xAxis, yAxis);
 
-            // Create plane with proper orientation (origin, xAxis, yAxis)
-            var plane = new Plane(center, xAxis, yAxis);
-
-            return new Circle(plane, r);
+            return new Circle(plane, radius);
         }
 
         /// <inheritdoc/>
-        public bool Validate(string value)
+        object IDataTypeSerializer.Deserialize(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            return this.Deserialize(value);
+        }
+
+        /// <inheritdoc/>
+        public bool IsValid(string value)
+        {
+            if (string.IsNullOrEmpty(value) ||
+                !value.StartsWith($"{this.Prefix}:", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            if (!value.StartsWith("circleCNRS:"))
-            {
-                return false;
-            }
-
-            var valueWithoutPrefix = value.Substring(11); // "circleCNRS:".Length
-            var parts = valueWithoutPrefix.Split(';');
-            if (parts.Length != 4)
-            {
-                return false;
-            }
-
-            // Validate center (3 components)
-            var centerParts = parts[0].Split(',');
-            if (centerParts.Length != 3)
-            {
-                return false;
-            }
-
-            foreach (var part in centerParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                {
-                    return false;
-                }
-            }
-
-            // Validate normal (3 components)
-            var normalParts = parts[1].Split(',');
-            if (normalParts.Length != 3)
-            {
-                return false;
-            }
-
-            foreach (var part in normalParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                {
-                    return false;
-                }
-            }
-
-            // Validate radius (positive)
-            if (!double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double radius))
-            {
-                return false;
-            }
-
-            if (radius <= 0)
-            {
-                return false;
-            }
-
-            // Validate start point (3 components)
-            var startParts = parts[3].Split(',');
-            if (startParts.Length != 3)
-            {
-                return false;
-            }
-
-            foreach (var part in startParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            return parts.Length == 4;
         }
     }
 }

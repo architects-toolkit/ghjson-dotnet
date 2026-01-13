@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,16 +17,15 @@
 
 using System;
 using System.Globalization;
-using GhJSON.Core.Serialization.DataTypes;
 using Rhino.Geometry;
 
 namespace GhJSON.Grasshopper.Serialization.DataTypes
 {
     /// <summary>
-    /// Serializer for Rhino.Geometry.Plane type.
-    /// Format: "planeOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz" (origin + X/Y axes).
+    /// Serializer for Plane values.
+    /// Format: planeOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz
     /// </summary>
-    public class PlaneSerializer : IDataTypeSerializer
+    internal sealed class PlaneSerializer : IDataTypeSerializer<Plane>
     {
         /// <inheritdoc/>
         public string TypeName => "Plane";
@@ -35,80 +34,88 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
         public Type TargetType => typeof(Plane);
 
         /// <inheritdoc/>
-        public string Serialize(object value)
-        {
-            if (value is Plane plane)
-            {
-                return $"planeOXY:{plane.Origin.X.ToString(CultureInfo.InvariantCulture)},{plane.Origin.Y.ToString(CultureInfo.InvariantCulture)},{plane.Origin.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{plane.XAxis.X.ToString(CultureInfo.InvariantCulture)},{plane.XAxis.Y.ToString(CultureInfo.InvariantCulture)},{plane.XAxis.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{plane.YAxis.X.ToString(CultureInfo.InvariantCulture)},{plane.YAxis.Y.ToString(CultureInfo.InvariantCulture)},{plane.YAxis.Z.ToString(CultureInfo.InvariantCulture)}";
-            }
+        public string Prefix => "planeOXY";
 
-            throw new ArgumentException($"Value must be of type Plane, got {value?.GetType().Name ?? "null"}");
+        /// <inheritdoc/>
+        public string Serialize(Plane value)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}:{1},{2},{3};{4},{5},{6};{7},{8},{9}",
+                this.Prefix,
+                value.Origin.X, value.Origin.Y, value.Origin.Z,
+                value.XAxis.X, value.XAxis.Y, value.XAxis.Z,
+                value.YAxis.X, value.YAxis.Y, value.YAxis.Z);
         }
 
         /// <inheritdoc/>
-        public object Deserialize(string value)
+        string IDataTypeSerializer.Serialize(object value)
         {
-            if (!Validate(value))
-            {
-                throw new FormatException($"Invalid Plane format: '{value}'. Expected format: 'planeOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz' with valid doubles.");
-            }
-
-            var valueWithoutPrefix = value.Substring(value.IndexOf(':') + 1);
-            var vectors = valueWithoutPrefix.Split(';');
-            var originParts = vectors[0].Split(',');
-            var xAxisParts = vectors[1].Split(',');
-            var yAxisParts = vectors[2].Split(',');
-
-            double ox = double.Parse(originParts[0], CultureInfo.InvariantCulture);
-            double oy = double.Parse(originParts[1], CultureInfo.InvariantCulture);
-            double oz = double.Parse(originParts[2], CultureInfo.InvariantCulture);
-            double xx = double.Parse(xAxisParts[0], CultureInfo.InvariantCulture);
-            double xy = double.Parse(xAxisParts[1], CultureInfo.InvariantCulture);
-            double xz = double.Parse(xAxisParts[2], CultureInfo.InvariantCulture);
-            double yx = double.Parse(yAxisParts[0], CultureInfo.InvariantCulture);
-            double yy = double.Parse(yAxisParts[1], CultureInfo.InvariantCulture);
-            double yz = double.Parse(yAxisParts[2], CultureInfo.InvariantCulture);
-
-            var origin = new Point3d(ox, oy, oz);
-            var xAxis = new Vector3d(xx, xy, xz);
-            var yAxis = new Vector3d(yx, yy, yz);
-
-            return new Plane(origin, xAxis, yAxis);
+            return this.Serialize((Plane)value);
         }
 
         /// <inheritdoc/>
-        public bool Validate(string value)
+        public Plane Deserialize(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (!this.IsValid(value))
+            {
+                throw new ArgumentException($"Invalid Plane format: {value}");
+            }
+
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            var origin = parts[0].Split(',');
+            var xAxis = parts[1].Split(',');
+            var yAxis = parts[2].Split(',');
+
+            return new Plane(
+                new Point3d(
+                    double.Parse(origin[0], CultureInfo.InvariantCulture),
+                    double.Parse(origin[1], CultureInfo.InvariantCulture),
+                    double.Parse(origin[2], CultureInfo.InvariantCulture)),
+                new Vector3d(
+                    double.Parse(xAxis[0], CultureInfo.InvariantCulture),
+                    double.Parse(xAxis[1], CultureInfo.InvariantCulture),
+                    double.Parse(xAxis[2], CultureInfo.InvariantCulture)),
+                new Vector3d(
+                    double.Parse(yAxis[0], CultureInfo.InvariantCulture),
+                    double.Parse(yAxis[1], CultureInfo.InvariantCulture),
+                    double.Parse(yAxis[2], CultureInfo.InvariantCulture)));
+        }
+
+        /// <inheritdoc/>
+        object IDataTypeSerializer.Deserialize(string value)
+        {
+            return this.Deserialize(value);
+        }
+
+        /// <inheritdoc/>
+        public bool IsValid(string value)
+        {
+            if (string.IsNullOrEmpty(value) ||
+                !value.StartsWith($"{this.Prefix}:", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            if (!value.StartsWith("planeOXY:"))
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            if (parts.Length != 3)
             {
                 return false;
             }
 
-            var valueWithoutPrefix = value.Substring(9); // "planeOXY:".Length
-            var vectors = valueWithoutPrefix.Split(';');
-            if (vectors.Length != 3)
+            foreach (var part in parts)
             {
-                return false;
-            }
-
-            foreach (var vector in vectors)
-            {
-                var parts = vector.Split(',');
-                if (parts.Length != 3)
+                var coords = part.Split(',');
+                if (coords.Length != 3)
                 {
                     return false;
                 }
 
-                foreach (var part in parts)
+                foreach (var coord in coords)
                 {
-                    if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    if (!double.TryParse(coord, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                     {
                         return false;
                     }

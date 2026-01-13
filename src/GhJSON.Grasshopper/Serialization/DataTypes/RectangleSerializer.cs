@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,16 +17,15 @@
 
 using System;
 using System.Globalization;
-using GhJSON.Core.Serialization.DataTypes;
 using Rhino.Geometry;
 
 namespace GhJSON.Grasshopper.Serialization.DataTypes
 {
     /// <summary>
-    /// Serializer for Rhino.Geometry.Rectangle3d type.
-    /// Format: "rectangleCXY:cx,cy,cz;xx,xy,xz;yx,yy,yz;w,h" (center + X-axis + Y-axis + dimensions).
+    /// Serializer for Rectangle3d values.
+    /// Format: rectangleCXY:cx,cy,cz;xx,xy,xz;yx,yy,yz;w,h
     /// </summary>
-    public class RectangleSerializer : IDataTypeSerializer
+    internal sealed class RectangleSerializer : IDataTypeSerializer<Rectangle3d>
     {
         /// <inheritdoc/>
         public string TypeName => "Rectangle";
@@ -35,142 +34,88 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
         public Type TargetType => typeof(Rectangle3d);
 
         /// <inheritdoc/>
-        public string Serialize(object value)
+        public string Prefix => "rectangleCXY";
+
+        /// <inheritdoc/>
+        public string Serialize(Rectangle3d value)
         {
-            if (value is Rectangle3d rectangle)
-            {
-                var plane = rectangle.Plane;
-                var center = rectangle.Center;
-                var width = rectangle.Width;
-                var height = rectangle.Height;
-
-                return $"rectangleCXY:{center.X.ToString(CultureInfo.InvariantCulture)},{center.Y.ToString(CultureInfo.InvariantCulture)},{center.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{plane.XAxis.X.ToString(CultureInfo.InvariantCulture)},{plane.XAxis.Y.ToString(CultureInfo.InvariantCulture)},{plane.XAxis.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{plane.YAxis.X.ToString(CultureInfo.InvariantCulture)},{plane.YAxis.Y.ToString(CultureInfo.InvariantCulture)},{plane.YAxis.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{width.ToString(CultureInfo.InvariantCulture)},{height.ToString(CultureInfo.InvariantCulture)}";
-            }
-
-            throw new ArgumentException($"Value must be of type Rectangle3d, got {value?.GetType().Name ?? "null"}");
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}:{1},{2},{3};{4},{5},{6};{7},{8},{9};{10},{11}",
+                this.Prefix,
+                value.Center.X, value.Center.Y, value.Center.Z,
+                value.Plane.XAxis.X, value.Plane.XAxis.Y, value.Plane.XAxis.Z,
+                value.Plane.YAxis.X, value.Plane.YAxis.Y, value.Plane.YAxis.Z,
+                value.Width, value.Height);
         }
 
         /// <inheritdoc/>
-        public object Deserialize(string value)
+        string IDataTypeSerializer.Serialize(object value)
         {
-            if (!Validate(value))
-            {
-                throw new FormatException($"Invalid Rectangle format: '{value}'. Expected format: 'rectangleCXY:cx,cy,cz;xx,xy,xz;yx,yy,yz;w,h' with valid doubles.");
-            }
-
-            var valueWithoutPrefix = value.Substring(value.IndexOf(':') + 1);
-            var parts = valueWithoutPrefix.Split(';');
-
-            // Parse center
-            var centerParts = parts[0].Split(',');
-            var center = new Point3d(
-                double.Parse(centerParts[0], CultureInfo.InvariantCulture),
-                double.Parse(centerParts[1], CultureInfo.InvariantCulture),
-                double.Parse(centerParts[2], CultureInfo.InvariantCulture)
-            );
-
-            // Parse X axis
-            var xAxisParts = parts[1].Split(',');
-            var xAxis = new Vector3d(
-                double.Parse(xAxisParts[0], CultureInfo.InvariantCulture),
-                double.Parse(xAxisParts[1], CultureInfo.InvariantCulture),
-                double.Parse(xAxisParts[2], CultureInfo.InvariantCulture)
-            );
-
-            // Parse Y axis
-            var yAxisParts = parts[2].Split(',');
-            var yAxis = new Vector3d(
-                double.Parse(yAxisParts[0], CultureInfo.InvariantCulture),
-                double.Parse(yAxisParts[1], CultureInfo.InvariantCulture),
-                double.Parse(yAxisParts[2], CultureInfo.InvariantCulture)
-            );
-
-            // Parse dimensions
-            var dimensionParts = parts[3].Split(',');
-            var width = double.Parse(dimensionParts[0], CultureInfo.InvariantCulture);
-            var height = double.Parse(dimensionParts[1], CultureInfo.InvariantCulture);
-
-            // Normalize axes to ensure they are unit vectors
-            xAxis.Unitize();
-            yAxis.Unitize();
-
-            // Ensure axes are orthogonal by recalculating Y-axis
-            var normal = Vector3d.CrossProduct(xAxis, yAxis);
-            normal.Unitize();
-            yAxis = Vector3d.CrossProduct(normal, xAxis);
-            yAxis.Unitize();
-
-            // Create plane at center and rectangle using intervals
-            var plane = new Plane(center, xAxis, yAxis);
-            var xInterval = new Interval(-width / 2.0, width / 2.0);
-            var yInterval = new Interval(-height / 2.0, height / 2.0);
-            return new Rectangle3d(plane, xInterval, yInterval);
+            return this.Serialize((Rectangle3d)value);
         }
 
         /// <inheritdoc/>
-        public bool Validate(string value)
+        public Rectangle3d Deserialize(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (!this.IsValid(value))
+            {
+                throw new ArgumentException($"Invalid Rectangle format: {value}");
+            }
+
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            var center = parts[0].Split(',');
+            var xAxis = parts[1].Split(',');
+            var yAxis = parts[2].Split(',');
+            var dims = parts[3].Split(',');
+
+            var centerPt = new Point3d(
+                double.Parse(center[0], CultureInfo.InvariantCulture),
+                double.Parse(center[1], CultureInfo.InvariantCulture),
+                double.Parse(center[2], CultureInfo.InvariantCulture));
+
+            var xVec = new Vector3d(
+                double.Parse(xAxis[0], CultureInfo.InvariantCulture),
+                double.Parse(xAxis[1], CultureInfo.InvariantCulture),
+                double.Parse(xAxis[2], CultureInfo.InvariantCulture));
+
+            // Recalculate Y-axis from normal × X-axis for orthogonality
+            var normal = Vector3d.CrossProduct(xVec, new Vector3d(
+                double.Parse(yAxis[0], CultureInfo.InvariantCulture),
+                double.Parse(yAxis[1], CultureInfo.InvariantCulture),
+                double.Parse(yAxis[2], CultureInfo.InvariantCulture)));
+            var yVec = Vector3d.CrossProduct(normal, xVec);
+            yVec.Unitize();
+
+            var plane = new Plane(centerPt, xVec, yVec);
+            var width = double.Parse(dims[0], CultureInfo.InvariantCulture);
+            var height = double.Parse(dims[1], CultureInfo.InvariantCulture);
+
+            return new Rectangle3d(
+                plane,
+                new Interval(-width / 2, width / 2),
+                new Interval(-height / 2, height / 2));
+        }
+
+        /// <inheritdoc/>
+        object IDataTypeSerializer.Deserialize(string value)
+        {
+            return this.Deserialize(value);
+        }
+
+        /// <inheritdoc/>
+        public bool IsValid(string value)
+        {
+            if (string.IsNullOrEmpty(value) ||
+                !value.StartsWith($"{this.Prefix}:", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            if (!value.StartsWith("rectangleCXY:"))
-            {
-                return false;
-            }
-
-            var valueWithoutPrefix = value.Substring(13); // "rectangleCXY:".Length
-            var parts = valueWithoutPrefix.Split(';');
-            if (parts.Length != 4)
-            {
-                return false;
-            }
-
-            // Validate center (3 doubles)
-            var centerParts = parts[0].Split(',');
-            if (centerParts.Length != 3)
-                return false;
-            foreach (var part in centerParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            // Validate X axis (3 doubles)
-            var xAxisParts = parts[1].Split(',');
-            if (xAxisParts.Length != 3)
-                return false;
-            foreach (var part in xAxisParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            // Validate Y axis (3 doubles)
-            var yAxisParts = parts[2].Split(',');
-            if (yAxisParts.Length != 3)
-                return false;
-            foreach (var part in yAxisParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            // Validate dimensions (2 doubles)
-            var dimensionParts = parts[3].Split(',');
-            if (dimensionParts.Length != 2)
-                return false;
-            foreach (var part in dimensionParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            return true;
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            return parts.Length == 4;
         }
     }
 }

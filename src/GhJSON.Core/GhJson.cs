@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -16,12 +16,12 @@
  */
 
 using System.IO;
-using GhJSON.Core.Migration;
-using GhJSON.Core.Models.Document;
-using GhJSON.Core.Operations;
+using GhJSON.Core.FixOperations;
+using GhJSON.Core.MergeOperations;
+using GhJSON.Core.SchemaModels;
+using GhJSON.Core.SchemaMigration;
 using GhJSON.Core.Serialization;
 using GhJSON.Core.Validation;
-using Newtonsoft.Json;
 
 namespace GhJSON.Core
 {
@@ -31,29 +31,101 @@ namespace GhJSON.Core
     /// </summary>
     public static class GhJson
     {
-        private static readonly JsonSerializerSettings _serializerSettings = new JsonSerializerSettings
-        {
-            NullValueHandling = NullValueHandling.Ignore,
-            Formatting = Formatting.Indented,
-            Converters = { new CompactPositionConverter() }
-        };
+        /// <summary>
+        /// Gets the current schema version.
+        /// </summary>
+        public static string CurrentVersion => SchemaMigrator.CurrentVersion;
 
+        #region Document Creation
+
+        /// <summary>
+        /// Creates a new empty GhJSON document.
+        /// </summary>
+        /// <returns>A new GhJSON document.</returns>
         public static GhJsonDocument CreateDocument()
         {
-            return new GhJsonDocument();
+            return new GhJsonDocument
+            {
+                Schema = CurrentVersion
+            };
         }
 
-        #region Read/Write
+        /// <summary>
+        /// Creates a new metadata builder.
+        /// </summary>
+        /// <returns>A new metadata instance.</returns>
+        public static GhJsonMetadata CreateMetadataProperty()
+        {
+            return new GhJsonMetadata();
+        }
+
+        /// <summary>
+        /// Creates a new component builder.
+        /// </summary>
+        /// <returns>A new component instance.</returns>
+        public static GhJsonComponent CreateComponentObject()
+        {
+            return new GhJsonComponent();
+        }
+
+        /// <summary>
+        /// Creates a new parameter settings builder.
+        /// </summary>
+        /// <returns>A new parameter settings instance.</returns>
+        public static GhJsonParameterSettings CreateComponentParameterObject()
+        {
+            return new GhJsonParameterSettings();
+        }
+
+        /// <summary>
+        /// Creates a new component state builder.
+        /// </summary>
+        /// <returns>A new component state instance.</returns>
+        public static GhJsonComponentState CreateComponentStateObject()
+        {
+            return new GhJsonComponentState();
+        }
+
+        /// <summary>
+        /// Creates a new connection builder.
+        /// </summary>
+        /// <returns>A new connection instance.</returns>
+        public static GhJsonConnection CreateConnectionObject()
+        {
+            return new GhJsonConnection();
+        }
+
+        /// <summary>
+        /// Creates a new connection endpoint builder.
+        /// </summary>
+        /// <returns>A new connection endpoint instance.</returns>
+        public static GhJsonConnectionEndpoint CreateConnectionEndpointObject()
+        {
+            return new GhJsonConnectionEndpoint();
+        }
+
+        /// <summary>
+        /// Creates a new group builder.
+        /// </summary>
+        /// <returns>A new group instance.</returns>
+        public static GhJsonGroup CreateGroupObject()
+        {
+            return new GhJsonGroup();
+        }
+
+        #endregion
+
+        #region Input/Output
 
         /// <summary>
         /// Reads a GhJSON document from a file path.
         /// </summary>
         /// <param name="path">The file path to read from.</param>
         /// <returns>The deserialized GhJSON document.</returns>
-        public static GhJsonDocument Read(string path)
+        public static GhJsonDocument FromFile(string path)
         {
             var json = File.ReadAllText(path);
-            return Parse(json);
+            return FromJson(json);
         }
 
         /// <summary>
@@ -61,11 +133,11 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="stream">The stream to read from.</param>
         /// <returns>The deserialized GhJSON document.</returns>
-        public static GhJsonDocument Read(Stream stream)
+        public static GhJsonDocument FromStream(Stream stream)
         {
             using var reader = new StreamReader(stream);
             var json = reader.ReadToEnd();
-            return Parse(json);
+            return FromJson(json);
         }
 
         /// <summary>
@@ -73,49 +145,32 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="json">The JSON string to parse.</param>
         /// <returns>The deserialized GhJSON document.</returns>
-        public static GhJsonDocument Parse(string json)
+        public static GhJsonDocument FromJson(string json)
         {
-            return JsonConvert.DeserializeObject<GhJsonDocument>(json, _serializerSettings)
-                ?? new GhJsonDocument();
+            return Serialization.GhJsonSerializer.Deserialize(json);
         }
 
         /// <summary>
         /// Writes a GhJSON document to a file path.
         /// </summary>
-        /// <param name="document">The document to write.</param>
+        /// <param name="doc">The document to write.</param>
         /// <param name="path">The file path to write to.</param>
         /// <param name="options">Optional write options.</param>
-        public static void Write(GhJsonDocument document, string path, WriteOptions? options = null)
+        public static void ToFile(GhJsonDocument doc, string path, WriteOptions? options = null)
         {
-            var json = Serialize(document, options);
+            var json = ToJson(doc, options);
             File.WriteAllText(path, json);
         }
 
         /// <summary>
         /// Serializes a GhJSON document to a JSON string.
         /// </summary>
-        /// <param name="document">The document to serialize.</param>
+        /// <param name="doc">The document to serialize.</param>
         /// <param name="options">Optional write options.</param>
         /// <returns>The serialized JSON string.</returns>
-        public static string Serialize(GhJsonDocument document, WriteOptions? options = null)
+        public static string ToJson(GhJsonDocument doc, WriteOptions? options = null)
         {
-            options ??= WriteOptions.Default;
-            var settings = new JsonSerializerSettings
-            {
-                NullValueHandling = NullValueHandling.Ignore,
-                Formatting = options.Indented ? Formatting.Indented : Formatting.None,
-                Converters = { new CompactPositionConverter() }
-            };
-            return JsonConvert.SerializeObject(document, settings);
-        }
-
-        #endregion
-
-        #region Merge
-
-        public static MergeResult Merge(GhJsonDocument target, GhJsonDocument source)
-        {
-            return GhJsonMerger.Merge(target, source);
+            return Serialization.GhJsonSerializer.Serialize(doc, options);
         }
 
         #endregion
@@ -125,137 +180,154 @@ namespace GhJSON.Core
         /// <summary>
         /// Validates a GhJSON document.
         /// </summary>
-        /// <param name="document">The document to validate.</param>
+        /// <param name="doc">The document to validate.</param>
+        /// <param name="level">The validation level.</param>
         /// <returns>A validation result containing errors, warnings, and info messages.</returns>
-        public static ValidationResult Validate(GhJsonDocument document)
+        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard)
         {
-            var json = Serialize(document);
-            return Validate(json);
+            return GhJsonValidator.Validate(doc, level);
         }
 
         /// <summary>
         /// Validates a JSON string as a GhJSON document.
         /// </summary>
         /// <param name="json">The JSON string to validate.</param>
+        /// <param name="level">The validation level.</param>
         /// <returns>A validation result containing errors, warnings, and info messages.</returns>
-        public static ValidationResult Validate(string json)
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard)
         {
-            return GhJsonValidator.ValidateDetailed(json);
+            return GhJsonValidator.Validate(json, level);
         }
 
         /// <summary>
         /// Checks if a GhJSON document is valid.
         /// </summary>
-        /// <param name="document">The document to check.</param>
-        /// <param name="errorMessage">Output parameter for error messages if invalid.</param>
+        /// <param name="doc">The document to check.</param>
+        /// <param name="level">The validation level.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(GhJsonDocument document, out string? errorMessage)
+        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard)
         {
-            var json = Serialize(document);
-            return GhJsonValidator.Validate(json, out errorMessage);
+            return Validate(doc, level).IsValid;
         }
 
         /// <summary>
         /// Checks if a JSON string is a valid GhJSON document.
         /// </summary>
         /// <param name="json">The JSON string to check.</param>
-        /// <param name="errorMessage">Output parameter for error messages if invalid.</param>
+        /// <param name="level">The validation level.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(string json, out string? errorMessage)
+        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard)
         {
-            return GhJsonValidator.Validate(json, out errorMessage);
+            return Validate(json, level).IsValid;
         }
 
         #endregion
 
-        #region Fix/Repair
+        #region Fix Operations
 
         /// <summary>
         /// Fixes a GhJSON document by applying all default fix operations.
         /// </summary>
-        /// <param name="document">The document to fix.</param>
+        /// <param name="doc">The document to fix.</param>
         /// <param name="options">Optional fix options.</param>
         /// <returns>A fix result containing the fixed document and applied actions.</returns>
-        public static FixResult Fix(GhJsonDocument document, FixOptions? options = null)
+        public static FixResult Fix(GhJsonDocument doc, FixOptions? options = null)
         {
-            var fixer = new DocumentFixer(options);
-            return fixer.Fix(document);
+            return DocumentFixer.Fix(doc, options);
         }
 
         /// <summary>
-        /// Fixes a GhJSON document with minimal changes (IDs only).
+        /// Fixes document metadata (counts, timestamps).
         /// </summary>
-        /// <param name="document">The document to fix.</param>
+        /// <param name="doc">The document to fix.</param>
         /// <returns>A fix result containing the fixed document and applied actions.</returns>
-        public static FixResult FixMinimal(GhJsonDocument document)
+        public static FixResult FixMetadata(GhJsonDocument doc)
         {
-            return DocumentFixer.FixMinimal(document);
+            return DocumentFixer.FixMetadata(doc);
+        }
+
+        /// <summary>
+        /// Assigns missing IDs to components.
+        /// </summary>
+        /// <param name="doc">The document to fix.</param>
+        /// <returns>A fix result containing the fixed document and applied actions.</returns>
+        public static FixResult AssignMissingIds(GhJsonDocument doc)
+        {
+            return DocumentFixer.AssignMissingIds(doc);
+        }
+
+        /// <summary>
+        /// Reassigns all component IDs sequentially.
+        /// </summary>
+        /// <param name="doc">The document to fix.</param>
+        /// <returns>A fix result containing the fixed document and applied actions.</returns>
+        public static FixResult ReassignIds(GhJsonDocument doc)
+        {
+            return DocumentFixer.ReassignIds(doc);
+        }
+
+        /// <summary>
+        /// Generates missing instance GUIDs for components.
+        /// </summary>
+        /// <param name="doc">The document to fix.</param>
+        /// <returns>A fix result containing the fixed document and applied actions.</returns>
+        public static FixResult GenerateMissingInstanceGuids(GhJsonDocument doc)
+        {
+            return DocumentFixer.GenerateMissingInstanceGuids(doc);
+        }
+
+        /// <summary>
+        /// Regenerates all instance GUIDs.
+        /// </summary>
+        /// <param name="doc">The document to fix.</param>
+        /// <returns>A fix result containing the fixed document and applied actions.</returns>
+        public static FixResult RegenerateInstanceGuids(GhJsonDocument doc)
+        {
+            return DocumentFixer.RegenerateInstanceGuids(doc);
         }
 
         #endregion
 
-        #region Migration
+        #region Merge Operations
+
+        /// <summary>
+        /// Merges two GhJSON documents.
+        /// </summary>
+        /// <param name="baseDoc">The base document to merge into.</param>
+        /// <param name="incomingDoc">The incoming document to merge from.</param>
+        /// <param name="options">Optional merge options.</param>
+        /// <returns>A merge result containing the merged document.</returns>
+        public static MergeResult Merge(GhJsonDocument baseDoc, GhJsonDocument incomingDoc, MergeOptions? options = null)
+        {
+            return DocumentMerger.Merge(baseDoc, incomingDoc, options);
+        }
+
+        #endregion
+
+        #region Schema Migration
 
         /// <summary>
         /// Migrates a GhJSON document to the target schema version.
         /// </summary>
-        /// <param name="document">The document to migrate.</param>
+        /// <param name="doc">The document to migrate.</param>
         /// <param name="targetVersion">The target schema version (default: current version).</param>
         /// <returns>A migration result with the migrated document.</returns>
-        public static MigrationResult Migrate(GhJsonDocument document, string? targetVersion = null)
+        public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null)
         {
-            return MigrationPipeline.Default.Migrate(document, targetVersion);
-        }
-
-        /// <summary>
-        /// Migrates a JSON string to the target schema version.
-        /// </summary>
-        /// <param name="json">The JSON string to migrate.</param>
-        /// <param name="targetVersion">The target schema version (default: current version).</param>
-        /// <returns>A migration result with the migrated document.</returns>
-        public static MigrationResult Migrate(string json, string? targetVersion = null)
-        {
-            return MigrationPipeline.Default.Migrate(json, targetVersion);
+            return SchemaMigrator.Migrate(doc, targetVersion);
         }
 
         /// <summary>
         /// Checks if a document needs migration to the target version.
         /// </summary>
-        /// <param name="json">The JSON string to check.</param>
+        /// <param name="doc">The document to check.</param>
         /// <param name="targetVersion">The target schema version (default: current version).</param>
         /// <returns>True if migration is needed.</returns>
-        public static bool NeedsMigration(string json, string? targetVersion = null)
+        public static bool NeedsMigration(GhJsonDocument doc, string? targetVersion = null)
         {
-            var jObject = Newtonsoft.Json.Linq.JObject.Parse(json);
-            return MigrationPipeline.Default.NeedsMigration(jObject, targetVersion);
+            return SchemaMigrator.NeedsMigration(doc, targetVersion);
         }
 
-        /// <summary>
-        /// Gets the current schema version.
-        /// </summary>
-        public static string CurrentVersion => MigrationPipeline.CurrentVersion;
-
         #endregion
-    }
-
-    /// <summary>
-    /// Options for writing GhJSON documents.
-    /// </summary>
-    public class WriteOptions
-    {
-        /// <summary>
-        /// Gets the default write options.
-        /// </summary>
-        public static WriteOptions Default { get; } = new WriteOptions();
-
-        /// <summary>
-        /// Gets or sets whether the output should be indented.
-        /// </summary>
-        public bool Indented { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets whether null values should be included.
-        /// </summary>
-        public bool IncludeNullValues { get; set; } = false;
     }
 }

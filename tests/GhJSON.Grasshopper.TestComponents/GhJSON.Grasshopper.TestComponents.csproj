@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net7.0-windows;net7.0</TargetFrameworks>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <TargetExt>.gha</TargetExt>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <NoWarn>NU1701;NETSDK1086</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grasshopper" Version="8.24.25281.15001" ExcludeAssets="runtime">
+      <Source>https://mcneel.jfrog.io/artifactory/api/nuget/rhino-packages</Source>
+    </PackageReference>
+    <PackageReference Include="RhinoCommon" Version="8.24.25281.15001" ExcludeAssets="runtime">
+      <Source>https://mcneel.jfrog.io/artifactory/api/nuget/rhino-packages</Source>
+    </PackageReference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Resources.Extensions" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GhJSON.Grasshopper\GhJSON.Grasshopper.csproj" />
+    <ProjectReference Include="..\..\src\GhJSON.Core\GhJSON.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="GhJsonTestInfo.cs" />
+    <Compile Include="Components\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
+    <PackageReference Include="System.Drawing.Common" Version="8.0.11" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>

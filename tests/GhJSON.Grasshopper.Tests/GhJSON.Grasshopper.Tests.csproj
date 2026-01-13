@@ -1,47 +1,44 @@
-<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GhJSON - JSON format for Grasshopper definitions
+  Copyright (C) 2024-2026 Marc Roca Musach
+-->
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net7.0-windows;net7.0</TargetFrameworks>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <TargetExt>.gha</TargetExt>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <IsPackable>false</IsPackable>
-    <IsTestProject>false</IsTestProject>
-    <NoWarn>NU1701;NETSDK1086</NoWarn>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <Title>GhJSON Grasshopper Tests</Title>
-    <Description>Test components for GhJSON Grasshopper integration</Description>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
-    <UseWindowsForms>true</UseWindowsForms>
+    <IsTestProject>true</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grasshopper" Version="8.24.25281.15001" ExcludeAssets="runtime">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Grasshopper" Version="8.24.25281.15001">
       <Source>https://mcneel.jfrog.io/artifactory/api/nuget/rhino-packages</Source>
     </PackageReference>
-    <PackageReference Include="RhinoCommon" Version="8.24.25281.15001" ExcludeAssets="runtime">
+    <PackageReference Include="RhinoCommon" Version="8.24.25281.15001">
       <Source>https://mcneel.jfrog.io/artifactory/api/nuget/rhino-packages</Source>
     </PackageReference>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="System.Resources.Extensions" Version="7.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\GhJSON.Grasshopper\GhJSON.Grasshopper.csproj" />
-    <ProjectReference Include="..\..\src\GhJSON.Core\GhJSON.Core.csproj" />
   </ItemGroup>
 
-  <!-- Reference WinForms for .NET 7.0 on macOS -->
-  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
-    <PackageReference Include="System.Drawing.Common" Version="8.0.11" ExcludeAssets="runtime" />
-  </ItemGroup>
+  <!-- For Windows only builds -->
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
 
 </Project>

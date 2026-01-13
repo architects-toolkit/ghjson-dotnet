@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -18,77 +18,34 @@
 namespace GhJSON.Grasshopper.Serialization
 {
     /// <summary>
-    /// Options for controlling GhJSON serialization behavior.
+    /// Options for serializing Grasshopper objects to GhJSON.
     /// </summary>
-    public class SerializationOptions
+    public sealed class SerializationOptions
     {
         /// <summary>
-        /// Gets the standard serialization options with all features enabled.
+        /// Gets the default serialization options.
         /// </summary>
-        public static SerializationOptions Standard => new SerializationOptions
-        {
-            IncludeConnections = true,
-            IncludeMetadata = true,
-            IncludeComponentState = true,
-            IncludeParameterSettings = true,
-            IncludeGroups = true,
-            IncludePersistentData = true,
-            IncludeAdditionalProperties = true,
-            IncludeWarningsAndErrors = true
-        };
+        public static SerializationOptions Default { get; } = new SerializationOptions();
 
         /// <summary>
-        /// Gets lite serialization options with minimal output.
-        /// Excludes metadata, component state, parameter settings, groups, persistent data, and warnings/errors.
+        /// Gets or sets a value indicating whether to include internalized data.
         /// </summary>
-        public static SerializationOptions Lite => new SerializationOptions
-        {
-            IncludeConnections = true,
-            IncludeMetadata = false,
-            IncludeComponentState = false,
-            IncludeParameterSettings = false,
-            IncludeGroups = false,
-            IncludePersistentData = false,
-            IncludeAdditionalProperties = false,
-            IncludeWarningsAndErrors = false
-        };
+        public bool IncludeInternalizedData { get; set; } = true;
 
         /// <summary>
-        /// Gets optimized serialization options for AI use.
-        /// Similar to <see cref="Standard"/>, but excludes bulky PersistentData fields
-        /// to reduce token usage while maintaining structural schema.
+        /// Gets or sets a value indicating whether to include runtime messages.
         /// </summary>
-        public static SerializationOptions Optimized => new SerializationOptions
-        {
-            IncludeConnections = true,
-            IncludeMetadata = true,
-            IncludeComponentState = true,
-            IncludeParameterSettings = true,
-            IncludeGroups = true,
-            IncludePersistentData = false,
-            IncludeAdditionalProperties = true,
-            IncludeWarningsAndErrors = true
-        };
+        public bool IncludeRuntimeMessages { get; set; } = false;
 
         /// <summary>
-        /// Gets or sets a value indicating whether to include connections in the output.
+        /// Gets or sets a value indicating whether to include selected state.
+        /// </summary>
+        public bool IncludeSelectedState { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to include connections.
         /// </summary>
         public bool IncludeConnections { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to include document metadata.
-        /// </summary>
-        public bool IncludeMetadata { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to include component state (values, settings).
-        /// </summary>
-        public bool IncludeComponentState { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to include parameter settings.
-        /// </summary>
-        public bool IncludeParameterSettings { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to include groups.
@@ -96,24 +53,8 @@ namespace GhJSON.Grasshopper.Serialization
         public bool IncludeGroups { get; set; } = true;
 
         /// <summary>
-        /// Gets or sets a value indicating whether to include persistent data values.
-        /// When false, PersistentData is excluded to reduce output size (useful for AI context).
-        /// Default is true for Standard, false for Optimized and Lite.
+        /// Gets or sets a value indicating whether to assign sequential IDs.
         /// </summary>
-        public bool IncludePersistentData { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to include schema properties
-        /// in <see cref="GhJSON.Core.Models.Components.ComponentState.AdditionalProperties"/>.
-        /// These are component/param-specific properties beyond the core GhJSON schema.
-        /// Default is true for Standard and Optimized, false for Lite.
-        /// </summary>
-        public bool IncludeAdditionalProperties { get; set; } = true;
-
-        /// <summary>
-        /// Gets or sets a value indicating whether to include warnings and errors from components.
-        /// Default is true for Standard and Optimized, false for Lite.
-        /// </summary>
-        public bool IncludeWarningsAndErrors { get; set; } = true;
+        public bool AssignSequentialIds { get; set; } = true;
     }
 }

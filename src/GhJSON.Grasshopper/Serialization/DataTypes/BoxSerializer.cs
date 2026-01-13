@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,16 +17,15 @@
 
 using System;
 using System.Globalization;
-using GhJSON.Core.Serialization.DataTypes;
 using Rhino.Geometry;
 
 namespace GhJSON.Grasshopper.Serialization.DataTypes
 {
     /// <summary>
-    /// Serializer for Rhino.Geometry.Box type.
-    /// Format: "boxOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz;x0,x1;y0,y1;z0,z1" (origin + X-axis + Y-axis + intervals).
+    /// Serializer for Box values.
+    /// Format: boxOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz;x0,x1;y0,y1;z0,z1
     /// </summary>
-    public class BoxSerializer : IDataTypeSerializer
+    internal sealed class BoxSerializer : IDataTypeSerializer<Box>
     {
         /// <inheritdoc/>
         public string TypeName => "Box";
@@ -35,153 +34,91 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
         public Type TargetType => typeof(Box);
 
         /// <inheritdoc/>
-        public string Serialize(object value)
+        public string Prefix => "boxOXY";
+
+        /// <inheritdoc/>
+        public string Serialize(Box value)
         {
-            if (value is Box box)
-            {
-                var plane = box.Plane;
-                var x = box.X;
-                var y = box.Y;
-                var z = box.Z;
-
-                return $"boxOXY:{plane.Origin.X.ToString(CultureInfo.InvariantCulture)},{plane.Origin.Y.ToString(CultureInfo.InvariantCulture)},{plane.Origin.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{plane.XAxis.X.ToString(CultureInfo.InvariantCulture)},{plane.XAxis.Y.ToString(CultureInfo.InvariantCulture)},{plane.XAxis.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{plane.YAxis.X.ToString(CultureInfo.InvariantCulture)},{plane.YAxis.Y.ToString(CultureInfo.InvariantCulture)},{plane.YAxis.Z.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{x.T0.ToString(CultureInfo.InvariantCulture)},{x.T1.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{y.T0.ToString(CultureInfo.InvariantCulture)},{y.T1.ToString(CultureInfo.InvariantCulture)};" +
-                       $"{z.T0.ToString(CultureInfo.InvariantCulture)},{z.T1.ToString(CultureInfo.InvariantCulture)}";
-            }
-
-            throw new ArgumentException($"Value must be of type Box, got {value?.GetType().Name ?? "null"}");
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}:{1},{2},{3};{4},{5},{6};{7},{8},{9};{10},{11};{12},{13};{14},{15}",
+                this.Prefix,
+                value.Plane.Origin.X, value.Plane.Origin.Y, value.Plane.Origin.Z,
+                value.Plane.XAxis.X, value.Plane.XAxis.Y, value.Plane.XAxis.Z,
+                value.Plane.YAxis.X, value.Plane.YAxis.Y, value.Plane.YAxis.Z,
+                value.X.T0, value.X.T1,
+                value.Y.T0, value.Y.T1,
+                value.Z.T0, value.Z.T1);
         }
 
         /// <inheritdoc/>
-        public object Deserialize(string value)
+        string IDataTypeSerializer.Serialize(object value)
         {
-            if (!Validate(value))
-            {
-                throw new FormatException($"Invalid Box format: '{value}'. Expected format: 'boxOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz;x0,x1;y0,y1;z0,z1' with valid doubles.");
-            }
-
-            var valueWithoutPrefix = value.Substring(value.IndexOf(':') + 1);
-            var parts = valueWithoutPrefix.Split(';');
-
-            // Parse origin
-            var originParts = parts[0].Split(',');
-            var origin = new Point3d(
-                double.Parse(originParts[0], CultureInfo.InvariantCulture),
-                double.Parse(originParts[1], CultureInfo.InvariantCulture),
-                double.Parse(originParts[2], CultureInfo.InvariantCulture)
-            );
-
-            // Parse X axis
-            var xAxisParts = parts[1].Split(',');
-            var xAxis = new Vector3d(
-                double.Parse(xAxisParts[0], CultureInfo.InvariantCulture),
-                double.Parse(xAxisParts[1], CultureInfo.InvariantCulture),
-                double.Parse(xAxisParts[2], CultureInfo.InvariantCulture)
-            );
-
-            // Parse Y axis
-            var yAxisParts = parts[2].Split(',');
-            var yAxis = new Vector3d(
-                double.Parse(yAxisParts[0], CultureInfo.InvariantCulture),
-                double.Parse(yAxisParts[1], CultureInfo.InvariantCulture),
-                double.Parse(yAxisParts[2], CultureInfo.InvariantCulture)
-            );
-
-            // Parse intervals
-            var xIntervalParts = parts[3].Split(',');
-            var xInterval = new Interval(
-                double.Parse(xIntervalParts[0], CultureInfo.InvariantCulture),
-                double.Parse(xIntervalParts[1], CultureInfo.InvariantCulture)
-            );
-
-            var yIntervalParts = parts[4].Split(',');
-            var yInterval = new Interval(
-                double.Parse(yIntervalParts[0], CultureInfo.InvariantCulture),
-                double.Parse(yIntervalParts[1], CultureInfo.InvariantCulture)
-            );
-
-            var zIntervalParts = parts[5].Split(',');
-            var zInterval = new Interval(
-                double.Parse(zIntervalParts[0], CultureInfo.InvariantCulture),
-                double.Parse(zIntervalParts[1], CultureInfo.InvariantCulture)
-            );
-
-            // Normalize axes to ensure they are unit vectors
-            xAxis.Unitize();
-            yAxis.Unitize();
-
-            // Create plane and box using the stored X and Y axes
-            var plane = new Plane(origin, xAxis, yAxis);
-            return new Box(plane, xInterval, yInterval, zInterval);
+            return this.Serialize((Box)value);
         }
 
         /// <inheritdoc/>
-        public bool Validate(string value)
+        public Box Deserialize(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (!this.IsValid(value))
+            {
+                throw new ArgumentException($"Invalid Box format: {value}");
+            }
+
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            var origin = parts[0].Split(',');
+            var xAxis = parts[1].Split(',');
+            var yAxis = parts[2].Split(',');
+            var xInterval = parts[3].Split(',');
+            var yInterval = parts[4].Split(',');
+            var zInterval = parts[5].Split(',');
+
+            var plane = new Plane(
+                new Point3d(
+                    double.Parse(origin[0], CultureInfo.InvariantCulture),
+                    double.Parse(origin[1], CultureInfo.InvariantCulture),
+                    double.Parse(origin[2], CultureInfo.InvariantCulture)),
+                new Vector3d(
+                    double.Parse(xAxis[0], CultureInfo.InvariantCulture),
+                    double.Parse(xAxis[1], CultureInfo.InvariantCulture),
+                    double.Parse(xAxis[2], CultureInfo.InvariantCulture)),
+                new Vector3d(
+                    double.Parse(yAxis[0], CultureInfo.InvariantCulture),
+                    double.Parse(yAxis[1], CultureInfo.InvariantCulture),
+                    double.Parse(yAxis[2], CultureInfo.InvariantCulture)));
+
+            return new Box(
+                plane,
+                new Interval(
+                    double.Parse(xInterval[0], CultureInfo.InvariantCulture),
+                    double.Parse(xInterval[1], CultureInfo.InvariantCulture)),
+                new Interval(
+                    double.Parse(yInterval[0], CultureInfo.InvariantCulture),
+                    double.Parse(yInterval[1], CultureInfo.InvariantCulture)),
+                new Interval(
+                    double.Parse(zInterval[0], CultureInfo.InvariantCulture),
+                    double.Parse(zInterval[1], CultureInfo.InvariantCulture)));
+        }
+
+        /// <inheritdoc/>
+        object IDataTypeSerializer.Deserialize(string value)
+        {
+            return this.Deserialize(value);
+        }
+
+        /// <inheritdoc/>
+        public bool IsValid(string value)
+        {
+            if (string.IsNullOrEmpty(value) ||
+                !value.StartsWith($"{this.Prefix}:", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
 
-            if (!value.StartsWith("boxOXY:"))
-            {
-                return false;
-            }
-
-            var valueWithoutPrefix = value.Substring(7); // "boxOXY:".Length
-            var parts = valueWithoutPrefix.Split(';');
-            if (parts.Length != 6)
-            {
-                return false;
-            }
-
-            // Validate origin (3 doubles)
-            var originParts = parts[0].Split(',');
-            if (originParts.Length != 3)
-                return false;
-            foreach (var part in originParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            // Validate X axis (3 doubles)
-            var xAxisParts = parts[1].Split(',');
-            if (xAxisParts.Length != 3)
-                return false;
-            foreach (var part in xAxisParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            // Validate Y axis (3 doubles)
-            var yAxisParts = parts[2].Split(',');
-            if (yAxisParts.Length != 3)
-                return false;
-            foreach (var part in yAxisParts)
-            {
-                if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                    return false;
-            }
-
-            // Validate intervals (2 doubles each)
-            for (int i = 3; i <= 5; i++)
-            {
-                var intervalParts = parts[i].Split(',');
-                if (intervalParts.Length != 2)
-                    return false;
-                foreach (var part in intervalParts)
-                {
-                    if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
-                        return false;
-                }
-            }
-
-            return true;
+            var data = value.Substring(this.Prefix.Length + 1);
+            var parts = data.Split(';');
+            return parts.Length == 6;
         }
     }
 }

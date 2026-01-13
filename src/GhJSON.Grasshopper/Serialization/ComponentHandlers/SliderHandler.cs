@@ -30,27 +30,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_NumberSlider components.
     /// Serializes slider value, minimum, and maximum in compact format.
     /// </summary>
-    public class SliderHandler : IComponentHandler
+    public class SliderHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_NumberSlider component.
         /// </summary>
         public static readonly Guid SliderGuid = new Guid("57da07bd-ecab-415d-9d86-af36d7073abc");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { SliderGuid };
+        public SliderHandler()
+            : base(new[] { SliderGuid }, new[] { typeof(GH_NumberSlider) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_NumberSlider) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_NumberSlider;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_NumberSlider;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_NumberSlider slider)
                 return null;
@@ -58,12 +57,25 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             var state = new ComponentState();
             bool hasState = false;
 
-            // Extract value
-            var value = ExtractValue(obj);
-            if (value != null)
+            // Extract value (slider current value, min, max in compact format)
+            try
             {
-                state.Value = value;
+                var current = slider.CurrentValue;
+                var min = slider.Slider.Minimum;
+                var max = slider.Slider.Maximum;
+
+                // Format as "current<min~max>" for compact representation
+                state.Value = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}<{1}~{2}>",
+                    current,
+                    min,
+                    max);
                 hasState = true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SliderHandler] Error extracting value: {ex.Message}");
             }
 
             // Extract locked state
@@ -98,34 +110,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_NumberSlider slider)
-                return null;
-
-            try
-            {
-                var current = slider.CurrentValue;
-                var min = slider.Slider.Minimum;
-                var max = slider.Slider.Maximum;
-
-                // Format as "current<min~max>" for compact representation
-                return string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}<{1}~{2}>",
-                    current,
-                    min,
-                    max);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[SliderHandler] Error extracting value: {ex.Message}");
-                return null;
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_NumberSlider slider || state == null)
                 return;
@@ -168,50 +153,41 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply value
             if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_NumberSlider slider || value == null)
-                return;
-
-            var valueStr = value.ToString();
-            if (string.IsNullOrEmpty(valueStr))
-                return;
-
-            try
-            {
-                // Parse format "current<min~max>"
-                var match = Regex.Match(valueStr, @"^([\d.\-]+)<([\d.\-]+)~([\d.\-]+)>$");
-                if (match.Success)
+                var valueStr = state.Value.ToString();
+                if (!string.IsNullOrEmpty(valueStr))
                 {
-                    var current = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-                    var min = decimal.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-                    var max = decimal.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
+                    try
+                    {
+                        // Parse format "current<min~max>"
+                        var match = Regex.Match(valueStr, @"^([\d.\-]+)<([\d.\-]+)~([\d.\-]+)>$");
+                        if (match.Success)
+                        {
+                            var current = decimal.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                            var min = decimal.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
+                            var max = decimal.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture);
 
-                    // Precision: highest decimal count determines slider.DecimalPlaces.
-                    slider.Slider.DecimalPlaces = Math.Max(
-                        0,
-                        Math.Max(
-                            GetDecimalPlaces(match.Groups[1].Value),
-                            Math.Max(GetDecimalPlaces(match.Groups[2].Value), GetDecimalPlaces(match.Groups[3].Value))));
+                            // Precision: highest decimal count determines slider.DecimalPlaces.
+                            slider.Slider.DecimalPlaces = Math.Max(
+                                0,
+                                Math.Max(
+                                    GetDecimalPlaces(match.Groups[1].Value),
+                                    Math.Max(GetDecimalPlaces(match.Groups[2].Value), GetDecimalPlaces(match.Groups[3].Value))));
 
-                    slider.Slider.Minimum = min;
-                    slider.Slider.Maximum = max;
-                    slider.SetSliderValue(current);
+                            slider.Slider.Minimum = min;
+                            slider.Slider.Maximum = max;
+                            slider.SetSliderValue(current);
+                        }
+                        else if (decimal.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var simpleValue))
+                        {
+                            // Simple numeric value only
+                            slider.SetSliderValue(simpleValue);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[SliderHandler] Error applying value '{valueStr}': {ex.Message}");
+                    }
                 }
-                else if (decimal.TryParse(valueStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var simpleValue))
-                {
-                    // Simple numeric value only
-                    slider.SetSliderValue(simpleValue);
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[SliderHandler] Error applying value '{valueStr}': {ex.Message}");
             }
         }
 

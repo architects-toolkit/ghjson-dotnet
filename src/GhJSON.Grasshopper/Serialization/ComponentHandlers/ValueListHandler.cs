@@ -30,27 +30,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_ValueList components.
     /// Serializes list items, selection, and list mode.
     /// </summary>
-    public class ValueListHandler : IComponentHandler
+    public class ValueListHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_ValueList component.
         /// </summary>
         public static readonly Guid ValueListGuid = new Guid("f31d8d7a-7536-4ac8-9c96-fde6ecda4d0a");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { ValueListGuid };
+        public ValueListHandler()
+            : base(new[] { ValueListGuid }, new[] { typeof(GH_ValueList) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_ValueList) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_ValueList;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_ValueList;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_ValueList valueList)
                 return null;
@@ -59,11 +58,16 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             bool hasState = false;
 
             // Extract value (selected item name)
-            var value = ExtractValue(obj);
-            if (value != null)
+            try
             {
-                state.Value = value;
-                hasState = true;
+                state.Value = valueList.FirstSelectedItem?.Name;
+                if (state.Value != null)
+                {
+                    hasState = true;
+                }
+            }
+            catch
+            {
             }
 
             // Extract locked state
@@ -123,23 +127,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_ValueList valueList)
-                return null;
-
-            try
-            {
-                return valueList.FirstSelectedItem?.Name;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_ValueList valueList || state == null)
                 return;
@@ -222,39 +210,29 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             if (state.Value != null)
             {
                 // Apply single value selection for non-CheckList modes
-                ApplyValue(obj, state.Value);
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_ValueList valueList || value == null)
-                return;
-
-            // Don't apply single value selection for CheckList mode
-            // (selections are handled via ListItems[].Selected in ApplyState)
-            if (valueList.ListMode == GH_ValueListMode.CheckList)
-                return;
-
-            var valueName = value.ToString();
-            if (string.IsNullOrEmpty(valueName))
-                return;
-
-            try
-            {
-                for (int i = 0; i < valueList.ListItems.Count; i++)
+                // (selections are handled via ListItems[].Selected in ApplyState for CheckList)
+                if (valueList.ListMode != GH_ValueListMode.CheckList)
                 {
-                    if (valueList.ListItems[i].Name == valueName)
+                    var valueName = state.Value.ToString();
+                    if (!string.IsNullOrEmpty(valueName))
                     {
-                        valueList.SelectItem(i);
-                        break;
+                        try
+                        {
+                            for (int i = 0; i < valueList.ListItems.Count; i++)
+                            {
+                                if (valueList.ListItems[i].Name == valueName)
+                                {
+                                    valueList.SelectItem(i);
+                                    break;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"[ValueListHandler] Error applying value '{valueName}': {ex.Message}");
+                        }
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[ValueListHandler] Error applying value '{valueName}': {ex.Message}");
             }
         }
     }

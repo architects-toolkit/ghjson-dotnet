@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: Component Handler API Simplification**: Removed `ExtractValue()` and `ApplyValue()` methods from `IComponentHandler` interface and `ComponentHandlerBase` abstract class
+  - These methods were internal helpers never called by the serialization pipeline
+  - All value extraction/application logic has been inlined into `ExtractState()` and `ApplyState()` methods
+  - Custom handler implementations must be updated to remove these methods and inline their logic
+  - Built-in handlers (SliderHandler, PanelHandler, ScriptHandler, etc.) have been updated accordingly
+  - This change simplifies the handler contract and aligns with the schema where all properties live under `componentState`
+
 ### Added
 
 - **Property Handling Architecture Documentation**: Added comprehensive documentation at `docs/Architecture/PropertyHandling.md` explaining the three-tier property system (ComponentHandlerRegistry, DataTypeRegistry, PropertyManagerV2) and their separation of concerns.
@@ -31,7 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **IComponentHandler interface**: Extensible contract for component-specific serialization/deserialization logic
   - `ExtractState()` / `ApplyState()` for component state management
-  - `ExtractValue()` / `ApplyValue()` for universal value handling
   - Support for GUID-based and Type-based handler matching
   - Priority system for handler selection (higher = preferred)
 - **ComponentHandlerRegistry**: Centralized registry for component handlers
@@ -135,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PutOptions configuration class**: Configures canvas placement behavior
   - `Offset`, `Spacing`, `UseExactPositions`, `UseDependencyLayout`
   - `CreateConnections`, `CreateGroups`, `PreserveInstanceGuids`
-  - `ApplyComponentState`, `ApplySchemaProperties`, `ApplyParameterSettings`
+  - `ApplyComponentState`, `ApplyAdditionalProperties`, `ApplyParameterSettings`
 - **PutResult class**: Result of Put operations with placed objects and mappings
 - **WriteOptions class**: Configures JSON serialization (indentation, null handling)
 - **Automatic registry initialization**: `GhJsonGrasshopper.Initialize()` ensures all serializers and handlers are registered

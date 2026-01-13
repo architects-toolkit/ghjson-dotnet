@@ -29,25 +29,24 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for script components (C#, Python, IronPython, VB.NET).
     /// Serializes script code, VB sections, and standard output visibility.
     /// </summary>
-    public class ScriptHandler : IComponentHandler
+    public class ScriptHandler : ComponentHandlerBase
     {
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[]
+        public ScriptHandler()
+            : base(new[]
+            {
+                ScriptComponentFactory.Python3Guid,
+                ScriptComponentFactory.IronPython2Guid,
+                ScriptComponentFactory.CSharpGuid,
+                ScriptComponentFactory.VBNetGuid
+            })
         {
-            ScriptComponentFactory.Python3Guid,
-            ScriptComponentFactory.IronPython2Guid,
-            ScriptComponentFactory.CSharpGuid,
-            ScriptComponentFactory.VBNetGuid
-        };
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => Array.Empty<Type>();
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
-
-        /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj)
+        public override bool CanHandle(IGH_DocumentObject obj)
         {
             if (obj is not IGH_Component component)
                 return false;
@@ -57,7 +56,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not IGH_Component component || !CanHandle(obj))
                 return null;
@@ -124,24 +123,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not IGH_Component component || !CanHandle(obj))
-                return null;
-
-            var lang = ScriptComponentHelper.GetScriptLanguageTypeFromComponent(component);
-
-            // VB Script returns VBScriptCode, not a simple string value
-            if (lang == ScriptLanguage.VB)
-            {
-                return ExtractVBScriptCode(component);
-            }
-
-            return ExtractScriptCode(component);
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not IGH_Component component || state == null || !CanHandle(obj))
                 return;
@@ -156,7 +138,11 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply standard script code
             else if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
+                var scriptCode = state.Value.ToString();
+                if (!string.IsNullOrEmpty(scriptCode))
+                {
+                    ApplyScriptCode(component, scriptCode);
+                }
             }
 
             // Apply standard output visibility
@@ -176,27 +162,6 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             {
                 component.Hidden = state.Hidden.Value;
             }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not IGH_Component component || value == null || !CanHandle(obj))
-                return;
-
-            // Handle VBScriptCode object
-            if (value is VBScriptCode vbCode)
-            {
-                ApplyVBScriptCode(component, vbCode);
-                return;
-            }
-
-            // Apply script code string
-            var scriptCode = value.ToString();
-            if (string.IsNullOrEmpty(scriptCode))
-                return;
-
-            ApplyScriptCode(component, scriptCode);
         }
 
         #region Script Code Extraction

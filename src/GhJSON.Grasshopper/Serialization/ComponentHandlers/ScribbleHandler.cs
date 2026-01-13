@@ -30,27 +30,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_Scribble components.
     /// Serializes scribble text, font, and corner positions.
     /// </summary>
-    public class ScribbleHandler : IComponentHandler
+    public class ScribbleHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_Scribble component.
         /// </summary>
         public static readonly Guid ScribbleGuid = new Guid("7f5c6c55-f846-4a08-9c9a-cfdc285cc6fe");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { ScribbleGuid };
+        public ScribbleHandler()
+            : base(new[] { ScribbleGuid }, new[] { typeof(GH_Scribble) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_Scribble) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_Scribble;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_Scribble;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_Scribble scribble)
                 return null;
@@ -59,12 +58,8 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             bool hasState = false;
 
             // Extract value (scribble text)
-            var value = ExtractValue(obj);
-            if (value != null)
-            {
-                state.Value = value;
-                hasState = true;
-            }
+            state.Value = scribble.Text;
+            hasState = true;
 
             // Extract locked state (via IGH_ActiveObject)
             if (scribble is IGH_ActiveObject activeObj && activeObj.Locked)
@@ -128,16 +123,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_Scribble scribble)
-                return null;
-
-            return scribble.Text;
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_Scribble scribble || state == null)
                 return;
@@ -200,17 +186,8 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply value
             if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
+                scribble.Text = state.Value.ToString();
             }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_Scribble scribble || value == null)
-                return;
-
-            scribble.Text = value.ToString();
         }
     }
 }

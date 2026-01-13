@@ -42,7 +42,6 @@ namespace GhJSON.Core.Tests.Models
             Assert.Null(props.ComponentState);
             Assert.Null(props.Warnings);
             Assert.Null(props.Errors);
-            Assert.Null(props.Properties);
         }
 
         [Fact]
@@ -111,7 +110,6 @@ namespace GhJSON.Core.Tests.Models
                 InstanceGuid = guid2,
                 Pivot = new CompactPosition(100.5f, 200.75f),
                 Id = 1,
-                Properties = new Dictionary<string, object> { { "key", "value" } },
                 InputSettings = new List<ParameterSettings>
                 {
                     new ParameterSettings { ParameterName = "A" }
@@ -120,7 +118,12 @@ namespace GhJSON.Core.Tests.Models
                 {
                     new ParameterSettings { ParameterName = "Result" }
                 },
-                ComponentState = new ComponentState { Selected = true, Locked = true },
+                ComponentState = new ComponentState
+                {
+                    Selected = true,
+                    Locked = true,
+                    AdditionalProperties = new Dictionary<string, object> { { "key", "value" } }
+                },
                 Warnings = new List<string> { "Test warning" },
                 Errors = new List<string> { "Test error" }
             };
@@ -138,9 +141,9 @@ namespace GhJSON.Core.Tests.Models
             Assert.Equal(100.5f, deserialized.Pivot.X);
             Assert.Equal(200.75f, deserialized.Pivot.Y);
             Assert.Equal(1, deserialized.Id);
-            Assert.NotNull(deserialized.Properties);
             Assert.NotNull(deserialized.ComponentState);
             Assert.True(deserialized.ComponentState.Selected);
+            Assert.NotNull(deserialized.ComponentState.AdditionalProperties);
             Assert.NotNull(deserialized.InputSettings);
             Assert.Single(deserialized.InputSettings);
             Assert.NotNull(deserialized.OutputSettings);

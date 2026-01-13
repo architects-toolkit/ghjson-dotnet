@@ -40,6 +40,9 @@ namespace GhJSON.Core.Models.Components
         [JsonProperty("value", NullValueHandling = NullValueHandling.Ignore)]
         public object? Value { get; set; }
 
+        [JsonProperty("persistentData", NullValueHandling = NullValueHandling.Ignore)]
+        public object? PersistentData { get; set; }
+
         /// <summary>
         /// Gets or sets the VB Script code with 3 separate sections.
         /// This is an alternative to Value for VB Script components only.

@@ -30,27 +30,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_ColourSwatch components.
     /// Serializes swatch color value.
     /// </summary>
-    public class ColorSwatchHandler : IComponentHandler
+    public class ColorSwatchHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_ColourSwatch component.
         /// </summary>
         public static readonly Guid ColorSwatchGuid = new Guid("9c53bac0-ba66-40bd-8154-ce9829b9db1a");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { ColorSwatchGuid };
+        public ColorSwatchHandler()
+            : base(new[] { ColorSwatchGuid }, new[] { typeof(GH_ColourSwatch) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_ColourSwatch) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_ColourSwatch;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_ColourSwatch;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_ColourSwatch swatch)
                 return null;
@@ -59,11 +58,14 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             bool hasState = false;
 
             // Extract value (color as rgba format)
-            var value = ExtractValue(obj);
-            if (value != null)
+            try
             {
-                state.Value = value;
+                var c = swatch.SwatchColour;
+                state.Value = $"rgba:{c.R},{c.G},{c.B},{c.A}";
                 hasState = true;
+            }
+            catch
+            {
             }
 
             // Also store in AdditionalProperties for backward compatibility
@@ -95,24 +97,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_ColourSwatch swatch)
-                return null;
-
-            try
-            {
-                var c = swatch.SwatchColour;
-                return $"rgba:{c.R},{c.G},{c.B},{c.A}";
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_ColourSwatch swatch || state == null)
                 return;
@@ -141,40 +126,32 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply value (legacy rgba format)
             else if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_ColourSwatch swatch || value == null)
-                return;
-
-            var str = value.ToString();
-            if (string.IsNullOrEmpty(str))
-                return;
-
-            try
-            {
-                // Try argb format first (DataTypeSerializer)
-                if (DataTypeSerializer.TryDeserializeFromPrefix(str, out var colorObj) &&
-                    colorObj is Color c)
+                var str = state.Value.ToString();
+                if (!string.IsNullOrEmpty(str))
                 {
-                    swatch.SwatchColour = c;
-                    return;
+                    try
+                    {
+                        // Try argb format first (DataTypeSerializer)
+                        if (DataTypeSerializer.TryDeserializeFromPrefix(str, out var colorObj) &&
+                            colorObj is Color c)
+                        {
+                            swatch.SwatchColour = c;
+                        }
+                        else
+                        {
+                            // Try legacy rgba format
+                            var color = ParseRgbaColor(str);
+                            if (color.HasValue)
+                            {
+                                swatch.SwatchColour = color.Value;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[ColorSwatchHandler] Error applying value: {ex.Message}");
+                    }
                 }
-
-                // Try legacy rgba format
-                var color = ParseRgbaColor(str);
-                if (color.HasValue)
-                {
-                    swatch.SwatchColour = color.Value;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[ColorSwatchHandler] Error applying value: {ex.Message}");
             }
         }
 

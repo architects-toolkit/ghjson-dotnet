@@ -51,25 +51,10 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         ComponentState? ExtractState(IGH_DocumentObject obj);
 
         /// <summary>
-        /// Extracts the universal value from a component.
-        /// The universal value is the primary data value for components like sliders, panels, etc.
-        /// </summary>
-        /// <param name="obj">The document object to extract value from.</param>
-        /// <returns>The extracted value, or null if no value to extract.</returns>
-        object? ExtractValue(IGH_DocumentObject obj);
-
-        /// <summary>
         /// Applies the component state to a Grasshopper component.
         /// </summary>
         /// <param name="obj">The document object to apply state to.</param>
         /// <param name="state">The state to apply.</param>
         void ApplyState(IGH_DocumentObject obj, ComponentState state);
-
-        /// <summary>
-        /// Applies the universal value to a component.
-        /// </summary>
-        /// <param name="obj">The document object to apply value to.</param>
-        /// <param name="value">The value to apply.</param>
-        void ApplyValue(IGH_DocumentObject obj, object value);
     }
 }

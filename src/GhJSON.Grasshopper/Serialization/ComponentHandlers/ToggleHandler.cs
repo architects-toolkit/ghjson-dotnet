@@ -28,27 +28,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_BooleanToggle components.
     /// Serializes boolean value state.
     /// </summary>
-    public class ToggleHandler : IComponentHandler
+    public class ToggleHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_BooleanToggle component.
         /// </summary>
         public static readonly Guid ToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3eba1d739dec");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { ToggleGuid };
+        public ToggleHandler()
+            : base(new[] { ToggleGuid }, new[] { typeof(GH_BooleanToggle) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_BooleanToggle) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_BooleanToggle;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_BooleanToggle;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_BooleanToggle toggle)
                 return null;
@@ -57,12 +56,8 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             bool hasState = false;
 
             // Extract value
-            var value = ExtractValue(obj);
-            if (value != null)
-            {
-                state.Value = value;
-                hasState = true;
-            }
+            state.Value = toggle.Value;
+            hasState = true;
 
             // Extract locked state
             if (toggle.Locked)
@@ -82,16 +77,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_BooleanToggle toggle)
-                return null;
-
-            return toggle.Value;
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_BooleanToggle toggle || state == null)
                 return;
@@ -111,30 +97,21 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply value
             if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_BooleanToggle toggle || value == null)
-                return;
-
-            try
-            {
-                if (value is bool boolVal)
+                try
                 {
-                    toggle.Value = boolVal;
+                    if (state.Value is bool boolVal)
+                    {
+                        toggle.Value = boolVal;
+                    }
+                    else if (bool.TryParse(state.Value.ToString(), out var parsed))
+                    {
+                        toggle.Value = parsed;
+                    }
                 }
-                else if (bool.TryParse(value.ToString(), out var parsed))
+                catch (Exception ex)
                 {
-                    toggle.Value = parsed;
+                    Debug.WriteLine($"[ToggleHandler] Error applying value: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[ToggleHandler] Error applying value: {ex.Message}");
             }
         }
     }

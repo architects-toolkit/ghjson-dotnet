@@ -41,7 +41,7 @@ namespace GhJSON.Core.Tests.Models
             Assert.Null(state.MarshOutputs);
             Assert.Null(state.ShowStandardOutput);
             Assert.Null(state.ListMode);
-            Assert.Null(state.SelectedIndices);
+            Assert.Null(state.ListItems);
             Assert.Null(state.Font);
             Assert.Null(state.Corners);
             Assert.Null(state.DrawIndices);
@@ -113,7 +113,12 @@ namespace GhJSON.Core.Tests.Models
             var state = new ComponentState
             {
                 ListMode = "DropDown",
-                SelectedIndices = new List<int> { 0, 2, 3 }
+                ListItems = new List<ValueListItem>
+                {
+                    new ValueListItem { Name = "A", Expression = "0", Selected = true },
+                    new ValueListItem { Name = "B", Expression = "1" },
+                    new ValueListItem { Name = "C", Expression = "2", Selected = true },
+                }
             };
 
             var json = JsonConvert.SerializeObject(state);
@@ -121,11 +126,11 @@ namespace GhJSON.Core.Tests.Models
 
             Assert.NotNull(deserialized);
             Assert.Equal("DropDown", deserialized.ListMode);
-            Assert.NotNull(deserialized.SelectedIndices);
-            Assert.Equal(3, deserialized.SelectedIndices.Count);
-            Assert.Equal(0, deserialized.SelectedIndices[0]);
-            Assert.Equal(2, deserialized.SelectedIndices[1]);
-            Assert.Equal(3, deserialized.SelectedIndices[2]);
+            Assert.NotNull(deserialized.ListItems);
+            Assert.Equal(3, deserialized.ListItems.Count);
+            Assert.True(deserialized.ListItems[0].Selected);
+            Assert.False(deserialized.ListItems[1].Selected);
+            Assert.True(deserialized.ListItems[2].Selected);
         }
 
         [Fact]

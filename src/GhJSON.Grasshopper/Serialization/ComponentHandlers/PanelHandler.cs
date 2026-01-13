@@ -30,27 +30,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_Panel components.
     /// Serializes panel text, color, and bounds.
     /// </summary>
-    public class PanelHandler : IComponentHandler
+    public class PanelHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_Panel component.
         /// </summary>
         public static readonly Guid PanelGuid = new Guid("59e0b89a-e487-49f8-bab8-b5bab16be14c");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { PanelGuid };
+        public PanelHandler()
+            : base(new[] { PanelGuid }, new[] { typeof(GH_Panel) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_Panel) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_Panel;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_Panel;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_Panel panel)
                 return null;
@@ -59,12 +58,8 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             bool hasState = false;
 
             // Extract value (panel text)
-            var value = ExtractValue(obj);
-            if (value != null)
-            {
-                state.Value = value;
-                hasState = true;
-            }
+            state.Value = panel.UserText;
+            hasState = true;
 
             // Extract locked state
             if (panel.Locked)
@@ -235,16 +230,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_Panel panel)
-                return null;
-
-            return panel.UserText;
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_Panel panel || state == null)
                 return;
@@ -373,17 +359,8 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply value
             if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
+                panel.UserText = state.Value.ToString();
             }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_Panel panel || value == null)
-                return;
-
-            panel.UserText = value.ToString();
         }
     }
 }

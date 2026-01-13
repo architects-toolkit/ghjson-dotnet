@@ -29,7 +29,6 @@ using GhJSON.Core.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ComponentHandlers;
 using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
-using GhJSON.Grasshopper.Serialization.SchemaProperties;
 using GhJSON.Grasshopper.Serialization.SchemaProperties.PropertyFilters;
 using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper;
@@ -82,10 +81,8 @@ namespace GhJSON.Grasshopper.Serialization
             };
 
             // Property-manager centric approach (legacy parity):
-            // Build ComponentProperties from PropertyManagerV2 schema properties first,
-            // then layer componentState + parameter settings.
-            var ctx = GetSchemaPropertyContext(options);
-            var propertyManager = new PropertyManagerV2(ctx);
+            // Schema properties are now stored in componentState.additionalProperties.
+            var schemaContext = GetSchemaPropertyContext(options);
 
             // Collect objects to serialize:
             // - all IGH_Component
@@ -106,7 +103,7 @@ namespace GhJSON.Grasshopper.Serialization
 
             foreach (var obj in objectsToSerialize)
             {
-                var props = CreateComponentProperties(obj, guidToId, options, propertyManager, handlerRegistry);
+                var props = CreateComponentProperties(obj, guidToId, options, schemaContext, handlerRegistry);
                 if (props != null)
                 {
                     document.Components.Add(props);
@@ -138,7 +135,7 @@ namespace GhJSON.Grasshopper.Serialization
             IGH_ActiveObject obj,
             Dictionary<Guid, int> guidToId,
             SerializationOptions options,
-            PropertyManagerV2 propertyManager,
+            SerializationContext schemaContext,
             ComponentHandlerRegistry handlerRegistry)
         {
             if (obj == null)
@@ -158,21 +155,10 @@ namespace GhJSON.Grasshopper.Serialization
                 Pivot = new CompactPosition(pivot.X, pivot.Y)
             };
 
-            // Schema properties
-            if (options.IncludeSchemaProperties)
-            {
-                var schemaProps = propertyManager.ExtractProperties(obj);
-                if (schemaProps.Count > 0)
-                {
-                    props.Properties = schemaProps;
-                }
-            }
-
             // Component state - use handler registry
             if (options.IncludeComponentState)
             {
-                var handler = handlerRegistry.GetHandler(obj);
-                props.ComponentState = handler.ExtractState(obj);
+                props.ComponentState = handlerRegistry.ComponentStateToGhJson(obj);
 
                 // Move 'selected' to componentState per schema
                 if (obj.Attributes?.Selected == true)
@@ -180,16 +166,24 @@ namespace GhJSON.Grasshopper.Serialization
                     props.ComponentState ??= new ComponentState();
                     props.ComponentState.Selected = true;
                 }
-            }
 
-            // Avoid duplication: when a componentState.value exists, PersistentData becomes redundant and can be user-noise.
-            if (props.ComponentState?.Value != null && props.Properties != null)
-            {
-                props.Properties.Remove("PersistentData");
-
-                if (props.Properties.Count == 0)
+                // Schema properties are now stored in componentState.additionalProperties.
+                if (options.IncludeAdditionalProperties)
                 {
-                    props.Properties = null;
+                    var schemaAdditional = DefaultComponentHandler.ExtractSchemaPropertiesForAdditionalProperties(
+                        obj,
+                        schemaContext,
+                        includePersistentData: options.IncludePersistentData);
+
+                    if (schemaAdditional != null && schemaAdditional.Count > 0)
+                    {
+                        props.ComponentState ??= new ComponentState();
+                        props.ComponentState.AdditionalProperties ??= new Dictionary<string, object>();
+                        foreach (var kvp in schemaAdditional)
+                        {
+                            props.ComponentState.AdditionalProperties[kvp.Key] = kvp.Value;
+                        }
+                    }
                 }
             }
 
@@ -216,6 +210,66 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             return props;
+        }
+
+        private static ComponentState? MergeComponentStates(ComponentState? baseState, ComponentState? overrideState)
+        {
+            if (baseState == null)
+                return overrideState;
+            if (overrideState == null)
+                return baseState;
+
+            var merged = new ComponentState
+            {
+                Value = overrideState.Value ?? baseState.Value,
+                VBCode = overrideState.VBCode ?? baseState.VBCode,
+                Selected = overrideState.Selected ?? baseState.Selected,
+                Locked = overrideState.Locked ?? baseState.Locked,
+                Hidden = overrideState.Hidden ?? baseState.Hidden,
+                Multiline = overrideState.Multiline ?? baseState.Multiline,
+                Wrap = overrideState.Wrap ?? baseState.Wrap,
+                Color = overrideState.Color ?? baseState.Color,
+                MarshInputs = overrideState.MarshInputs ?? baseState.MarshInputs,
+                MarshOutputs = overrideState.MarshOutputs ?? baseState.MarshOutputs,
+                ShowStandardOutput = overrideState.ShowStandardOutput ?? baseState.ShowStandardOutput,
+                ListMode = overrideState.ListMode ?? baseState.ListMode,
+                ListItems = overrideState.ListItems ?? baseState.ListItems,
+                Font = overrideState.Font ?? baseState.Font,
+                Corners = overrideState.Corners ?? baseState.Corners,
+                DrawIndices = overrideState.DrawIndices ?? baseState.DrawIndices,
+                DrawPaths = overrideState.DrawPaths ?? baseState.DrawPaths,
+                Alignment = overrideState.Alignment ?? baseState.Alignment,
+                SpecialCodes = overrideState.SpecialCodes ?? baseState.SpecialCodes,
+                Bounds = overrideState.Bounds ?? baseState.Bounds,
+                Rounding = overrideState.Rounding ?? baseState.Rounding,
+            };
+
+            if (baseState.AdditionalProperties != null || overrideState.AdditionalProperties != null)
+            {
+                merged.AdditionalProperties = new Dictionary<string, object>();
+                if (baseState.AdditionalProperties != null)
+                {
+                    foreach (var kvp in baseState.AdditionalProperties)
+                    {
+                        merged.AdditionalProperties[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                if (overrideState.AdditionalProperties != null)
+                {
+                    foreach (var kvp in overrideState.AdditionalProperties)
+                    {
+                        merged.AdditionalProperties[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                if (merged.AdditionalProperties.Count == 0)
+                {
+                    merged.AdditionalProperties = null;
+                }
+            }
+
+            return merged;
         }
 
         private static void ExtractWarningsAndErrors(IGH_ActiveObject obj, ComponentProperties props)
@@ -330,7 +384,7 @@ namespace GhJSON.Grasshopper.Serialization
             }
         }
 
-        private static ComponentProperties? SerializeObject(
+        public static ComponentProperties? SerializeObject(
             IGH_ActiveObject obj,
             Dictionary<Guid, int> guidToId,
             SerializationOptions options)
@@ -338,8 +392,7 @@ namespace GhJSON.Grasshopper.Serialization
             // Backward-compatible entry point used by older call sites.
             // Prefer CreateComponentProperties (property-manager centric).
             var ctx = GetSchemaPropertyContext(options);
-            var propertyManager = new PropertyManagerV2(ctx);
-            return CreateComponentProperties(obj, guidToId, options, propertyManager, ComponentHandlerRegistry.Default);
+            return CreateComponentProperties(obj, guidToId, options, ctx, ComponentHandlerRegistry.Default);
         }
 
         private static SerializationContext GetSchemaPropertyContext(SerializationOptions options)

@@ -28,27 +28,26 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
     /// Handler for GH_ButtonObject components.
     /// Serializes button expressions for normal and pressed states.
     /// </summary>
-    public class ButtonHandler : IComponentHandler
+    public class ButtonHandler : ComponentHandlerBase
     {
         /// <summary>
         /// Known GUID for GH_ButtonObject component.
         /// </summary>
         public static readonly Guid ButtonGuid = new Guid("8f9cfa8e-8593-4b15-8b39-5c5e8b07a6c8");
 
-        /// <inheritdoc/>
-        public IEnumerable<Guid> SupportedComponentGuids => new[] { ButtonGuid };
+        public ButtonHandler()
+            : base(new[] { ButtonGuid }, new[] { typeof(GH_ButtonObject) })
+        {
+        }
 
         /// <inheritdoc/>
-        public IEnumerable<Type> SupportedTypes => new[] { typeof(GH_ButtonObject) };
+        public override int Priority => 100;
 
         /// <inheritdoc/>
-        public int Priority => 100;
+        public override bool CanHandle(IGH_DocumentObject obj) => obj is GH_ButtonObject;
 
         /// <inheritdoc/>
-        public bool CanHandle(IGH_DocumentObject obj) => obj is GH_ButtonObject;
-
-        /// <inheritdoc/>
-        public ComponentState? ExtractState(IGH_DocumentObject obj)
+        public override ComponentState? ExtractState(IGH_DocumentObject obj)
         {
             if (obj is not GH_ButtonObject btn)
                 return null;
@@ -57,11 +56,24 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             bool hasState = false;
 
             // Extract value (button expressions)
-            var value = ExtractValue(obj);
-            if (value != null)
+            try
             {
-                state.Value = value;
-                hasState = true;
+                var expNormal = btn.ExpressionNormal;
+                var expPressed = btn.ExpressionPressed;
+
+                // Only serialize if not default values
+                if (expNormal != "False" || expPressed != "True")
+                {
+                    state.Value = new Dictionary<string, string>
+                    {
+                        { "normal", expNormal ?? "False" },
+                        { "pressed", expPressed ?? "True" }
+                    };
+                    hasState = true;
+                }
+            }
+            catch
+            {
             }
 
             // Extract locked state
@@ -82,35 +94,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         }
 
         /// <inheritdoc/>
-        public object? ExtractValue(IGH_DocumentObject obj)
-        {
-            if (obj is not GH_ButtonObject btn)
-                return null;
-
-            try
-            {
-                var expNormal = btn.ExpressionNormal;
-                var expPressed = btn.ExpressionPressed;
-
-                // Only serialize if not default values
-                if (expNormal != "False" || expPressed != "True")
-                {
-                    return new Dictionary<string, string>
-                    {
-                        { "normal", expNormal ?? "False" },
-                        { "pressed", expPressed ?? "True" }
-                    };
-                }
-            }
-            catch
-            {
-            }
-
-            return null;
-        }
-
-        /// <inheritdoc/>
-        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
+        public override void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
             if (obj is not GH_ButtonObject btn || state == null)
                 return;
@@ -130,46 +114,37 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             // Apply value
             if (state.Value != null)
             {
-                ApplyValue(obj, state.Value);
-            }
-        }
-
-        /// <inheritdoc/>
-        public void ApplyValue(IGH_DocumentObject obj, object value)
-        {
-            if (obj is not GH_ButtonObject btn || value == null)
-                return;
-
-            try
-            {
-                // Handle dictionary format
-                if (value is IDictionary<string, object> dict)
+                try
                 {
-                    if (dict.TryGetValue("normal", out var normal))
+                    // Handle dictionary format
+                    if (state.Value is IDictionary<string, object> dict)
                     {
-                        btn.ExpressionNormal = normal?.ToString() ?? "False";
+                        if (dict.TryGetValue("normal", out var normal))
+                        {
+                            btn.ExpressionNormal = normal?.ToString() ?? "False";
+                        }
+                        if (dict.TryGetValue("pressed", out var pressed))
+                        {
+                            btn.ExpressionPressed = pressed?.ToString() ?? "True";
+                        }
                     }
-                    if (dict.TryGetValue("pressed", out var pressed))
+                    // Handle Dictionary<string, string>
+                    else if (state.Value is Dictionary<string, string> strDict)
                     {
-                        btn.ExpressionPressed = pressed?.ToString() ?? "True";
+                        if (strDict.TryGetValue("normal", out var normal))
+                        {
+                            btn.ExpressionNormal = normal ?? "False";
+                        }
+                        if (strDict.TryGetValue("pressed", out var pressed))
+                        {
+                            btn.ExpressionPressed = pressed ?? "True";
+                        }
                     }
                 }
-                // Handle Dictionary<string, string>
-                else if (value is Dictionary<string, string> strDict)
+                catch (Exception ex)
                 {
-                    if (strDict.TryGetValue("normal", out var normal))
-                    {
-                        btn.ExpressionNormal = normal ?? "False";
-                    }
-                    if (strDict.TryGetValue("pressed", out var pressed))
-                    {
-                        btn.ExpressionPressed = pressed ?? "True";
-                    }
+                    Debug.WriteLine($"[ButtonHandler] Error applying value: {ex.Message}");
                 }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[ButtonHandler] Error applying value: {ex.Message}");
             }
         }
     }

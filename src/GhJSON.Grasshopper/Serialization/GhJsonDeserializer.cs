@@ -28,7 +28,6 @@ using GhJSON.Core.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ComponentHandlers;
 using GhJSON.Grasshopper.Serialization.DataTypes;
 using GhJSON.Grasshopper.Serialization.ScriptComponents;
-using GhJSON.Grasshopper.Serialization.SchemaProperties;
 using GhJSON.Grasshopper.Serialization.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -206,18 +205,42 @@ namespace GhJSON.Grasshopper.Serialization
                 }
             }
 
-            // Apply schema properties first (legacy behavior)
-            // so that componentState.value can rely on properties being present (e.g. ValueList ListItems).
-            if (options.ApplySchemaProperties && props.Properties != null && props.Properties.Count > 0)
-            {
-                ApplySchemaProperties(obj, props.Properties);
-            }
-
             // Apply component state after script code/parameter rebuild to avoid re-generation.
             if (props.ComponentState != null && options.ApplyComponentState)
             {
-                var handler = handlerRegistry.GetHandler(obj);
-                handler.ApplyState(obj, props.ComponentState);
+                // Schema properties are now stored in componentState.additionalProperties.
+                // Gate applying additionalProperties behind ApplyAdditionalProperties.
+                var stateToApply = props.ComponentState;
+                if (!options.ApplyAdditionalProperties && props.ComponentState.AdditionalProperties != null)
+                {
+                    stateToApply = new ComponentState
+                    {
+                        Value = props.ComponentState.Value,
+                        VBCode = props.ComponentState.VBCode,
+                        Selected = props.ComponentState.Selected,
+                        Locked = props.ComponentState.Locked,
+                        Hidden = props.ComponentState.Hidden,
+                        Multiline = props.ComponentState.Multiline,
+                        Wrap = props.ComponentState.Wrap,
+                        Color = props.ComponentState.Color,
+                        MarshInputs = props.ComponentState.MarshInputs,
+                        MarshOutputs = props.ComponentState.MarshOutputs,
+                        ShowStandardOutput = props.ComponentState.ShowStandardOutput,
+                        ListMode = props.ComponentState.ListMode,
+                        ListItems = props.ComponentState.ListItems,
+                        Font = props.ComponentState.Font,
+                        Corners = props.ComponentState.Corners,
+                        DrawIndices = props.ComponentState.DrawIndices,
+                        DrawPaths = props.ComponentState.DrawPaths,
+                        Alignment = props.ComponentState.Alignment,
+                        SpecialCodes = props.ComponentState.SpecialCodes,
+                        Bounds = props.ComponentState.Bounds,
+                        Rounding = props.ComponentState.Rounding,
+                        AdditionalProperties = null,
+                    };
+                }
+
+                handlerRegistry.ApplyState(obj, stateToApply);
             }
 
             return obj;
@@ -478,85 +501,6 @@ namespace GhJSON.Grasshopper.Serialization
             }
 
             return result;
-        }
-
-        private static void ApplySchemaProperties(IGH_DocumentObject obj, Dictionary<string, object> schemaProperties)
-        {
-            try
-            {
-                var manager = new PropertyManagerV2();
-                var normalized = new Dictionary<string, object>();
-                foreach (var kvp in schemaProperties)
-                {
-                    var unwrapped = UnwrapComponentPropertyValue(kvp.Value);
-                    if (unwrapped != null)
-                    {
-                        normalized[kvp.Key] = unwrapped;
-                    }
-                }
-
-                manager.ApplyProperties(obj, normalized);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[GhJsonDeserializer] Error applying schema properties: {ex.Message}");
-            }
-        }
-
-        private static object? UnwrapComponentPropertyValue(object? value)
-        {
-            if (value == null)
-            {
-                return null;
-            }
-
-            // JObject wrapper: { "value": ... }
-            if (value is JObject jo)
-            {
-                if (jo.TryGetValue("value", StringComparison.OrdinalIgnoreCase, out var token))
-                {
-                    return UnwrapJToken(token);
-                }
-
-                return value;
-            }
-
-            // Dictionary wrapper: { "value": ... }
-            if (value is IDictionary<string, object> dict)
-            {
-                foreach (var key in dict.Keys)
-                {
-                    if (string.Equals(key, "value", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return UnwrapComponentPropertyValue(dict[key]);
-                    }
-                }
-
-                return value;
-            }
-
-            // Raw JToken
-            if (value is JToken jt)
-            {
-                return UnwrapJToken(jt);
-            }
-
-            return value;
-        }
-
-        private static object? UnwrapJToken(JToken token)
-        {
-            if (token is JValue jv)
-            {
-                return jv.Value;
-            }
-
-            if (token is JObject || token is JArray)
-            {
-                return token;
-            }
-
-            return token.ToString();
         }
 
         private static void ApplyScriptCode(IGH_Component component, string? scriptCode)

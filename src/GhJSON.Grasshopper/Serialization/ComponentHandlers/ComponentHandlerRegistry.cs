@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using GhJSON.Core.Models.Components;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
@@ -38,10 +39,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             });
 
         private readonly List<IComponentHandler> _handlers = new List<IComponentHandler>();
-        private readonly Dictionary<Guid, IComponentHandler> _guidCache = new Dictionary<Guid, IComponentHandler>();
-        private readonly Dictionary<Type, IComponentHandler> _typeCache = new Dictionary<Type, IComponentHandler>();
         private readonly object _lock = new object();
-        private IComponentHandler? _defaultHandler;
 
         /// <summary>
         /// Gets the default registry instance with all built-in handlers registered.
@@ -61,10 +59,6 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             {
                 _handlers.Add(handler);
 
-                // Clear caches when new handlers are registered
-                _guidCache.Clear();
-                _typeCache.Clear();
-
                 // Sort handlers by priority (descending)
                 _handlers.Sort((a, b) => b.Priority.CompareTo(a.Priority));
 
@@ -80,8 +74,7 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         {
             lock (_lock)
             {
-                _handlers.RemoveAll(h => h.SupportedComponentGuids.Contains(componentGuid));
-                _guidCache.Remove(componentGuid);
+                _handlers.RemoveAll(h => h is ComponentHandlerBase b && b.SupportsComponentGuid(componentGuid));
             }
         }
 
@@ -93,119 +86,56 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
         {
             lock (_lock)
             {
-                _handlers.RemoveAll(h => h.SupportedTypes.Contains(type));
-                _typeCache.Remove(type);
+                _handlers.RemoveAll(h => h is ComponentHandlerBase b && b.SupportsType(type));
             }
         }
 
-        /// <summary>
-        /// Gets the appropriate handler for a document object.
-        /// </summary>
-        /// <param name="obj">The document object to get a handler for.</param>
-        /// <returns>The handler for the object, or the default handler if no specific handler is found.</returns>
-        public IComponentHandler GetHandler(IGH_DocumentObject obj)
+        public ComponentState? ComponentStateToGhJson(IGH_DocumentObject obj)
         {
             if (obj == null)
-                return GetDefaultHandler();
+                return null;
 
-            var componentGuid = obj.ComponentGuid;
-            var objType = obj.GetType();
+            var handlers = GetMatchingHandlers(obj);
+            if (handlers.Count == 0)
+                return null;
 
-            lock (_lock)
+            ComponentState? merged = null;
+            foreach (var handler in handlers)
             {
-                // Check GUID cache first
-                if (_guidCache.TryGetValue(componentGuid, out var cachedHandler))
+                ComponentState? state = null;
+                try
                 {
-                    if (cachedHandler.CanHandle(obj))
-                        return cachedHandler;
+                    state = handler.ExtractState(obj);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[ComponentHandlerRegistry] Error extracting state in {handler.GetType().Name}: {ex.Message}");
                 }
 
-                // Check type cache
-                if (_typeCache.TryGetValue(objType, out cachedHandler))
-                {
-                    if (cachedHandler.CanHandle(obj))
-                        return cachedHandler;
-                }
-
-                // Search all handlers (already sorted by priority)
-                foreach (var handler in _handlers)
-                {
-                    // Check GUID match
-                    if (handler.SupportedComponentGuids.Contains(componentGuid))
-                    {
-                        if (handler.CanHandle(obj))
-                        {
-                            _guidCache[componentGuid] = handler;
-                            return handler;
-                        }
-                    }
-
-                    // Check type match
-                    if (handler.SupportedTypes.Any(t => t.IsAssignableFrom(objType)))
-                    {
-                        if (handler.CanHandle(obj))
-                        {
-                            _typeCache[objType] = handler;
-                            return handler;
-                        }
-                    }
-                }
+                merged = MergeComponentStates(merged, state);
             }
 
-            return GetDefaultHandler();
+            return merged;
         }
 
-        /// <summary>
-        /// Gets the handler for a specific component GUID.
-        /// </summary>
-        /// <param name="componentGuid">The component GUID.</param>
-        /// <returns>The handler for the GUID, or the default handler if no specific handler is found.</returns>
-        public IComponentHandler GetHandler(Guid componentGuid)
+        public void ApplyState(IGH_DocumentObject obj, ComponentState state)
         {
-            lock (_lock)
-            {
-                if (_guidCache.TryGetValue(componentGuid, out var cachedHandler))
-                    return cachedHandler;
+            if (obj == null || state == null)
+                return;
 
-                foreach (var handler in _handlers)
+            // Apply from lowest to highest priority so higher priority wins on conflict.
+            var handlers = GetMatchingHandlers(obj);
+            for (int i = handlers.Count - 1; i >= 0; i--)
+            {
+                var handler = handlers[i];
+                try
                 {
-                    if (handler.SupportedComponentGuids.Contains(componentGuid))
-                    {
-                        _guidCache[componentGuid] = handler;
-                        return handler;
-                    }
+                    handler.ApplyState(obj, state);
                 }
-            }
-
-            return GetDefaultHandler();
-        }
-
-        /// <summary>
-        /// Gets the default handler used when no specific handler matches.
-        /// </summary>
-        /// <returns>The default handler.</returns>
-        public IComponentHandler GetDefaultHandler()
-        {
-            lock (_lock)
-            {
-                if (_defaultHandler == null)
+                catch (Exception ex)
                 {
-                    _defaultHandler = _handlers.FirstOrDefault(h => h.Priority == 0)
-                        ?? new DefaultComponentHandler();
+                    Debug.WriteLine($"[ComponentHandlerRegistry] Error applying state in {handler.GetType().Name}: {ex.Message}");
                 }
-                return _defaultHandler;
-            }
-        }
-
-        /// <summary>
-        /// Sets a custom default handler.
-        /// </summary>
-        /// <param name="handler">The handler to use as default.</param>
-        public void SetDefaultHandler(IComponentHandler handler)
-        {
-            lock (_lock)
-            {
-                _defaultHandler = handler ?? throw new ArgumentNullException(nameof(handler));
             }
         }
 
@@ -229,10 +159,78 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             lock (_lock)
             {
                 _handlers.Clear();
-                _guidCache.Clear();
-                _typeCache.Clear();
-                _defaultHandler = null;
             }
+        }
+
+        private List<IComponentHandler> GetMatchingHandlers(IGH_DocumentObject obj)
+        {
+            lock (_lock)
+            {
+                // Already kept sorted by Priority descending.
+                return _handlers.Where(h => h.CanHandle(obj)).ToList();
+            }
+        }
+
+        private static ComponentState? MergeComponentStates(ComponentState? baseState, ComponentState? overrideState)
+        {
+            if (baseState == null)
+                return overrideState;
+            if (overrideState == null)
+                return baseState;
+
+            var merged = new ComponentState
+            {
+                Value = overrideState.Value ?? baseState.Value,
+                PersistentData = overrideState.PersistentData ?? baseState.PersistentData,
+                VBCode = overrideState.VBCode ?? baseState.VBCode,
+                Selected = overrideState.Selected ?? baseState.Selected,
+                Locked = overrideState.Locked ?? baseState.Locked,
+                Hidden = overrideState.Hidden ?? baseState.Hidden,
+                Multiline = overrideState.Multiline ?? baseState.Multiline,
+                Wrap = overrideState.Wrap ?? baseState.Wrap,
+                Color = overrideState.Color ?? baseState.Color,
+                MarshInputs = overrideState.MarshInputs ?? baseState.MarshInputs,
+                MarshOutputs = overrideState.MarshOutputs ?? baseState.MarshOutputs,
+                ShowStandardOutput = overrideState.ShowStandardOutput ?? baseState.ShowStandardOutput,
+                ListMode = overrideState.ListMode ?? baseState.ListMode,
+                ListItems = overrideState.ListItems ?? baseState.ListItems,
+                Font = overrideState.Font ?? baseState.Font,
+                Corners = overrideState.Corners ?? baseState.Corners,
+                DrawIndices = overrideState.DrawIndices ?? baseState.DrawIndices,
+                DrawPaths = overrideState.DrawPaths ?? baseState.DrawPaths,
+                Alignment = overrideState.Alignment ?? baseState.Alignment,
+                SpecialCodes = overrideState.SpecialCodes ?? baseState.SpecialCodes,
+                Bounds = overrideState.Bounds ?? baseState.Bounds,
+                Rounding = overrideState.Rounding ?? baseState.Rounding,
+            };
+
+            if (baseState.AdditionalProperties != null || overrideState.AdditionalProperties != null)
+            {
+                merged.AdditionalProperties = new Dictionary<string, object>();
+
+                if (baseState.AdditionalProperties != null)
+                {
+                    foreach (var kvp in baseState.AdditionalProperties)
+                    {
+                        merged.AdditionalProperties[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                if (overrideState.AdditionalProperties != null)
+                {
+                    foreach (var kvp in overrideState.AdditionalProperties)
+                    {
+                        merged.AdditionalProperties[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                if (merged.AdditionalProperties.Count == 0)
+                {
+                    merged.AdditionalProperties = null;
+                }
+            }
+
+            return merged;
         }
 
         /// <summary>
@@ -249,8 +247,6 @@ namespace GhJSON.Grasshopper.Serialization.ComponentHandlers
             Register(new ButtonHandler());
             Register(new ScribbleHandler());
             Register(new ScriptHandler());
-
-            // Register default handler last (lowest priority)
             Register(new DefaultComponentHandler());
 
             Debug.WriteLine($"[ComponentHandlerRegistry] Registered {_handlers.Count} built-in handlers");

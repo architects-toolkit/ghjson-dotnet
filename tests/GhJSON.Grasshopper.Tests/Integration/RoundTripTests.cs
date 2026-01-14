@@ -1,6 +1,18 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 using System;
@@ -21,17 +33,18 @@ namespace GhJSON.Grasshopper.Tests.Integration
         public void RoundTrip_SimpleDocument_PreservesData()
         {
             // Create document
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Components.Add(new GhJsonComponent 
-            { 
-                Name = "Addition",
-                ComponentGuid = Guid.Parse("59e0b89a-e487-49f8-bab8-b5bab16be14c"),
-                InstanceGuid = Guid.NewGuid(),
-                Id = 1,
-                NickName = "Add",
-                Library = "Maths",
-                Pivot = new GhJsonPivot { X = 100, Y = 200 }
-            });
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    ComponentGuid = Guid.Parse("59e0b89a-e487-49f8-bab8-b5bab16be14c"),
+                    InstanceGuid = Guid.NewGuid(),
+                    Id = 1,
+                    NickName = "Add",
+                    Library = "Maths",
+                    Pivot = new GhJsonPivot { X = 100, Y = 200 }
+                })
+                .Build();
 
             // Serialize
             var json = GhJson.ToJson(doc);
@@ -52,17 +65,15 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithConnections_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
-            doc.Components.Add(new GhJsonComponent { Name = "Panel", Id = 2 });
-            doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
-            {
-                new GhJsonConnection
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .AddComponent(new GhJsonComponent { Name = "Panel", Id = 2 })
+                .AddConnection(new GhJsonConnection
                 {
                     From = new GhJsonConnectionEndpoint { Id = 1, ParamName = "Result", ParamIndex = 0 },
                     To = new GhJsonConnectionEndpoint { Id = 2, ParamName = "Value", ParamIndex = 0 }
-                }
-            };
+                })
+                .Build();
 
             var json = GhJson.ToJson(doc);
             var loadedDoc = GhJson.FromJson(json);
@@ -77,20 +88,18 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithGroups_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
-            doc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 2 });
-            doc.Groups = new System.Collections.Generic.List<GhJsonGroup>
-            {
-                new GhJsonGroup
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .AddComponent(new GhJsonComponent { Name = "Subtraction", Id = 2 })
+                .AddGroup(new GhJsonGroup
                 {
                     Id = 1,
                     InstanceGuid = Guid.NewGuid(),
                     Name = "Math Operations",
                     Color = "argb:255,128,64,32",
                     Members = new System.Collections.Generic.List<int> { 1, 2 }
-                }
-            };
+                })
+                .Build();
 
             var json = GhJson.ToJson(doc);
             var loadedDoc = GhJson.FromJson(json);
@@ -105,14 +114,17 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithMetadata_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Metadata = GhJson.CreateMetadataProperty();
-            doc.Metadata.Title = "Test Definition";
-            doc.Metadata.Description = "A test Grasshopper definition";
-            doc.Metadata.Author = "Test Author";
-            doc.Metadata.Version = "1";
-            doc.Metadata.Tags = new System.Collections.Generic.List<string> { "test", "sample" };
-            doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
+            var metadata = GhJson.CreateMetadataProperty();
+            metadata.Title = "Test Definition";
+            metadata.Description = "A test Grasshopper definition";
+            metadata.Author = "Test Author";
+            metadata.Version = "1";
+            metadata.Tags = new System.Collections.Generic.List<string> { "test", "sample" };
+
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithMetadata(metadata)
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .Build();
 
             var json = GhJson.ToJson(doc);
             var loadedDoc = GhJson.FromJson(json);
@@ -127,7 +139,6 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithParameterSettings_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -145,7 +156,9 @@ namespace GhJSON.Grasshopper.Tests.Integration
                     IsReversed = false
                 }
             };
-            doc.Components.Add(component);
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
 
             var json = GhJson.ToJson(doc);
             var loadedDoc = GhJson.FromJson(json);
@@ -162,7 +175,6 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithInternalizedData_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Number Slider",
@@ -182,7 +194,10 @@ namespace GhJSON.Grasshopper.Tests.Integration
                     }
                 }
             };
-            doc.Components.Add(component);
+
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
 
             var json = GhJson.ToJson(doc);
             var loadedDoc = GhJson.FromJson(json);
@@ -195,7 +210,6 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithComponentState_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Number Slider",
@@ -207,7 +221,10 @@ namespace GhJSON.Grasshopper.Tests.Integration
                 Locked = false,
                 Hidden = false
             };
-            doc.Components.Add(component);
+
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
 
             var json = GhJson.ToJson(doc);
             var loadedDoc = GhJson.FromJson(json);
@@ -220,47 +237,36 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_ComplexDocument_PreservesAllData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            
-            // Metadata
-            doc.Metadata = GhJson.CreateMetadataProperty();
-            doc.Metadata.Title = "Complex Definition";
-            doc.Metadata.Author = "Test";
-            
-            // Components
-            doc.Components.Add(new GhJsonComponent 
-            { 
-                Name = "Addition",
-                Id = 1,
-                Pivot = new GhJsonPivot { X = 100, Y = 100 }
-            });
-            doc.Components.Add(new GhJsonComponent 
-            { 
-                Name = "Panel",
-                Id = 2,
-                Pivot = new GhJsonPivot { X = 300, Y = 100 }
-            });
-            
-            // Connections
-            doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
-            {
-                new GhJsonConnection
+            var metadata = GhJson.CreateMetadataProperty();
+            metadata.Title = "Complex Definition";
+            metadata.Author = "Test";
+
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithMetadata(metadata)
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    Pivot = new GhJsonPivot { X = 100, Y = 100 }
+                })
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Panel",
+                    Id = 2,
+                    Pivot = new GhJsonPivot { X = 300, Y = 100 }
+                })
+                .AddConnection(new GhJsonConnection
                 {
                     From = new GhJsonConnectionEndpoint { Id = 1, ParamIndex = 0 },
                     To = new GhJsonConnectionEndpoint { Id = 2, ParamIndex = 0 }
-                }
-            };
-            
-            // Groups
-            doc.Groups = new System.Collections.Generic.List<GhJsonGroup>
-            {
-                new GhJsonGroup
+                })
+                .AddGroup(new GhJsonGroup
                 {
                     Id = 1,
                     Name = "Group 1",
                     Members = new System.Collections.Generic.List<int> { 1, 2 }
-                }
-            };
+                })
+                .Build();
 
             // Validate original
             Assert.True(GhJson.IsValid(doc));

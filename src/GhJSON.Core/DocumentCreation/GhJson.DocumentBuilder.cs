@@ -1,3 +1,20 @@
+﻿/*
+ * GhJSON - JSON format for Grasshopper definitions
+ * Copyright (C) 2024-2026 Marc Roca Musach
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -58,7 +75,7 @@ namespace GhJSON.Core
                 return new DocumentBuilder(
                     schema: string.IsNullOrWhiteSpace(document.Schema) ? CurrentVersion : document.Schema,
                     metadata: document.Metadata,
-                    components: (document.Components ?? new List<GhJsonComponent>()).ToList(),
+                    components: document.Components.ToList(),
                     connections: document.Connections?.ToList(),
                     groups: document.Groups?.ToList());
             }
@@ -215,14 +232,12 @@ namespace GhJSON.Core
             /// <exception cref="InvalidOperationException">Thrown when the builder produces an invalid document.</exception>
             public GhJsonDocument Build()
             {
-                var doc = new GhJsonDocument
-                {
-                    Schema = string.IsNullOrWhiteSpace(this.schema) ? CurrentVersion : this.schema,
-                    Metadata = this.metadata,
-                    Components = this.components.ToList(),
-                    Connections = this.connections?.Any() == true ? this.connections.ToList() : null,
-                    Groups = this.groups?.Any() == true ? this.groups.ToList() : null,
-                };
+                var doc = new GhJsonDocument(
+                    schema: string.IsNullOrWhiteSpace(this.schema) ? CurrentVersion : this.schema,
+                    metadata: this.metadata,
+                    components: this.components,
+                    connections: this.connections?.Any() == true ? this.connections : null,
+                    groups: this.groups?.Any() == true ? this.groups : null);
 
                 var validation = GhJsonValidator.Validate(doc, ValidationLevel.Standard);
                 if (validation.HasErrors)

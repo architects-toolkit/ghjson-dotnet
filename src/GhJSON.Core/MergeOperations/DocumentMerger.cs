@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -44,6 +44,10 @@ namespace GhJSON.Core.MergeOperations
                 Success = true
             };
 
+            var mergedComponents = baseDoc.Components.ToList();
+            var mergedConnections = baseDoc.Connections?.ToList();
+            var mergedGroups = baseDoc.Groups?.ToList();
+
             // Calculate the next available ID
             var maxId = baseDoc.Components
                 .Where(c => c.Id.HasValue)
@@ -68,14 +72,14 @@ namespace GhJSON.Core.MergeOperations
             foreach (var component in incomingDoc.Components)
             {
                 var newComponent = CloneComponent(component, result.IdMapping, options);
-                baseDoc.Components.Add(newComponent);
+                mergedComponents.Add(newComponent);
                 result.ComponentsAdded++;
             }
 
             // Add incoming connections with updated IDs
             if (incomingDoc.Connections != null && incomingDoc.Connections.Count > 0)
             {
-                baseDoc.Connections ??= new List<GhJsonConnection>();
+                mergedConnections ??= new List<GhJsonConnection>();
 
                 foreach (var connection in incomingDoc.Connections)
                 {
@@ -95,7 +99,7 @@ namespace GhJSON.Core.MergeOperations
                         }
                     };
 
-                    baseDoc.Connections.Add(newConnection);
+                    mergedConnections.Add(newConnection);
                     result.ConnectionsAdded++;
                 }
             }
@@ -103,7 +107,7 @@ namespace GhJSON.Core.MergeOperations
             // Add incoming groups with updated member IDs
             if (options.PreserveGroups && incomingDoc.Groups != null && incomingDoc.Groups.Count > 0)
             {
-                baseDoc.Groups ??= new List<GhJsonGroup>();
+                mergedGroups ??= new List<GhJsonGroup>();
 
                 foreach (var group in incomingDoc.Groups)
                 {
@@ -118,10 +122,17 @@ namespace GhJSON.Core.MergeOperations
                             .ToList()
                     };
 
-                    baseDoc.Groups.Add(newGroup);
+                    mergedGroups.Add(newGroup);
                     result.GroupsAdded++;
                 }
             }
+
+            result.Document = new GhJsonDocument(
+                schema: baseDoc.Schema,
+                metadata: baseDoc.Metadata,
+                components: mergedComponents,
+                connections: mergedConnections?.Count > 0 ? mergedConnections : null,
+                groups: mergedGroups?.Count > 0 ? mergedGroups : null);
 
             return result;
         }

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -36,40 +36,54 @@ namespace GhJSON.Core.FixOperations
         public static FixResult Fix(GhJsonDocument document, FixOptions? options = null)
         {
             options ??= FixOptions.Default;
-            var result = new FixResult { Document = document };
+            var workingComponents = document.Components.ToList();
+            var workingConnections = document.Connections?.ToList();
+            var workingGroups = document.Groups?.ToList();
+            var workingMetadata = document.Metadata;
+            var result = new FixResult
+            {
+                Document = document
+            };
 
             if (options.ReassignIds)
             {
-                ReassignIds(document, result);
+                ReassignIds(workingComponents, workingConnections, workingGroups, result);
             }
             else if (options.AssignMissingIds)
             {
-                AssignMissingIds(document, result);
+                AssignMissingIds(workingComponents, result);
             }
 
             if (options.RegenerateInstanceGuids)
             {
-                RegenerateInstanceGuids(document, result);
+                RegenerateInstanceGuids(workingComponents, result);
             }
             else if (options.GenerateMissingInstanceGuids)
             {
-                GenerateMissingInstanceGuids(document, result);
+                GenerateMissingInstanceGuids(workingComponents, result);
             }
 
             if (options.RemoveInvalidConnections)
             {
-                RemoveInvalidConnections(document, result);
+                RemoveInvalidConnections(workingComponents, ref workingConnections, result);
             }
 
             if (options.RemoveInvalidGroupMembers)
             {
-                RemoveInvalidGroupMembers(document, result);
+                RemoveInvalidGroupMembers(workingComponents, workingGroups, result);
             }
 
             if (options.FixMetadata)
             {
-                FixMetadata(document, result);
+                FixMetadata(ref workingMetadata, workingComponents, workingConnections, workingGroups, result);
             }
+
+            result.Document = new GhJsonDocument(
+                schema: document.Schema,
+                metadata: workingMetadata,
+                components: workingComponents,
+                connections: workingConnections?.Count > 0 ? workingConnections : null,
+                groups: workingGroups?.Count > 0 ? workingGroups : null);
 
             return result;
         }
@@ -79,9 +93,16 @@ namespace GhJSON.Core.FixOperations
         /// </summary>
         public static FixResult AssignMissingIds(GhJsonDocument document)
         {
-            var result = new FixResult { Document = document };
-            AssignMissingIds(document, result);
-            return result;
+            return Fix(document, new FixOptions
+            {
+                AssignMissingIds = true,
+                ReassignIds = false,
+                GenerateMissingInstanceGuids = false,
+                RegenerateInstanceGuids = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                FixMetadata = false,
+            });
         }
 
         /// <summary>
@@ -89,9 +110,16 @@ namespace GhJSON.Core.FixOperations
         /// </summary>
         public static FixResult ReassignIds(GhJsonDocument document)
         {
-            var result = new FixResult { Document = document };
-            ReassignIds(document, result);
-            return result;
+            return Fix(document, new FixOptions
+            {
+                AssignMissingIds = false,
+                ReassignIds = true,
+                GenerateMissingInstanceGuids = false,
+                RegenerateInstanceGuids = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                FixMetadata = false,
+            });
         }
 
         /// <summary>
@@ -99,9 +127,16 @@ namespace GhJSON.Core.FixOperations
         /// </summary>
         public static FixResult GenerateMissingInstanceGuids(GhJsonDocument document)
         {
-            var result = new FixResult { Document = document };
-            GenerateMissingInstanceGuids(document, result);
-            return result;
+            return Fix(document, new FixOptions
+            {
+                AssignMissingIds = false,
+                ReassignIds = false,
+                GenerateMissingInstanceGuids = true,
+                RegenerateInstanceGuids = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                FixMetadata = false,
+            });
         }
 
         /// <summary>
@@ -109,9 +144,16 @@ namespace GhJSON.Core.FixOperations
         /// </summary>
         public static FixResult RegenerateInstanceGuids(GhJsonDocument document)
         {
-            var result = new FixResult { Document = document };
-            RegenerateInstanceGuids(document, result);
-            return result;
+            return Fix(document, new FixOptions
+            {
+                AssignMissingIds = false,
+                ReassignIds = false,
+                GenerateMissingInstanceGuids = false,
+                RegenerateInstanceGuids = true,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                FixMetadata = false,
+            });
         }
 
         /// <summary>
@@ -119,21 +161,28 @@ namespace GhJSON.Core.FixOperations
         /// </summary>
         public static FixResult FixMetadata(GhJsonDocument document)
         {
-            var result = new FixResult { Document = document };
-            FixMetadata(document, result);
-            return result;
+            return Fix(document, new FixOptions
+            {
+                AssignMissingIds = false,
+                ReassignIds = false,
+                GenerateMissingInstanceGuids = false,
+                RegenerateInstanceGuids = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                FixMetadata = true,
+            });
         }
 
-        private static void AssignMissingIds(GhJsonDocument document, FixResult result)
+        private static void AssignMissingIds(List<GhJsonComponent> components, FixResult result)
         {
             var existingIds = new HashSet<int>(
-                document.Components
+                components
                     .Where(c => c.Id.HasValue)
                     .Select(c => c.Id!.Value));
 
             var nextId = existingIds.Count > 0 ? existingIds.Max() + 1 : 1;
 
-            foreach (var component in document.Components.Where(c => !c.Id.HasValue))
+            foreach (var component in components.Where(c => !c.Id.HasValue))
             {
                 component.Id = nextId++;
                 result.AppliedActions.Add($"Assigned ID {component.Id} to component '{component.Name}'");
@@ -141,12 +190,16 @@ namespace GhJSON.Core.FixOperations
             }
         }
 
-        private static void ReassignIds(GhJsonDocument document, FixResult result)
+        private static void ReassignIds(
+            List<GhJsonComponent> components,
+            List<GhJsonConnection>? connections,
+            List<GhJsonGroup>? groups,
+            FixResult result)
         {
             var oldToNewMapping = new Dictionary<int, int>();
             var newId = 1;
 
-            foreach (var component in document.Components)
+            foreach (var component in components)
             {
                 if (component.Id.HasValue)
                 {
@@ -158,9 +211,9 @@ namespace GhJSON.Core.FixOperations
             }
 
             // Update connection references
-            if (document.Connections != null)
+            if (connections != null)
             {
-                foreach (var connection in document.Connections)
+                foreach (var connection in connections)
                 {
                     if (oldToNewMapping.TryGetValue(connection.From.Id, out var newFromId))
                     {
@@ -175,9 +228,9 @@ namespace GhJSON.Core.FixOperations
             }
 
             // Update group member references
-            if (document.Groups != null)
+            if (groups != null)
             {
-                foreach (var group in document.Groups)
+                foreach (var group in groups)
                 {
                     for (var i = 0; i < group.Members.Count; i++)
                     {
@@ -189,12 +242,12 @@ namespace GhJSON.Core.FixOperations
                 }
             }
 
-            result.AppliedActions.Add($"Reassigned IDs for {document.Components.Count} components");
+            result.AppliedActions.Add($"Reassigned IDs for {components.Count} components");
         }
 
-        private static void GenerateMissingInstanceGuids(GhJsonDocument document, FixResult result)
+        private static void GenerateMissingInstanceGuids(List<GhJsonComponent> components, FixResult result)
         {
-            foreach (var component in document.Components.Where(c => !c.InstanceGuid.HasValue))
+            foreach (var component in components.Where(c => !c.InstanceGuid.HasValue))
             {
                 component.InstanceGuid = Guid.NewGuid();
                 result.AppliedActions.Add($"Generated instance GUID for component '{component.Name}'");
@@ -202,54 +255,60 @@ namespace GhJSON.Core.FixOperations
             }
         }
 
-        private static void RegenerateInstanceGuids(GhJsonDocument document, FixResult result)
+        private static void RegenerateInstanceGuids(List<GhJsonComponent> components, FixResult result)
         {
-            foreach (var component in document.Components)
+            foreach (var component in components)
             {
                 component.InstanceGuid = Guid.NewGuid();
                 result.WasModified = true;
             }
 
-            result.AppliedActions.Add($"Regenerated instance GUIDs for {document.Components.Count} components");
+            result.AppliedActions.Add($"Regenerated instance GUIDs for {components.Count} components");
         }
 
-        private static void RemoveInvalidConnections(GhJsonDocument document, FixResult result)
+        private static void RemoveInvalidConnections(
+            List<GhJsonComponent> components,
+            ref List<GhJsonConnection>? connections,
+            FixResult result)
         {
-            if (document.Connections == null || document.Connections.Count == 0)
+            if (connections == null || connections.Count == 0)
             {
                 return;
             }
 
             var validIds = new HashSet<int>(
-                document.Components
+                components
                     .Where(c => c.Id.HasValue)
                     .Select(c => c.Id!.Value));
 
-            var invalidConnections = document.Connections
+            var invalidConnections = connections
                 .Where(c => !validIds.Contains(c.From.Id) || !validIds.Contains(c.To.Id))
                 .ToList();
 
             foreach (var conn in invalidConnections)
             {
-                document.Connections.Remove(conn);
+                connections.Remove(conn);
                 result.AppliedActions.Add($"Removed invalid connection from {conn.From.Id} to {conn.To.Id}");
                 result.WasModified = true;
             }
         }
 
-        private static void RemoveInvalidGroupMembers(GhJsonDocument document, FixResult result)
+        private static void RemoveInvalidGroupMembers(
+            List<GhJsonComponent> components,
+            List<GhJsonGroup>? groups,
+            FixResult result)
         {
-            if (document.Groups == null || document.Groups.Count == 0)
+            if (groups == null || groups.Count == 0)
             {
                 return;
             }
 
             var validIds = new HashSet<int>(
-                document.Components
+                components
                     .Where(c => c.Id.HasValue)
                     .Select(c => c.Id!.Value));
 
-            foreach (var group in document.Groups)
+            foreach (var group in groups)
             {
                 var invalidMembers = group.Members.Where(m => !validIds.Contains(m)).ToList();
                 foreach (var member in invalidMembers)
@@ -261,39 +320,44 @@ namespace GhJSON.Core.FixOperations
             }
         }
 
-        private static void FixMetadata(GhJsonDocument document, FixResult result)
+        private static void FixMetadata(
+            ref GhJsonMetadata? metadata,
+            List<GhJsonComponent> components,
+            List<GhJsonConnection>? connections,
+            List<GhJsonGroup>? groups,
+            FixResult result)
         {
-            document.Metadata ??= new GhJsonMetadata();
+            metadata ??= new GhJsonMetadata();
 
-            var expectedComponentCount = document.Components.Count;
-            var expectedConnectionCount = document.Connections?.Count ?? 0;
-            var expectedGroupCount = document.Groups?.Count ?? 0;
+            var expectedComponentCount = components.Count;
+            var expectedConnectionCount = connections?.Count ?? 0;
+            var expectedGroupCount = groups?.Count ?? 0;
 
-            if (document.Metadata.ComponentCount != expectedComponentCount)
+            if (metadata.ComponentCount != expectedComponentCount)
             {
-                document.Metadata.ComponentCount = expectedComponentCount;
+                metadata.ComponentCount = expectedComponentCount;
                 result.AppliedActions.Add($"Updated component count to {expectedComponentCount}");
                 result.WasModified = true;
             }
 
-            if (document.Metadata.ConnectionCount != expectedConnectionCount)
+            if (metadata.ConnectionCount != expectedConnectionCount)
             {
-                document.Metadata.ConnectionCount = expectedConnectionCount;
+                metadata.ConnectionCount = expectedConnectionCount;
                 result.AppliedActions.Add($"Updated connection count to {expectedConnectionCount}");
                 result.WasModified = true;
             }
 
-            if (document.Metadata.GroupCount != expectedGroupCount)
+            if (metadata.GroupCount != expectedGroupCount)
             {
-                document.Metadata.GroupCount = expectedGroupCount;
+                metadata.GroupCount = expectedGroupCount;
                 result.AppliedActions.Add($"Updated group count to {expectedGroupCount}");
                 result.WasModified = true;
             }
 
             var now = DateTime.UtcNow;
-            if (!document.Metadata.Modified.HasValue || document.Metadata.Modified.Value != now)
+            if (!metadata.Modified.HasValue || metadata.Modified.Value != now)
             {
-                document.Metadata.Modified = now;
+                metadata.Modified = now;
                 result.AppliedActions.Add("Updated modified timestamp");
                 result.WasModified = true;
             }

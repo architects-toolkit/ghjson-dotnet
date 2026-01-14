@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using Newtonsoft.Json;
 
@@ -29,35 +30,76 @@ namespace GhJSON.Core.SchemaModels
     public sealed class GhJsonDocument
     {
         /// <summary>
+        /// Initializes a new instance of the <see cref="GhJsonDocument"/> class.
+        /// Intended for JSON deserialization.
+        /// </summary>
+        public GhJsonDocument()
+            : this(
+                schema: SchemaMigration.SchemaMigrator.CurrentVersion,
+                metadata: null,
+                components: Array.Empty<GhJsonComponent>(),
+                connections: null,
+                groups: null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GhJsonDocument"/> class.
+        /// </summary>
+        /// <param name="schema">The GhJSON schema version.</param>
+        /// <param name="metadata">The document metadata.</param>
+        /// <param name="components">The document components.</param>
+        /// <param name="connections">The document connections.</param>
+        /// <param name="groups">The document groups.</param>
+        [JsonConstructor]
+        public GhJsonDocument(
+            string? schema,
+            GhJsonMetadata? metadata,
+            IEnumerable<GhJsonComponent>? components,
+            IEnumerable<GhJsonConnection>? connections,
+            IEnumerable<GhJsonGroup>? groups)
+        {
+            this.Schema = schema;
+            this.Metadata = metadata;
+            this.Components = (components ?? Array.Empty<GhJsonComponent>()).ToList().AsReadOnly();
+
+            var connectionsList = connections?.ToList();
+            this.Connections = connectionsList?.Count > 0 ? connectionsList.AsReadOnly() : null;
+
+            var groupsList = groups?.ToList();
+            this.Groups = groupsList?.Count > 0 ? groupsList.AsReadOnly() : null;
+        }
+
+        /// <summary>
         /// Gets or sets the GhJSON schema version.
         /// </summary>
         [JsonProperty("schema", NullValueHandling = NullValueHandling.Ignore)]
-        public string? Schema { get; set; }
+        public string? Schema { get; private set; }
 
         /// <summary>
         /// Gets or sets the document metadata (optional).
         /// </summary>
         [JsonProperty("metadata", NullValueHandling = NullValueHandling.Ignore)]
-        public GhJsonMetadata? Metadata { get; set; }
+        public GhJsonMetadata? Metadata { get; private set; }
 
         /// <summary>
         /// Gets or sets list of all components in the document.
         /// This is the primary content of a GhJSON file.
         /// </summary>
         [JsonProperty("components")]
-        public List<GhJsonComponent> Components { get; set; } = new List<GhJsonComponent>();
+        public IReadOnlyList<GhJsonComponent> Components { get; private set; }
 
         /// <summary>
         /// Gets or sets list of all connections between components in the document.
         /// </summary>
         [JsonProperty("connections", NullValueHandling = NullValueHandling.Ignore)]
-        public List<GhJsonConnection>? Connections { get; set; }
+        public IReadOnlyList<GhJsonConnection>? Connections { get; private set; }
 
         /// <summary>
         /// Gets or sets list of all groups in the document (optional).
         /// </summary>
         [JsonProperty("groups", NullValueHandling = NullValueHandling.Ignore)]
-        public List<GhJsonGroup>? Groups { get; set; }
+        public IReadOnlyList<GhJsonGroup>? Groups { get; private set; }
 
         /// <summary>
         /// Gets all components with validation issues (errors or warnings).

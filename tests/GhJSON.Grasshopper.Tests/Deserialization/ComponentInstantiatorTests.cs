@@ -1,6 +1,18 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 using System;
@@ -36,13 +48,14 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_WithValidDocument_ReturnsResult()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Components.Add(new GhJsonComponent 
-            { 
-                Name = "Addition",
-                ComponentGuid = Guid.Parse("59e0b89a-e487-49f8-bab8-b5bab16be14c"),
-                Id = 1 
-            });
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    ComponentGuid = Guid.Parse("59e0b89a-e487-49f8-bab8-b5bab16be14c"),
+                    Id = 1
+                })
+                .Build();
 
             // Note: This requires Grasshopper context
             // API verification test
@@ -52,12 +65,13 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_WithInvalidComponent_HandlesGracefully()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Components.Add(new GhJsonComponent 
-            { 
-                Name = "NonExistentComponent",
-                Id = 1 
-            });
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "NonExistentComponent",
+                    Id = 1
+                })
+                .Build();
 
             var options = new DeserializationOptions
             {
@@ -71,7 +85,6 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_PreservesComponentProperties()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -80,7 +93,9 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                 NickName = "Add",
                 Pivot = new GhJsonPivot { X = 100, Y = 200 }
             };
-            doc.Components.Add(component);
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
 
             // API verification test
             Assert.Equal("Add", component.NickName);
@@ -90,7 +105,6 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_AppliesInputSettings()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -104,7 +118,9 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                     DataMapping = "Flatten"
                 }
             };
-            doc.Components.Add(component);
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
 
             Assert.Single(component.InputSettings);
             Assert.Equal("Flatten", component.InputSettings[0].DataMapping);
@@ -113,7 +129,6 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_AppliesComponentState()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Number Slider",
@@ -124,7 +139,9 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                 Locked = true,
                 Hidden = false
             };
-            doc.Components.Add(component);
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
 
             Assert.NotNull(component.ComponentState);
             Assert.True(component.ComponentState.Locked);

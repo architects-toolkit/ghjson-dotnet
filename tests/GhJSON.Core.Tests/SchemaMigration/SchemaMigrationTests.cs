@@ -1,6 +1,18 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 using GhJSON.Core;
@@ -14,8 +26,9 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_CurrentVersion_NoMigrationNeeded()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .Build();
 
             var result = GhJson.MigrateSchema(doc);
 
@@ -26,8 +39,9 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void NeedsMigration_CurrentVersion_ReturnsFalse()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Schema = GhJson.CurrentVersion;
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema(GhJson.CurrentVersion)
+                .Build();
 
             Assert.False(GhJson.NeedsMigration(doc));
         }
@@ -35,8 +49,9 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void NeedsMigration_OldVersion_ReturnsTrue()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Schema = "0.9";
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("0.9")
+                .Build();
 
             Assert.True(GhJson.NeedsMigration(doc));
         }
@@ -44,9 +59,10 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_OldVersion_UpdatesSchema()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Schema = "0.9";
-            doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("0.9")
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .Build();
 
             var result = GhJson.MigrateSchema(doc);
 
@@ -57,9 +73,10 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_WithTargetVersion_MigratesToTarget()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Schema = "0.9";
-            doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("0.9")
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .Build();
 
             var result = GhJson.MigrateSchema(doc, "1.0");
 
@@ -70,15 +87,16 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_PreservesData()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Schema = "0.9";
-            doc.Components.Add(new GhJsonComponent 
-            { 
-                Name = "Addition", 
-                Id = 1,
-                NickName = "Add",
-                Pivot = new GhJsonPivot { X = 100, Y = 200 }
-            });
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("0.9")
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    NickName = "Add",
+                    Pivot = new GhJsonPivot { X = 100, Y = 200 }
+                })
+                .Build();
 
             var result = GhJson.MigrateSchema(doc);
 
@@ -92,8 +110,9 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_NullVersion_UsesCurrentVersion()
         {
-            var doc = GhJson.CreateDocumentBuilder().Build();
-            doc.Schema = "0.9";
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("0.9")
+                .Build();
 
             var result = GhJson.MigrateSchema(doc, null);
 

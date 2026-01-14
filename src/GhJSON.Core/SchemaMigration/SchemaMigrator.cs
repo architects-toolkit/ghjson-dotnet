@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2024-2026 Marc Roca Musach
  *
@@ -60,7 +60,12 @@ namespace GhJSON.Core.SchemaMigration
 
                 // Currently only version 1.0 exists, so no migrations are needed
                 // Future migrations would be added here
-                document.Schema = targetVersion;
+                result.Document = new GhJsonDocument(
+                    schema: targetVersion,
+                    metadata: document.Metadata,
+                    components: document.Components,
+                    connections: document.Connections,
+                    groups: document.Groups);
                 result.Success = true;
             }
             catch (Exception ex)

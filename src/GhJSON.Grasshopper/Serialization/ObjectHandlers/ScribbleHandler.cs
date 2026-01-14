@@ -17,6 +17,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
 using System.Globalization;
 using GhJSON.Core.SchemaModels;
 using Grasshopper.Kernel;
@@ -113,7 +115,57 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 scribble.Text = textVal?.ToString() ?? string.Empty;
             }
 
-            // Font deserialization would be handled here if needed
+            // Apply corner positions from "x,y" string format
+            if (data.TryGetValue("corners", out var cornersVal) && cornersVal is List<object> cornersList)
+            {
+                try
+                {
+                    var type = scribble.GetType();
+                    string[] cornerNames = { "Corner1", "Corner2", "Corner3", "Corner4" };
+
+                    for (int i = 0; i < Math.Min(cornerNames.Length, cornersList.Count); i++)
+                    {
+                        var cornerStr = cornersList[i]?.ToString();
+                        if (!string.IsNullOrEmpty(cornerStr))
+                        {
+                            var parts = cornerStr.Split(',');
+                            if (parts.Length == 2 &&
+                                float.TryParse(parts[0], out var x) &&
+                                float.TryParse(parts[1], out var y))
+                            {
+                                var prop = type.GetProperty(cornerNames[i]);
+                                if (prop != null && prop.CanWrite)
+                                {
+                                    prop.SetValue(scribble, new PointF(x, y));
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[ScribbleHandler] Error applying corners: {ex.Message}");
+                }
+            }
+
+            // Apply font
+            if (data.TryGetValue("fontFamily", out var familyVal) ||
+                data.TryGetValue("fontSize", out var sizeVal) ||
+                data.TryGetValue("fontStyle", out var styleVal))
+            {
+                try
+                {
+                    var family = familyVal?.ToString() ?? "Arial";
+                    var size = sizeVal != null && float.TryParse(sizeVal.ToString(), out var fs) ? fs : 12f;
+                    var style = styleVal != null && Enum.TryParse<FontStyle>(styleVal.ToString(), out var parsed) ? parsed : FontStyle.Regular;
+
+                    scribble.Font = new Font(family, size, style);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[ScribbleHandler] Error applying font: {ex.Message}");
+                }
+            }
         }
     }
 }

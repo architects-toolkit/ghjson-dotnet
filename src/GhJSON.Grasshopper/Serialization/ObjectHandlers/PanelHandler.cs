@@ -17,6 +17,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
 using GhJSON.Core.SchemaModels;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -67,6 +69,101 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     ["drawPaths"] = panel.Properties.DrawPaths
                 };
 
+                // Serialize color as ARGB string format
+                try
+                {
+                    var panelColor = panel.Properties?.Colour;
+                    if (panelColor.HasValue)
+                    {
+                        var c = panelColor.Value;
+                        panelData["color"] = $"{c.A},{c.R},{c.G},{c.B}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error serializing color: {ex.Message}");
+                }
+
+                // Serialize bounds as WxH string format
+                try
+                {
+                    var bounds = panel.Attributes?.Bounds;
+                    if (bounds.HasValue && !bounds.Value.IsEmpty)
+                    {
+                        panelData["bounds"] = $"{bounds.Value.Width}x{bounds.Value.Height}";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error serializing bounds: {ex.Message}");
+                }
+
+                // Serialize alignment
+                try
+                {
+                    var align = panel.Properties?.Alignment;
+                    if (align.HasValue)
+                    {
+                        var alignmentValue = (int)align.Value;
+                        if (alignmentValue != 0)
+                        {
+                            panelData["alignment"] = alignmentValue;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error serializing alignment: {ex.Message}");
+                }
+
+                // Serialize special codes
+                try
+                {
+                    if (panel.Properties?.SpecialCodes == true)
+                    {
+                        panelData["specialCodes"] = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error serializing special codes: {ex.Message}");
+                }
+
+                // Serialize font
+                try
+                {
+                    var font = panel.Properties?.Font;
+                    if (font != null)
+                    {
+                        var fontDict = new Dictionary<string, object>();
+
+                        if (!string.Equals(font.Name, "Courier New", StringComparison.OrdinalIgnoreCase))
+                        {
+                            fontDict["name"] = font.Name;
+                        }
+
+                        if (font.Bold)
+                        {
+                            fontDict["bold"] = true;
+                        }
+
+                        if (font.Italic)
+                        {
+                            fontDict["italic"] = true;
+                        }
+
+                        if (fontDict.Count > 0)
+                        {
+                            fontDict["size"] = font.Size;
+                            panelData["font"] = fontDict;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error serializing font: {ex.Message}");
+                }
+
                 component.ComponentState.Extensions[ExtensionKey] = panelData;
             }
         }
@@ -110,6 +207,96 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             if (data.TryGetValue("drawPaths", out var pathsVal) && pathsVal is bool paths)
             {
                 panel.Properties.DrawPaths = paths;
+            }
+
+            // Apply color from ARGB string format
+            if (data.TryGetValue("color", out var colorVal))
+            {
+                try
+                {
+                    var parts = colorVal?.ToString()?.Split(',');
+                    if (parts?.Length == 4 &&
+                        int.TryParse(parts[0], out var a) &&
+                        int.TryParse(parts[1], out var r) &&
+                        int.TryParse(parts[2], out var g) &&
+                        int.TryParse(parts[3], out var b))
+                    {
+                        panel.Properties.Colour = Color.FromArgb(a, r, g, b);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error applying color: {ex.Message}");
+                }
+            }
+
+            // Apply bounds from WxH string format
+            if (data.TryGetValue("bounds", out var boundsVal))
+            {
+                try
+                {
+                    var parts = boundsVal?.ToString()?.Split('x');
+                    if (parts?.Length == 2 &&
+                        float.TryParse(parts[0], out var width) &&
+                        float.TryParse(parts[1], out var height))
+                    {
+                        var attr = panel.Attributes;
+                        if (attr != null)
+                        {
+                            attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, width, height);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error applying bounds: {ex.Message}");
+                }
+            }
+
+            // Apply alignment
+            if (data.TryGetValue("alignment", out var alignVal))
+            {
+                try
+                {
+                    if (int.TryParse(alignVal?.ToString(), out var alignmentValue))
+                    {
+                        panel.Properties.Alignment = (GH_Panel.Alignment)alignmentValue;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error applying alignment: {ex.Message}");
+                }
+            }
+
+            // Apply special codes
+            if (data.TryGetValue("specialCodes", out var specialVal) && specialVal is bool special)
+            {
+                panel.Properties.SpecialCodes = special;
+            }
+
+            // Apply font
+            if (data.TryGetValue("font", out var fontVal) && fontVal is Dictionary<string, object> fontDict)
+            {
+                try
+                {
+                    var name = fontDict.TryGetValue("name", out var n) ? n?.ToString() : null;
+                    var size = fontDict.TryGetValue("size", out var s) && float.TryParse(s?.ToString(), out var fs) ? fs : (float?)null;
+                    var bold = fontDict.TryGetValue("bold", out var b) && bool.TryParse(b?.ToString(), out var fb) && fb;
+                    var italic = fontDict.TryGetValue("italic", out var i) && bool.TryParse(i?.ToString(), out var fi) && fi;
+
+                    if (!string.IsNullOrEmpty(name) && size.HasValue)
+                    {
+                        var style = FontStyle.Regular;
+                        if (bold) style |= FontStyle.Bold;
+                        if (italic) style |= FontStyle.Italic;
+                        panel.Properties.Font = new Font(name, size.Value, style);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[PanelHandler] Error applying font: {ex.Message}");
+                }
             }
         }
     }

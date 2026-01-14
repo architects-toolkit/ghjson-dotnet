@@ -29,7 +29,7 @@ namespace GhJSON.Core
     /// Main entry point for GhJSON document operations.
     /// Provides a unified API for reading, writing, validating, fixing, and migrating GhJSON documents.
     /// </summary>
-    public static class GhJson
+    public static partial class GhJson
     {
         /// <summary>
         /// Gets the current schema version.
@@ -39,15 +39,22 @@ namespace GhJSON.Core
         #region Document Creation
 
         /// <summary>
-        /// Creates a new empty GhJSON document.
+        /// Creates a new fluent builder for immutable GhJSON document creation.
         /// </summary>
-        /// <returns>A new GhJSON document.</returns>
-        public static GhJsonDocument CreateDocument()
+        /// <returns>A new builder instance.</returns>
+        public static DocumentBuilder CreateDocumentBuilder()
         {
-            return new GhJsonDocument
-            {
-                Schema = CurrentVersion
-            };
+            return DocumentBuilder.Create();
+        }
+
+        /// <summary>
+        /// Creates a new fluent builder initialized from an existing document.
+        /// </summary>
+        /// <param name="document">Source document to copy data from.</param>
+        /// <returns>A new builder instance initialized from the given document.</returns>
+        public static DocumentBuilder CreateDocumentBuilder(GhJsonDocument document)
+        {
+            return DocumentBuilder.FromImmutable(document);
         }
 
         /// <summary>

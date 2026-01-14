@@ -47,10 +47,7 @@ namespace GhJSON.Grasshopper
         {
             options ??= SerializationOptions.Default;
 
-            var document = new GhJsonDocument
-            {
-                Schema = GhJSON.Core.GhJson.CurrentVersion
-            };
+            var builder = GhJSON.Core.GhJson.CreateDocumentBuilder();
 
             var guidToId = new Dictionary<Guid, int>();
             var nextId = 1;
@@ -66,10 +63,10 @@ namespace GhJSON.Grasshopper
                     nextId++;
                 }
 
-                document.Components.Add(component);
+                builder = builder.AddComponent(component);
             }
 
-            return document;
+            return builder.Build();
         }
 
         #endregion

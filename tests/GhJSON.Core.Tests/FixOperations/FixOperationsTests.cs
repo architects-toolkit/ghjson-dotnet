@@ -17,7 +17,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void AssignMissingIds_AssignsIdsToComponents()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition" });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction" });
 
@@ -32,7 +32,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void ReassignIds_ReassignsAllIds()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 10 });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 20 });
 
@@ -46,7 +46,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void GenerateMissingInstanceGuids_AssignsGuids()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 2 });
 
@@ -59,7 +59,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void RegenerateInstanceGuids_RegeneratesAllGuids()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var originalGuid = Guid.NewGuid();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1, InstanceGuid = originalGuid });
 
@@ -72,7 +72,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void FixMetadata_UpdatesCounts()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 2 });
             doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
@@ -95,7 +95,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void FixMetadata_UpdatesModifiedTimestamp()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Metadata = GhJson.CreateMetadataProperty();
             doc.Metadata.Modified = DateTime.UtcNow.AddDays(-1);
 
@@ -111,7 +111,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void Fix_WithDefaultOptions_AppliesAllFixes()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition" });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction" });
 
@@ -125,7 +125,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void Fix_WithCustomOptions_AppliesSelectedFixes()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 10 });
 
             var options = new FixOptions
@@ -143,7 +143,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void Fix_UpdatesConnectionReferences()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 10 });
             doc.Components.Add(new GhJsonComponent { Name = "Panel", Id = 20 });
             doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
@@ -166,7 +166,7 @@ namespace GhJSON.Core.Tests.FixOperations
         [Fact]
         public void Fix_UpdatesGroupReferences()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 10 });
             doc.Groups = new System.Collections.Generic.List<GhJsonGroup>
             {

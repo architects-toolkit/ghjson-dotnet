@@ -36,7 +36,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_WithValidDocument_ReturnsResult()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -52,7 +52,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_WithInvalidComponent_HandlesGracefully()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent 
             { 
                 Name = "NonExistentComponent",
@@ -71,7 +71,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_PreservesComponentProperties()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -90,7 +90,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_AppliesInputSettings()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -113,7 +113,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
         [Fact]
         public void Deserialize_AppliesComponentState()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Number Slider",

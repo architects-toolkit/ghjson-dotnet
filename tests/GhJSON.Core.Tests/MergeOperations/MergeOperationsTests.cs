@@ -16,10 +16,10 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_TwoDocuments_CombinesComponents()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 1 });
 
             var result = GhJson.Merge(baseDoc, incomingDoc);
@@ -31,10 +31,10 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_ReassignsIncomingIds()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 1 });
 
             var result = GhJson.Merge(baseDoc, incomingDoc);
@@ -47,7 +47,7 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_CombinesConnections()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             baseDoc.Connections = new System.Collections.Generic.List<GhJsonConnection>
             {
@@ -58,7 +58,7 @@ namespace GhJSON.Core.Tests.MergeOperations
                 }
             };
 
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 1 });
             incomingDoc.Connections = new System.Collections.Generic.List<GhJsonConnection>
             {
@@ -78,10 +78,10 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_UpdatesConnectionReferences()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Panel", Id = 1 });
             incomingDoc.Connections = new System.Collections.Generic.List<GhJsonConnection>
             {
@@ -102,14 +102,14 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_CombinesGroups()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             baseDoc.Groups = new System.Collections.Generic.List<GhJsonGroup>
             {
                 new GhJsonGroup { Id = 1, Members = new System.Collections.Generic.List<int> { 1 } }
             };
 
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 1 });
             incomingDoc.Groups = new System.Collections.Generic.List<GhJsonGroup>
             {
@@ -125,10 +125,10 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_WithOptions_AppliesCustomBehavior()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 1 });
 
             var options = new MergeOptions
@@ -146,9 +146,9 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_EmptyBase_ReturnsIncoming()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
             incomingDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var result = GhJson.Merge(baseDoc, incomingDoc);
@@ -160,10 +160,10 @@ namespace GhJSON.Core.Tests.MergeOperations
         [Fact]
         public void Merge_EmptyIncoming_ReturnsBase()
         {
-            var baseDoc = GhJson.CreateDocument();
+            var baseDoc = GhJson.CreateDocumentBuilder().Build();
             baseDoc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             
-            var incomingDoc = GhJson.CreateDocument();
+            var incomingDoc = GhJson.CreateDocumentBuilder().Build();
 
             var result = GhJson.Merge(baseDoc, incomingDoc);
 

@@ -47,7 +47,7 @@ namespace GhJSON.Grasshopper.Tests.PutOperations
         public void Put_ValidatesDocument()
         {
             // API verification test
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             Assert.NotNull(doc);

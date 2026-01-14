@@ -14,7 +14,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_CurrentVersion_NoMigrationNeeded()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var result = GhJson.MigrateSchema(doc);
@@ -26,7 +26,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void NeedsMigration_CurrentVersion_ReturnsFalse()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Schema = GhJson.CurrentVersion;
 
             Assert.False(GhJson.NeedsMigration(doc));
@@ -35,7 +35,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void NeedsMigration_OldVersion_ReturnsTrue()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Schema = "0.9";
 
             Assert.True(GhJson.NeedsMigration(doc));
@@ -44,7 +44,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_OldVersion_UpdatesSchema()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Schema = "0.9";
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
@@ -57,7 +57,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_WithTargetVersion_MigratesToTarget()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Schema = "0.9";
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
@@ -70,7 +70,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Schema = "0.9";
             doc.Components.Add(new GhJsonComponent 
             { 
@@ -92,7 +92,7 @@ namespace GhJSON.Core.Tests.SchemaMigration
         [Fact]
         public void MigrateSchema_NullVersion_UsesCurrentVersion()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Schema = "0.9";
 
             var result = GhJson.MigrateSchema(doc, null);

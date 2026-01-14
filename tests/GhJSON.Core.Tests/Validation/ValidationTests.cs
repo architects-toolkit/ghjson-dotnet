@@ -16,7 +16,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_ValidDocument_ReturnsSuccess()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var result = GhJson.Validate(doc);
@@ -28,7 +28,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void IsValid_ValidDocument_ReturnsTrue()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             Assert.True(GhJson.IsValid(doc));
@@ -37,7 +37,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_EmptyDocument_ReturnsSuccess()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
 
             var result = GhJson.Validate(doc);
 
@@ -80,7 +80,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_DuplicateComponentIds_ReturnsWarning()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 1 });
 
@@ -92,7 +92,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_InvalidConnectionReference_ReturnsError()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
             {
@@ -111,7 +111,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_ValidConnection_ReturnsSuccess()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Components.Add(new GhJsonComponent { Name = "Panel", Id = 2 });
             doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
@@ -131,7 +131,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_InvalidGroupReference_ReturnsError()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Groups = new System.Collections.Generic.List<GhJsonGroup>
             {
@@ -150,7 +150,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_StandardLevel_PerformsBasicValidation()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var result = GhJson.Validate(doc, ValidationLevel.Standard);
@@ -161,7 +161,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_StrictLevel_PerformsComprehensiveValidation()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var result = GhJson.Validate(doc, ValidationLevel.Strict);

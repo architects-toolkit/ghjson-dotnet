@@ -21,7 +21,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         public void RoundTrip_SimpleDocument_PreservesData()
         {
             // Create document
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -52,7 +52,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithConnections_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Components.Add(new GhJsonComponent { Name = "Panel", Id = 2 });
             doc.Connections = new System.Collections.Generic.List<GhJsonConnection>
@@ -77,7 +77,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithGroups_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
             doc.Components.Add(new GhJsonComponent { Name = "Subtraction", Id = 2 });
             doc.Groups = new System.Collections.Generic.List<GhJsonGroup>
@@ -105,7 +105,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithMetadata_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Metadata = GhJson.CreateMetadataProperty();
             doc.Metadata.Title = "Test Definition";
             doc.Metadata.Description = "A test Grasshopper definition";
@@ -127,7 +127,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithParameterSettings_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Addition",
@@ -162,7 +162,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithInternalizedData_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Number Slider",
@@ -195,7 +195,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_WithComponentState_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             var component = new GhJsonComponent 
             { 
                 Name = "Number Slider",
@@ -220,7 +220,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
         [Fact]
         public void RoundTrip_ComplexDocument_PreservesAllData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             
             // Metadata
             doc.Metadata = GhJson.CreateMetadataProperty();

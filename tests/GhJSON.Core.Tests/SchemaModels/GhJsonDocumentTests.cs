@@ -14,7 +14,7 @@ namespace GhJSON.Core.Tests.SchemaModels
         [Fact]
         public void CreateDocument_ReturnsEmptyDocument()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
 
             Assert.NotNull(doc);
             Assert.NotNull(doc.Components);
@@ -25,7 +25,7 @@ namespace GhJSON.Core.Tests.SchemaModels
         [Fact]
         public void ToJson_SerializesDocument()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent
             {
                 Name = "Addition",

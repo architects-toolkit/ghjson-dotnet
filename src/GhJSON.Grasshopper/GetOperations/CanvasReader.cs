@@ -41,7 +41,7 @@ namespace GhJSON.Grasshopper.GetOperations
             var doc = Instances.ActiveCanvas?.Document;
             if (doc == null)
             {
-                return new GhJsonDocument();
+                return GhJSON.Core.GhJson.CreateDocumentBuilder().Build();
             }
 
             return GetFromDocument(doc, options);
@@ -67,7 +67,7 @@ namespace GhJSON.Grasshopper.GetOperations
             var doc = Instances.ActiveCanvas?.Document;
             if (doc == null)
             {
-                return new GhJsonDocument();
+                return GhJSON.Core.GhJson.CreateDocumentBuilder().Build();
             }
 
             var guidSet = new HashSet<Guid>(guids);
@@ -89,10 +89,7 @@ namespace GhJSON.Grasshopper.GetOperations
 
         private static GhJsonDocument CreateDocument(List<IGH_DocumentObject> objects, GetOptions options)
         {
-            var document = new GhJsonDocument
-            {
-                Schema = GhJSON.Core.GhJson.CurrentVersion
-            };
+            var builder = GhJSON.Core.GhJson.CreateDocumentBuilder();
 
             // Filter out groups for separate handling
             var components = objects.Where(obj => !(obj is GH_Group)).ToList();
@@ -110,22 +107,22 @@ namespace GhJSON.Grasshopper.GetOperations
                 guidToId[obj.InstanceGuid] = nextId;
                 nextId++;
 
-                document.Components.Add(component);
+                builder = builder.AddComponent(component);
             }
 
             // Extract connections
             if (options.IncludeConnections)
             {
-                document.Connections = ExtractConnections(components, guidToId);
+                builder = builder.AddConnections(ExtractConnections(components, guidToId));
             }
 
             // Extract groups
             if (options.IncludeGroups && groups.Any())
             {
-                document.Groups = ExtractGroups(groups, guidToId, ref nextId);
+                builder = builder.AddGroups(ExtractGroups(groups, guidToId, ref nextId));
             }
 
-            return document;
+            return builder.Build();
         }
 
         private static List<GhJsonConnection> ExtractConnections(

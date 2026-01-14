@@ -16,7 +16,7 @@ namespace GhJSON.Core.Tests.Serialization
         [Fact]
         public void ToJson_WithIndentedOption_FormatsJson()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var options = new WriteOptions { Indented = true };
@@ -29,7 +29,7 @@ namespace GhJSON.Core.Tests.Serialization
         [Fact]
         public void ToJson_WithoutIndentation_ProducesCompactJson()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var options = new WriteOptions { Indented = false };
@@ -41,7 +41,7 @@ namespace GhJSON.Core.Tests.Serialization
         [Fact]
         public void ToFile_WritesJsonToFile()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var tempPath = Path.GetTempFileName();
@@ -63,7 +63,7 @@ namespace GhJSON.Core.Tests.Serialization
         [Fact]
         public void FromFile_ReadsJsonFromFile()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent { Name = "Addition", Id = 1 });
 
             var tempPath = Path.GetTempFileName();
@@ -105,7 +105,7 @@ namespace GhJSON.Core.Tests.Serialization
         [Fact]
         public void RoundTrip_PreservesData()
         {
-            var doc = GhJson.CreateDocument();
+            var doc = GhJson.CreateDocumentBuilder().Build();
             doc.Components.Add(new GhJsonComponent 
             { 
                 Name = "Addition", 

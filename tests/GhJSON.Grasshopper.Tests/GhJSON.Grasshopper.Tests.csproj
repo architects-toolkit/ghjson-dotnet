@@ -24,12 +24,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Grasshopper" Version="8.24.25281.15001">
-      <Source>https://mcneel.jfrog.io/artifactory/api/nuget/v3/rhino-packages/index.json</Source>
-    </PackageReference>
-    <PackageReference Include="RhinoCommon" Version="8.24.25281.15001">
-      <Source>https://mcneel.jfrog.io/artifactory/api/nuget/v3/rhino-packages/index.json</Source>
-    </PackageReference>
+    <PackageReference Include="Grasshopper" Version="8.24.25281.15001" />
+    <PackageReference Include="RhinoCommon" Version="8.24.25281.15001" />
   </ItemGroup>
 
   <ItemGroup>

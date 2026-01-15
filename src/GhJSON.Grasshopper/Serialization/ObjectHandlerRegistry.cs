@@ -127,6 +127,13 @@ namespace GhJSON.Grasshopper.Serialization
             Register(new PanelHandler());
             Register(new ScribbleHandler());
             Register(new ValueListHandler());
+            Register(new ButtonHandler());
+            Register(new ToggleHandler());
+            Register(new ColorSwatchHandler());
+            Register(new CSharpScriptHandler());
+            Register(new PythonScriptHandler());
+            Register(new IronPythonScriptHandler());
+            Register(new VBScriptHandler());
         }
     }
 }

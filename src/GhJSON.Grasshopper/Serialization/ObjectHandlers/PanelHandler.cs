@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.Serialization.DataTypes;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
@@ -31,7 +32,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class PanelHandler : IObjectHandler
     {
-        private const string ExtensionKey = "panel";
+        private const string ExtensionKey = "gh.panel";
 
         /// <inheritdoc/>
         public int Priority => 100;
@@ -69,14 +70,14 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     ["drawPaths"] = panel.Properties.DrawPaths
                 };
 
-                // Serialize color as ARGB string format
+                // Serialize color using ColorSerializer (argb:A,R,G,B)
                 try
                 {
                     var panelColor = panel.Properties?.Colour;
                     if (panelColor.HasValue)
                     {
-                        var c = panelColor.Value;
-                        panelData["color"] = $"{c.A},{c.R},{c.G},{c.B}";
+                        var serializer = new ColorSerializer();
+                        panelData["color"] = serializer.Serialize(panelColor.Value);
                     }
                 }
                 catch (Exception ex)
@@ -209,19 +210,20 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 panel.Properties.DrawPaths = paths;
             }
 
-            // Apply color from ARGB string format
+            // Apply color using ColorSerializer; fallback to legacy comma format
             if (data.TryGetValue("color", out var colorVal))
             {
                 try
                 {
-                    var parts = colorVal?.ToString()?.Split(',');
-                    if (parts?.Length == 4 &&
-                        int.TryParse(parts[0], out var a) &&
-                        int.TryParse(parts[1], out var r) &&
-                        int.TryParse(parts[2], out var g) &&
-                        int.TryParse(parts[3], out var b))
+                    var colorString = colorVal?.ToString();
+                    var serializer = new ColorSerializer();
+
+                    if (!string.IsNullOrWhiteSpace(colorString))
                     {
-                        panel.Properties.Colour = Color.FromArgb(a, r, g, b);
+                        if (serializer.IsValid(colorString))
+                        {
+                            panel.Properties.Colour = serializer.Deserialize(colorString);
+                        }
                     }
                 }
                 catch (Exception ex)

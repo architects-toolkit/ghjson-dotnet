@@ -32,7 +32,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class ScribbleHandler : IObjectHandler
     {
-        private const string ExtensionKey = "scribble";
+        private const string ExtensionKey = "gh.scribble";
 
         /// <inheritdoc/>
         public int Priority => 100;
@@ -149,15 +149,17 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
 
             // Apply font
-            if (data.TryGetValue("fontFamily", out var familyVal) ||
-                data.TryGetValue("fontSize", out var sizeVal) ||
-                data.TryGetValue("fontStyle", out var styleVal))
+            bool hasFamily = data.TryGetValue("fontFamily", out var familyVal);
+            bool hasSize = data.TryGetValue("fontSize", out var sizeValObj);
+            bool hasStyle = data.TryGetValue("fontStyle", out var styleValObj);
+
+            if (hasFamily || hasSize || hasStyle)
             {
                 try
                 {
                     var family = familyVal?.ToString() ?? "Arial";
-                    var size = sizeVal != null && float.TryParse(sizeVal.ToString(), out var fs) ? fs : 12f;
-                    var style = styleVal != null && Enum.TryParse<FontStyle>(styleVal.ToString(), out var parsed) ? parsed : FontStyle.Regular;
+                    var size = hasSize && float.TryParse(sizeValObj?.ToString(), out var fs) ? fs : 12f;
+                    var style = hasStyle && Enum.TryParse<FontStyle>(styleValObj?.ToString(), out var parsed) ? parsed : FontStyle.Regular;
 
                     scribble.Font = new Font(family, size, style);
                 }

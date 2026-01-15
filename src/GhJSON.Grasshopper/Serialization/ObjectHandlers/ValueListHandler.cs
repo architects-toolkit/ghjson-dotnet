@@ -29,7 +29,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class ValueListHandler : IObjectHandler
     {
-        private const string ExtensionKey = "valueList";
+        private const string ExtensionKey = "gh.valuelist";
 
         /// <inheritdoc/>
         public int Priority => 100;

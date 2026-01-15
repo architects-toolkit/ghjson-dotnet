@@ -22,6 +22,8 @@ using GhJSON.Core.SchemaModels;
 using GhJSON.Core.SchemaMigration;
 using GhJSON.Core.Serialization;
 using GhJSON.Core.Validation;
+using System;
+using System.Linq;
 
 namespace GhJSON.Core
 {
@@ -226,6 +228,35 @@ namespace GhJSON.Core
         public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard)
         {
             return Validate(json, level).IsValid;
+        }
+
+        /// <summary>
+        /// Checks if a JSON string is a valid GhJSON document, returning a human-readable message.
+        /// </summary>
+        /// <param name="json">The JSON string to check.</param>
+        /// <param name="message">A human-readable message describing validation errors, if any.</param>
+        /// <param name="level">The validation level.</param>
+        /// <returns>True if valid, false otherwise.</returns>
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard)
+        {
+            message = null;
+
+            try
+            {
+                var result = Validate(json, level);
+                if (result.IsValid)
+                {
+                    return true;
+                }
+
+                message = string.Join("; ", result.Errors.Select(e => e.ToString()));
+                return false;
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                return false;
+            }
         }
 
         #endregion

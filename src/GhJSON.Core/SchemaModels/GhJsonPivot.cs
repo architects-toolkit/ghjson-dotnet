@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-using System;
+using System.Drawing;
 using System.Globalization;
 using Newtonsoft.Json;
 
@@ -101,6 +101,20 @@ namespace GhJSON.Core.SchemaModels
         public override string ToString()
         {
             return this.ToCompact();
+        }
+
+        /// <summary>
+        /// Converts this pivot to a PointF.
+        /// </summary>
+        /// <returns>A new PointF instance.</returns>
+        public PointF ToPointF()
+        {
+            return new PointF((float)this.X, (float)this.Y);
+        }
+
+        public static GhJsonPivot FromPointF(PointF point)
+        {
+            return new GhJsonPivot(point.X, point.Y);
         }
     }
 }

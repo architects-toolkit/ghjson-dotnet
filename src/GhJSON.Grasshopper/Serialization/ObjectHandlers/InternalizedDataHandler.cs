@@ -15,7 +15,11 @@
  * limitations under the License.
  */
 
+using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using GhJSON.Core.SchemaModels;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
@@ -65,8 +69,197 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Deserialize(GhJsonComponent component, IGH_DocumentObject obj)
         {
-            // Internalized data deserialization is handled by specialized handlers
-            // This basic handler only serializes the data
+            if (obj is IGH_Component comp)
+            {
+                DeserializeInternalizedData(component.InputSettings, comp.Params.Input);
+            }
+            else if (obj is IGH_Param param)
+            {
+                if (component.OutputSettings?.Count > 0)
+                {
+                    DeserializeParamData(component.OutputSettings[0], param);
+                }
+            }
+        }
+
+        private static void DeserializeInternalizedData(
+            List<GhJsonParameterSettings>? settings,
+            IList<IGH_Param> parameters)
+        {
+            if (settings == null || parameters == null)
+            {
+                return;
+            }
+
+            foreach (var paramSettings in settings)
+            {
+                var param = FindParameter(parameters, paramSettings.ParameterName);
+                if (param != null)
+                {
+                    DeserializeParamData(paramSettings, param);
+                }
+            }
+        }
+
+        private static IGH_Param? FindParameter(IList<IGH_Param> parameters, string name)
+        {
+            foreach (var param in parameters)
+            {
+                if (param.Name == name)
+                {
+                    return param;
+                }
+            }
+
+            return null;
+        }
+
+        private static void DeserializeParamData(GhJsonParameterSettings settings, IGH_Param param)
+        {
+            if (settings.InternalizedData == null || settings.InternalizedData.Count == 0)
+            {
+                return;
+            }
+
+            var persistentParamBaseType = FindGenericBaseType(param.GetType(), typeof(global::Grasshopper.Kernel.GH_PersistentParam<>));
+            if (persistentParamBaseType == null)
+            {
+                return;
+            }
+
+            var gooType = persistentParamBaseType.GetGenericArguments()[0];
+            var structureType = typeof(GH_Structure<>).MakeGenericType(gooType);
+            var structure = Activator.CreateInstance(structureType);
+            if (structure == null)
+            {
+                return;
+            }
+
+            var appendMethod = structureType.GetMethod("Append", new[] { gooType, typeof(GH_Path) });
+            if (appendMethod == null)
+            {
+                return;
+            }
+
+            foreach (var pathEntry in settings.InternalizedData)
+            {
+                var path = ParsePath(pathEntry.Key);
+                foreach (var item in OrderItemsByIndex(pathEntry.Value))
+                {
+                    var deserialized = DataTypeRegistry.Deserialize(item.Value);
+                    var goo = CreateGoo(gooType, deserialized);
+                    appendMethod.Invoke(structure, new object?[] { goo, path });
+                }
+            }
+
+            var setPersistentDataMethod = param.GetType().GetMethod("SetPersistentData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (setPersistentDataMethod == null)
+            {
+                return;
+            }
+
+            setPersistentDataMethod.Invoke(param, new[] { structure });
+        }
+
+        private static Type? FindGenericBaseType(Type type, Type openGenericBaseType)
+        {
+            var current = type;
+            while (current != null)
+            {
+                if (current.IsGenericType && current.GetGenericTypeDefinition() == openGenericBaseType)
+                {
+                    return current;
+                }
+
+                current = current.BaseType;
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<KeyValuePair<string, string>> OrderItemsByIndex(Dictionary<string, string> items)
+        {
+            if (items == null || items.Count == 0)
+            {
+                return Array.Empty<KeyValuePair<string, string>>();
+            }
+
+            return items.OrderBy(kv => ExtractItemIndex(kv.Key));
+        }
+
+        private static int ExtractItemIndex(string itemKey)
+        {
+            if (string.IsNullOrWhiteSpace(itemKey))
+            {
+                return int.MaxValue;
+            }
+
+            var openParen = itemKey.LastIndexOf('(');
+            var closeParen = itemKey.LastIndexOf(')');
+
+            if (openParen < 0 || closeParen <= openParen)
+            {
+                return int.MaxValue;
+            }
+
+            var indexStr = itemKey.Substring(openParen + 1, closeParen - openParen - 1);
+            return int.TryParse(indexStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
+                ? idx
+                : int.MaxValue;
+        }
+
+        private static GH_Path ParsePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return new GH_Path(0);
+            }
+
+            var trimmed = path.Trim();
+
+            if (trimmed.StartsWith("{", StringComparison.Ordinal) && trimmed.EndsWith("}", StringComparison.Ordinal))
+            {
+                trimmed = trimmed.Substring(1, trimmed.Length - 2);
+            }
+
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return new GH_Path(0);
+            }
+
+            var parts = trimmed.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var indices = parts
+                .Select(p => int.Parse(p.Trim(), CultureInfo.InvariantCulture))
+                .ToArray();
+
+            return new GH_Path(indices);
+        }
+
+        private static object CreateGoo(Type gooType, object? value)
+        {
+            if (typeof(IGH_Goo).IsAssignableFrom(gooType) && value != null && gooType.IsInstanceOfType(value))
+            {
+                return value;
+            }
+
+            var gooObj = Activator.CreateInstance(gooType);
+            if (gooObj is not IGH_Goo goo)
+            {
+                throw new InvalidOperationException($"Failed to create IGH_Goo instance of type {gooType.FullName}");
+            }
+
+            if (value == null)
+            {
+                return goo;
+            }
+
+            var castOk = goo.CastFrom(value);
+            if (!castOk)
+            {
+                throw new InvalidOperationException($"Failed to cast value '{value}' ({value.GetType().FullName}) to goo type {gooType.FullName}");
+            }
+
+            return goo;
         }
 
         private static void SerializeInternalizedData(

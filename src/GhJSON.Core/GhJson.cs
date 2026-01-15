@@ -15,15 +15,15 @@
  * limitations under the License.
  */
 
+using System;
 using System.IO;
+using System.Linq;
 using GhJSON.Core.FixOperations;
 using GhJSON.Core.MergeOperations;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Core.SchemaMigration;
 using GhJSON.Core.Serialization;
 using GhJSON.Core.Validation;
-using System;
-using System.Linq;
 
 namespace GhJSON.Core
 {

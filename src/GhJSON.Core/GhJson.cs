@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using GhJSON.Core.FixOperations;
@@ -156,7 +157,14 @@ namespace GhJSON.Core
         /// <returns>The deserialized GhJSON document.</returns>
         public static GhJsonDocument FromJson(string json)
         {
-            return Serialization.GhJsonSerializer.Deserialize(json);
+#if DEBUG
+            Debug.WriteLine($"[GhJson.FromJson] Deserializing JSON, length: {json?.Length ?? 0}");
+#endif
+            var result = Serialization.GhJsonSerializer.Deserialize(json);
+#if DEBUG
+            Debug.WriteLine($"[GhJson.FromJson] Deserialized document with {result.Components?.Count ?? 0} components");
+#endif
+            return result;
         }
 
         /// <summary>
@@ -179,7 +187,14 @@ namespace GhJSON.Core
         /// <returns>The serialized JSON string.</returns>
         public static string ToJson(GhJsonDocument doc, WriteOptions? options = null)
         {
-            return Serialization.GhJsonSerializer.Serialize(doc, options);
+#if DEBUG
+            Debug.WriteLine($"[GhJson.ToJson] Serializing document with {doc?.Components?.Count ?? 0} components");
+#endif
+            var result = Serialization.GhJsonSerializer.Serialize(doc, options);
+#if DEBUG
+            Debug.WriteLine($"[GhJson.ToJson] Serialized JSON, length: {result?.Length ?? 0}");
+#endif
+            return result;
         }
 
         #endregion

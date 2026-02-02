@@ -19,9 +19,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-
+using System.Reflection;
 using GhJSON.Core.SchemaModels;
-
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
@@ -113,7 +113,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     var scriptInterface = typeOfScript.GetInterfaces().FirstOrDefault(i => i.Name == "IScriptComponent");
                     if (scriptInterface != null)
                     {
-                        var textProp = scriptInterface.GetProperty("Text");
+                        var textProp = ReflectionCache.GetProperty(scriptInterface, "Text");
                         if (textProp != null && textProp.CanRead)
                         {
                             var value = textProp.GetValue(component)?.ToString();
@@ -133,7 +133,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
                 foreach (var name in candidates)
                 {
-                    var prop = type.GetProperty(name);
+                    var prop = ReflectionCache.GetProperty(type, name);
                     if (prop != null && prop.CanRead)
                     {
                         var value = prop.GetValue(component)?.ToString();
@@ -144,7 +144,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     }
                 }
 
-                var scriptSourceProp = type.GetProperty("ScriptSource");
+                var scriptSourceProp = ReflectionCache.GetProperty(type, "ScriptSource");
                 if (scriptSourceProp != null && scriptSourceProp.CanRead)
                 {
                     var scriptSourceObj = scriptSourceProp.GetValue(component);
@@ -155,7 +155,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
                         foreach (var name in sourceCandidates)
                         {
-                            var prop = scriptSourceType.GetProperty(name);
+                            var prop = ReflectionCache.GetProperty(scriptSourceType, name);
                             if (prop != null && prop.CanRead)
                             {
                                 var value = prop.GetValue(scriptSourceObj)?.ToString();
@@ -170,7 +170,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             catch (Exception ex)
             {
+#if DEBUG
                 Debug.WriteLine($"[BaseScriptHandler] Error extracting script code: {ex.Message}");
+#endif
             }
 
             return null;
@@ -187,7 +189,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     var scriptInterface = type.GetInterfaces().FirstOrDefault(i => i.Name == "IScriptComponent");
                     if (scriptInterface != null)
                     {
-                        var textProp = scriptInterface.GetProperty("Text");
+                        var textProp = ReflectionCache.GetProperty(scriptInterface, "Text");
                         if (textProp != null && textProp.CanWrite)
                         {
                             textProp.SetValue(component, scriptCode);
@@ -202,7 +204,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 string[] candidates = { "Text", "Script", "Code", "ScriptCode", "Source", "SourceCode" };
                 foreach (var name in candidates)
                 {
-                    var prop = type.GetProperty(name);
+                    var prop = ReflectionCache.GetProperty(type, name);
                     if (prop != null && prop.CanWrite)
                     {
                         prop.SetValue(component, scriptCode);
@@ -210,7 +212,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     }
                 }
 
-                var scriptSourceProp = type.GetProperty("ScriptSource");
+                var scriptSourceProp = ReflectionCache.GetProperty(type, "ScriptSource");
                 if (scriptSourceProp != null && scriptSourceProp.CanRead)
                 {
                     var scriptSourceObj = scriptSourceProp.GetValue(component);
@@ -220,7 +222,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                         string[] sourceCandidates = { "ScriptCode", "Code", "Text", "Source", "SourceCode" };
                         foreach (var name in sourceCandidates)
                         {
-                            var prop = scriptSourceType.GetProperty(name);
+                            var prop = ReflectionCache.GetProperty(scriptSourceType, name);
                             if (prop != null && prop.CanWrite)
                             {
                                 prop.SetValue(scriptSourceObj, scriptCode);
@@ -232,7 +234,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             catch (Exception ex)
             {
+#if DEBUG
                 Debug.WriteLine($"[BaseScriptHandler] Error applying script code: {ex.Message}");
+#endif
             }
         }
 
@@ -242,7 +246,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             try
             {
-                var usingStdOutputProp = component.GetType().GetProperty("UsingStandardOutputParam");
+                var usingStdOutputProp = ReflectionCache.GetProperty(component.GetType(), "UsingStandardOutputParam");
                 if (usingStdOutputProp != null && usingStdOutputProp.CanRead)
                 {
                     var obj = usingStdOutputProp.GetValue(component);
@@ -264,7 +268,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             try
             {
-                var usingStdOutputProp = component.GetType().GetProperty("UsingStandardOutputParam");
+                var usingStdOutputProp = ReflectionCache.GetProperty(component.GetType(), "UsingStandardOutputParam");
                 if (usingStdOutputProp == null || !usingStdOutputProp.CanWrite)
                 {
                     return;
@@ -289,7 +293,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             catch (Exception ex)
             {
+#if DEBUG
                 Debug.WriteLine($"[BaseScriptHandler] Error applying UsingStandardOutputParam: {ex.Message}");
+#endif
             }
         }
     }

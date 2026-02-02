@@ -1,0 +1,23 @@
+# TODO list
+
+- [x] isInverted
+- [x] Restore Groups
+- [x] Restore Connections
+- [ ] isUnitized
+- [ ] isReparameterized
+- [ ] isPrincipal
+- [ ] Number sliders
+- [ ] Panel
+  - [ ] Size
+  - [ ] Color
+  - [ ] Value
+- [ ] Color swatch
+- [ ] Button custom values
+- [ ] Boolean toggle state
+- [ ] Correct pivot position on non-edit mode in gh_put
+- [ ] Value lists
+- [ ] Script components:
+  - [ ] Modifiers in C#
+  - [ ] Modifiers in Python3
+  - [ ] Additional inputs
+  - [ ] Additional outputs

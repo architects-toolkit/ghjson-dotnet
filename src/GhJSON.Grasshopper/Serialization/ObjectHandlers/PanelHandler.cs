@@ -82,7 +82,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error serializing color: {ex.Message}");
+#endif
                 }
 
                 // Serialize bounds as WxH string format
@@ -96,7 +98,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error serializing bounds: {ex.Message}");
+#endif
                 }
 
                 // Serialize alignment
@@ -114,7 +118,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error serializing alignment: {ex.Message}");
+#endif
                 }
 
                 // Serialize special codes
@@ -127,7 +133,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error serializing special codes: {ex.Message}");
+#endif
                 }
 
                 // Serialize font
@@ -162,7 +170,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error serializing font: {ex.Message}");
+#endif
                 }
 
                 component.ComponentState.Extensions[ExtensionKey] = panelData;
@@ -228,7 +238,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error applying color: {ex.Message}");
+#endif
                 }
             }
 
@@ -251,7 +263,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error applying bounds: {ex.Message}");
+#endif
                 }
             }
 
@@ -267,7 +281,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error applying alignment: {ex.Message}");
+#endif
                 }
             }
 
@@ -297,7 +313,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[PanelHandler] Error applying font: {ex.Message}");
+#endif
                 }
             }
         }

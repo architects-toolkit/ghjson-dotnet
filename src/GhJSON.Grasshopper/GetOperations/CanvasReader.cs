@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
@@ -84,16 +85,24 @@ namespace GhJSON.Grasshopper.GetOperations
                 ? doc.SelectedObjects().ToList()
                 : doc.Objects.ToList();
 
+#if DEBUG
+            Debug.WriteLine($"[CanvasReader.GetFromDocument] SelectedOnly={options.SelectedOnly}, Objects={objects.Count}");
+#endif
+
             return CreateDocument(objects, options);
         }
 
-        private static GhJsonDocument CreateDocument(List<IGH_DocumentObject> objects, GetOptions options)
+        internal static GhJsonDocument CreateDocument(List<IGH_DocumentObject> objects, GetOptions options)
         {
             var builder = GhJSON.Core.GhJson.CreateDocumentBuilder();
 
             // Filter out groups for separate handling
             var components = objects.Where(obj => !(obj is GH_Group)).ToList();
             var groups = objects.OfType<GH_Group>().ToList();
+
+#if DEBUG
+            Debug.WriteLine($"[CanvasReader.CreateDocument] Components={components.Count}, Groups={groups.Count}, IncludeConnections={options.IncludeConnections}");
+#endif
 
             // Create ID mappings
             var guidToId = new Dictionary<Guid, int>();
@@ -110,10 +119,18 @@ namespace GhJSON.Grasshopper.GetOperations
                 builder = builder.AddComponent(component);
             }
 
+#if DEBUG
+            Debug.WriteLine($"[CanvasReader.CreateDocument] Serialized {components.Count} components");
+#endif
+
             // Extract connections
             if (options.IncludeConnections)
             {
-                builder = builder.AddConnections(ExtractConnections(components, guidToId));
+                var connections = ExtractConnections(components, guidToId);
+#if DEBUG
+                Debug.WriteLine($"[CanvasReader.CreateDocument] Extracted {connections.Count} connections");
+#endif
+                builder = builder.AddConnections(connections);
             }
 
             // Extract groups

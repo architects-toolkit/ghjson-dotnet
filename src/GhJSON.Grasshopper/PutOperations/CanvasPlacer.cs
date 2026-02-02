@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
@@ -50,6 +51,10 @@ namespace GhJSON.Grasshopper.PutOperations
                 result.ErrorMessage = "No active Grasshopper document";
                 return result;
             }
+
+#if DEBUG
+            Debug.WriteLine($"[CanvasPlacer.Put] Starting placement of {document.Components?.Count ?? 0} components");
+#endif
 
             var deserializationOptions = new DeserializationOptions
             {
@@ -103,6 +108,10 @@ namespace GhJSON.Grasshopper.PutOperations
                 }
             }
 
+#if DEBUG
+            Debug.WriteLine($"[CanvasPlacer.Put] Placed {result.ComponentsPlaced} components, {result.FailedComponents.Count} failed");
+#endif
+
             // Create connections
             if (options.CreateConnections && document.Connections != null)
             {
@@ -117,6 +126,10 @@ namespace GhJSON.Grasshopper.PutOperations
                         result.Warnings.Add($"Failed to create connection from {connection.From.Id} to {connection.To.Id}");
                     }
                 }
+
+#if DEBUG
+                Debug.WriteLine($"[CanvasPlacer.Put] Created {result.ConnectionsCreated} connections, {result.Warnings.Count} warnings");
+#endif
             }
 
             // Create groups
@@ -137,6 +150,10 @@ namespace GhJSON.Grasshopper.PutOperations
 
             // Expire solution
             ghDoc.NewSolution(true);
+
+#if DEBUG
+            Debug.WriteLine($"[CanvasPlacer.Put] Placement complete: {result.ComponentsPlaced} components, {result.ConnectionsCreated} connections, {result.GroupsCreated} groups");
+#endif
 
             return result;
         }

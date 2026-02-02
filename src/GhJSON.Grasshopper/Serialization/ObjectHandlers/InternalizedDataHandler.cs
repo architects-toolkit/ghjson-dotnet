@@ -17,10 +17,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
@@ -53,31 +55,58 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {
+#if DEBUG
+            Debug.WriteLine($"[InternalizedDataHandler.Serialize] Serializing internalized data for: {obj?.Name}, ObjType: {obj?.GetType().Name}");
+#endif
+
             if (obj is IGH_Component comp)
             {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.Serialize] Object is IGH_Component, InputCount: {comp.Params.Input.Count}, InputSettingsCount: {component.InputSettings?.Count}");
+#endif
                 SerializeInternalizedData(comp.Params.Input, component.InputSettings);
             }
             else if (obj is IGH_Param param)
             {
-                if (component.OutputSettings?.Count > 0)
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.Serialize] Object is IGH_Param, DataType: {param.DataType}");
+#endif
+
+                // List is guaranteed to exist by orchestrator - find or create settings for this param
+                var settings = component.OutputSettings.FirstOrDefault(s => s.ParameterName == param.Name);
+                if (settings == null)
                 {
-                    SerializeParamData(param, component.OutputSettings[0]);
+                    settings = new GhJsonParameterSettings { ParameterName = param.Name };
+                    component.OutputSettings.Add(settings);
                 }
+
+                SerializeParamData(param, settings);
+            }
+            else
+            {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.Serialize] SKIPPED: Object is neither IGH_Component nor IGH_Param");
+#endif
             }
         }
 
         /// <inheritdoc/>
         public void Deserialize(GhJsonComponent component, IGH_DocumentObject obj)
         {
+#if DEBUG
+            Debug.WriteLine($"[InternalizedDataHandler.Deserialize] Deserializing internalized data for: {obj?.Name}");
+#endif
+
             if (obj is IGH_Component comp)
             {
                 DeserializeInternalizedData(component.InputSettings, comp.Params.Input);
             }
             else if (obj is IGH_Param param)
             {
-                if (component.OutputSettings?.Count > 0)
+                var settings = component.OutputSettings?.FirstOrDefault(s => s.ParameterName == param.Name);
+                if (settings != null)
                 {
-                    DeserializeParamData(component.OutputSettings[0], param);
+                    DeserializeParamData(settings, param);
                 }
             }
         }
@@ -152,7 +181,12 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
             }
 
-            var setPersistentDataMethod = param.GetType().GetMethod("SetPersistentData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var setPersistentDataMethod = param.GetType().GetMethod(
+                "SetPersistentData",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                null,
+                new[] { structureType },
+                null);
             if (setPersistentDataMethod == null)
             {
                 return;
@@ -264,14 +298,17 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         private static void SerializeInternalizedData(
             IList<IGH_Param> parameters,
-            List<GhJsonParameterSettings>? settings)
+            List<GhJsonParameterSettings> settings)
         {
             if (parameters == null || settings == null)
             {
                 return;
             }
 
-            for (var i = 0; i < parameters.Count && i < settings.Count; i++)
+            // IOIdentificationHandler creates settings in parameter order
+            // Simple index matching is sufficient
+            int count = Math.Min(parameters.Count, settings.Count);
+            for (int i = 0; i < count; i++)
             {
                 SerializeParamData(parameters[i], settings[i]);
             }
@@ -279,16 +316,48 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         private static void SerializeParamData(IGH_Param param, GhJsonParameterSettings settings)
         {
+#if DEBUG
+            Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Checking param: {param.Name}, DataType: {param.DataType}");
+#endif
+
             if (param.DataType != GH_ParamData.local)
             {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: DataType is {param.DataType} (not local)");
+#endif
                 return; // No persistent data
             }
 
-            var persistentData = param.VolatileData;
-            if (persistentData.IsEmpty)
+            // Access PersistentData via reflection (it's on GH_PersistentParam<T>, not IGH_Param)
+            var persistentDataProperty = ReflectionCache.GetProperty(param.GetType(), "PersistentData");
+            if (persistentDataProperty == null)
             {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: PersistentData property not found on {param.GetType().FullName}");
+#endif
                 return;
             }
+
+            var persistentData = persistentDataProperty.GetValue(param) as IGH_Structure;
+            if (persistentData == null)
+            {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: persistentData is null");
+#endif
+                return;
+            }
+
+            if (persistentData.IsEmpty)
+            {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: persistentData is empty");
+#endif
+                return;
+            }
+
+#if DEBUG
+            Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Serializing {persistentData.Paths.Count} paths for param: {param.Name}");
+#endif
 
             var dataTree = new Dictionary<string, Dictionary<string, string>>();
 
@@ -297,6 +366,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 var branch = persistentData.get_Branch(path);
                 if (branch == null || branch.Count == 0)
                 {
+#if DEBUG
+                    Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Path {path} has empty or null branch");
+#endif
                     continue;
                 }
 
@@ -308,11 +380,19 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     var goo = branch[i] as IGH_Goo;
                     if (goo == null)
                     {
+#if DEBUG
+                        Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Item at {path}[{i}] is null or not IGH_Goo");
+#endif
                         continue;
                     }
 
                     var itemKey = $"{pathKey}({i})";
-                    var serialized = DataTypeRegistry.Serialize(goo.ScriptVariable());
+                    var scriptVar = goo.ScriptVariable();
+                    var serialized = DataTypeRegistry.Serialize(scriptVar);
+
+#if DEBUG
+                    Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Item {path}[{i}]: GooType={goo.TypeName}, ScriptVarType={scriptVar?.GetType().Name}, Serialized='{serialized}'");
+#endif
 
                     if (!string.IsNullOrEmpty(serialized))
                     {
@@ -321,7 +401,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     else
                     {
                         // Fallback to string representation
-                        branchData[itemKey] = $"text:{goo}";
+                        var fallback = $"text:{goo}";
+#if DEBUG
+                        Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Serialization failed, using fallback: '{fallback}'");
+#endif
+                        branchData[itemKey] = fallback;
                     }
                 }
 
@@ -334,6 +418,15 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             if (dataTree.Count > 0)
             {
                 settings.InternalizedData = dataTree;
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SUCCESS: Serialized {dataTree.Count} paths with data for {param.Name}");
+#endif
+            }
+            else
+            {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] WARNING: No data serialized for {param.Name}");
+#endif
             }
         }
     }

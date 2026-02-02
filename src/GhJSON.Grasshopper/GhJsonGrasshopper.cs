@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.GetOperations;
@@ -47,26 +48,18 @@ namespace GhJSON.Grasshopper
         {
             options ??= SerializationOptions.Default;
 
-            var builder = GhJSON.Core.GhJson.CreateDocumentBuilder();
-
-            var guidToId = new Dictionary<Guid, int>();
-            var nextId = 1;
-
-            foreach (var obj in objects)
+            // Convert SerializationOptions to GetOptions for shared extraction logic
+            var getOptions = new GetOptions
             {
-                var component = ObjectHandlerOrchestrator.Serialize(obj);
+                SelectedOnly = false,
+                IncludeConnections = options.IncludeConnections,
+                IncludeGroups = options.IncludeGroups,
+                IncludeInternalizedData = options.IncludeInternalizedData,
+                IncludeRuntimeMessages = options.IncludeRuntimeMessages,
+            };
 
-                if (options.AssignSequentialIds)
-                {
-                    component.Id = nextId;
-                    guidToId[obj.InstanceGuid] = nextId;
-                    nextId++;
-                }
-
-                builder = builder.AddComponent(component);
-            }
-
-            return builder.Build();
+            // Delegate to shared document creation logic
+            return CanvasReader.CreateDocument(objects.ToList(), getOptions);
         }
 
         #endregion

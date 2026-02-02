@@ -15,8 +15,13 @@
  * limitations under the License.
  */
 
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
@@ -54,10 +59,15 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             else if (obj is IGH_Param param)
             {
-                if (component.OutputSettings?.Count > 0)
+                // List is guaranteed to exist by orchestrator - find or create settings for this param
+                var settings = component.OutputSettings.FirstOrDefault(s => s.ParameterName == param.Name);
+                if (settings == null)
                 {
-                    SerializeParamModifiers(param, component.OutputSettings[0]);
+                    settings = new GhJsonParameterSettings { ParameterName = param.Name };
+                    component.OutputSettings.Add(settings);
                 }
+
+                SerializeParamModifiers(param, settings);
             }
         }
 
@@ -71,23 +81,27 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             else if (obj is IGH_Param param)
             {
-                if (component.OutputSettings?.Count > 0)
+                var settings = component.OutputSettings?.FirstOrDefault(s => s.ParameterName == param.Name);
+                if (settings != null)
                 {
-                    DeserializeParamModifiers(component.OutputSettings[0], param);
+                    DeserializeParamModifiers(settings, param);
                 }
             }
         }
 
         private static void SerializeModifiers(
             IList<IGH_Param> parameters,
-            List<GhJsonParameterSettings>? settings)
+            List<GhJsonParameterSettings> settings)
         {
             if (parameters == null || settings == null)
             {
                 return;
             }
 
-            for (var i = 0; i < parameters.Count && i < settings.Count; i++)
+            // IOIdentificationHandler creates settings in parameter order
+            // Simple index matching is sufficient
+            int count = Math.Min(parameters.Count, settings.Count);
+            for (int i = 0; i < count; i++)
             {
                 SerializeParamModifiers(parameters[i], settings[i]);
             }
@@ -111,6 +125,39 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             if (param.Reverse)
             {
                 settings.IsReversed = true;
+            }
+
+            // Reparameterized - use cached reflection for curve parameters
+            var reparameterizedProperty = ReflectionCache.GetProperty(param.GetType(), "Reparameterized");
+            if (reparameterizedProperty != null)
+            {
+                var reparameterizedValue = reparameterizedProperty.GetValue(param);
+                if (reparameterizedValue is bool reparameterized && reparameterized)
+                {
+                    settings.IsReparameterized = true;
+                }
+            }
+
+            // Invert - use cached reflection for boolean parameters
+            var invertProperty = ReflectionCache.GetProperty(param.GetType(), "Invert");
+            if (invertProperty != null)
+            {
+                var invertValue = invertProperty.GetValue(param);
+                if (invertValue is bool invert && invert)
+                {
+                    settings.IsInverted = true;
+                }
+            }
+
+            // Unitized - use cached reflection for vector parameters
+            var unitizedProperty = ReflectionCache.GetProperty(param.GetType(), "Unitized");
+            if (unitizedProperty != null)
+            {
+                var unitizedValue = unitizedProperty.GetValue(param);
+                if (unitizedValue is bool unitized && unitized)
+                {
+                    settings.IsUnitized = true;
+                }
             }
         }
 
@@ -167,6 +214,36 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             if (settings.IsReversed == true)
             {
                 param.Reverse = true;
+            }
+
+            // Reparameterized - use cached reflection for curve parameters
+            if (settings.IsReparameterized == true)
+            {
+                var reparameterizedProperty = ReflectionCache.GetProperty(param.GetType(), "Reparameterized");
+                if (reparameterizedProperty != null && reparameterizedProperty.CanWrite)
+                {
+                    reparameterizedProperty.SetValue(param, true);
+                }
+            }
+
+            // Invert - use cached reflection for boolean parameters
+            if (settings.IsInverted == true)
+            {
+                var invertProperty = ReflectionCache.GetProperty(param.GetType(), "Invert");
+                if (invertProperty != null && invertProperty.CanWrite)
+                {
+                    invertProperty.SetValue(param, true);
+                }
+            }
+
+            // Unitized - use cached reflection for vector parameters
+            if (settings.IsUnitized == true)
+            {
+                var unitizedProperty = ReflectionCache.GetProperty(param.GetType(), "Unitized");
+                if (unitizedProperty != null && unitizedProperty.CanWrite)
+                {
+                    unitizedProperty.SetValue(param, true);
+                }
             }
         }
     }

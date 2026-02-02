@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Diagnostics;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
 using Grasshopper;
@@ -36,30 +37,51 @@ namespace GhJSON.Grasshopper.Deserialization
         /// <returns>The created document object, or null if creation failed.</returns>
         public static IGH_DocumentObject? Create(GhJsonComponent component, DeserializationOptions options)
         {
+#if DEBUG
+            Debug.WriteLine($"[ComponentInstantiator.Create] Creating component: {component.Name ?? "unknown"}, GUID: {component.ComponentGuid}");
+#endif
+
             IGH_DocumentObject? obj = null;
 
             // Try to create by component GUID first (most reliable)
             if (component.ComponentGuid.HasValue && component.ComponentGuid != Guid.Empty)
             {
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Trying to create by GUID: {component.ComponentGuid}");
+#endif
                 obj = CreateByGuid(component.ComponentGuid.Value);
             }
 
             // Fallback to name-based creation
             if (obj == null && !string.IsNullOrEmpty(component.Name))
             {
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Trying to create by name: {component.Name}");
+#endif
                 obj = CreateByName(component.Name, component.Library);
             }
 
             if (obj == null)
             {
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Failed to create component: {component.Name ?? component.ComponentGuid?.ToString()}");
+#endif
                 return null;
             }
+
+#if DEBUG
+            Debug.WriteLine($"[ComponentInstantiator.Create] Created object: {obj.Name}, Type: {obj.GetType().Name}");
+#endif
 
             // Create default attributes
             obj.CreateAttributes();
 
             // Apply properties using handlers
             ObjectHandlerOrchestrator.Deserialize(component, obj);
+
+#if DEBUG
+            Debug.WriteLine($"[ComponentInstantiator.Create] Finished deserializing properties for: {obj.Name}");
+#endif
 
             return obj;
         }

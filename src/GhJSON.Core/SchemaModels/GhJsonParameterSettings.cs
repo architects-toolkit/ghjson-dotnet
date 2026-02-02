@@ -35,8 +35,8 @@ namespace GhJSON.Core.SchemaModels
         /// <summary>
         /// Gets or sets the variable name of the input for Script components.
         /// </summary>
-        [JsonProperty("variableName")]
-        public string VariableName { get; set; } = string.Empty;
+        [JsonProperty("variableName", NullValueHandling = NullValueHandling.Ignore)]
+        public string? VariableName { get; set; }
 
         /// <summary>
         /// Gets or sets the custom nickname for the parameter.

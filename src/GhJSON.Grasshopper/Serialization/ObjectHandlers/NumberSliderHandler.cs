@@ -21,6 +21,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 using Grasshopper.GUI;
@@ -81,7 +82,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[NumberSliderHandler] Error serializing value: {ex.Message}");
+#endif
                 }
 
                 // Serialize rounding mode if not default
@@ -95,7 +98,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[NumberSliderHandler] Error serializing rounding: {ex.Message}");
+#endif
                 }
 
                 component.ComponentState.Extensions[ExtensionKey] = sliderData;
@@ -124,7 +129,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 try
                 {
                     var sliderType = slider.Slider.GetType();
-                    var typeProp = sliderType.GetProperty("Type");
+                    var typeProp = ReflectionCache.GetProperty(sliderType, "Type");
                     if (typeProp != null && typeProp.CanWrite)
                     {
                         var enumType = typeProp.PropertyType;
@@ -136,7 +141,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[NumberSliderHandler] Error applying rounding: {ex.Message}");
+#endif
                 }
             }
 
@@ -163,7 +170,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     }
                     catch (Exception ex)
                     {
+#if DEBUG
                         Debug.WriteLine($"[NumberSliderHandler] Error applying value '{valueStr}': {ex.Message}");
+#endif
                     }
                 }
             }

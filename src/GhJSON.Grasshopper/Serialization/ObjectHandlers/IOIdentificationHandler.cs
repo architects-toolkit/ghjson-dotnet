@@ -16,6 +16,7 @@
  */
 
 using System.Collections.Generic;
+using System.Linq;
 using GhJSON.Core.SchemaModels;
 using Grasshopper.Kernel;
 
@@ -49,24 +50,15 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             if (obj is IGH_Component comp)
             {
-                var inputSettings = component.InputSettings;
-                SerializeParameters(comp.Params.Input, ref inputSettings);
-                component.InputSettings = inputSettings;
-
-                var outputSettings = component.OutputSettings;
-                SerializeParameters(comp.Params.Output, ref outputSettings);
-                component.OutputSettings = outputSettings;
+                // Lists are pre-initialized by orchestrator, just add to them
+                SerializeParameters(comp.Params.Input, component.InputSettings);
+                SerializeParameters(comp.Params.Output, component.OutputSettings);
             }
             else if (obj is IGH_Param param)
             {
                 // Floating parameters have their settings serialized as output settings
-                if (component.OutputSettings == null)
-                {
-                    component.OutputSettings = new List<GhJsonParameterSettings>
-                    {
-                        CreateParameterSettings(param)
-                    };
-                }
+                // List is guaranteed to exist by orchestrator
+                component.OutputSettings.Add(CreateParameterSettings(param));
             }
         }
 
@@ -80,38 +72,37 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             else if (obj is IGH_Param param)
             {
-                if (component.OutputSettings?.Count > 0)
+                var settings = component.OutputSettings?.FirstOrDefault(s => s.ParameterName == param.Name);
+                if (settings != null)
                 {
-                    ApplyParameterSettings(component.OutputSettings[0], param);
+                    ApplyParameterSettings(settings, param);
                 }
             }
         }
 
         private static void SerializeParameters(
             IList<IGH_Param> parameters,
-            ref List<GhJsonParameterSettings>? settings)
+            List<GhJsonParameterSettings> settings)
         {
             if (parameters == null || parameters.Count == 0)
             {
                 return;
             }
 
-            var localSettings = settings ?? new List<GhJsonParameterSettings>();
-
             foreach (var param in parameters)
             {
                 var paramSettings = CreateParameterSettings(param);
-                localSettings.Add(paramSettings);
+                settings.Add(paramSettings);
             }
-
-            settings = localSettings;
         }
 
         private static GhJsonParameterSettings CreateParameterSettings(IGH_Param param)
         {
             var settings = new GhJsonParameterSettings
             {
-                ParameterName = param.Name
+                ParameterName = string.IsNullOrEmpty(param.Name)
+                    ? $"param_{param.InstanceGuid}"
+                    : param.Name
             };
 
             if (param.NickName != param.Name)

@@ -21,6 +21,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
@@ -133,7 +134,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                                 float.TryParse(parts[0], out var x) &&
                                 float.TryParse(parts[1], out var y))
                             {
-                                var prop = type.GetProperty(cornerNames[i]);
+                                var prop = ReflectionCache.GetProperty(type, cornerNames[i]);
                                 if (prop != null && prop.CanWrite)
                                 {
                                     prop.SetValue(scribble, new PointF(x, y));
@@ -144,7 +145,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[ScribbleHandler] Error applying corners: {ex.Message}");
+#endif
                 }
             }
 
@@ -165,7 +168,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
                 catch (Exception ex)
                 {
+#if DEBUG
                     Debug.WriteLine($"[ScribbleHandler] Error applying font: {ex.Message}");
+#endif
                 }
             }
         }

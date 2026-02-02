@@ -18,8 +18,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.Shared;
 
 using Grasshopper.Kernel;
 
@@ -90,7 +90,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             try
             {
                 var componentType = component.GetType();
-                var scriptSourceProp = componentType.GetProperty("ScriptSource");
+                var scriptSourceProp = ReflectionCache.GetProperty(componentType, "ScriptSource");
                 if (scriptSourceProp == null || !scriptSourceProp.CanRead)
                 {
                     return null;
@@ -103,9 +103,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
 
                 var scriptSourceType = scriptSourceObj.GetType();
-                var usingCodeProp = scriptSourceType.GetProperty("UsingCode");
-                var scriptCodeProp = scriptSourceType.GetProperty("ScriptCode");
-                var additionalCodeProp = scriptSourceType.GetProperty("AdditionalCode");
+                var usingCodeProp = ReflectionCache.GetProperty(scriptSourceType, "UsingCode");
+                var scriptCodeProp = ReflectionCache.GetProperty(scriptSourceType, "ScriptCode");
+                var additionalCodeProp = ReflectionCache.GetProperty(scriptSourceType, "AdditionalCode");
 
                 var vbCode = new Dictionary<string, object>();
 
@@ -131,7 +131,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             catch (Exception ex)
             {
+#if DEBUG
                 Debug.WriteLine($"[VBScriptHandler] Error extracting VB script code: {ex.Message}");
+#endif
                 return null;
             }
         }
@@ -141,7 +143,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             try
             {
                 var compType = component.GetType();
-                var scriptSourceProp = compType.GetProperty("ScriptSource");
+                var scriptSourceProp = ReflectionCache.GetProperty(compType, "ScriptSource");
                 if (scriptSourceProp == null || !scriptSourceProp.CanRead)
                 {
                     return;
@@ -154,9 +156,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
 
                 var scriptSourceType = scriptSourceObj.GetType();
-                var usingCodeProp = scriptSourceType.GetProperty("UsingCode");
-                var scriptCodeProp = scriptSourceType.GetProperty("ScriptCode");
-                var additionalCodeProp = scriptSourceType.GetProperty("AdditionalCode");
+                var usingCodeProp = ReflectionCache.GetProperty(scriptSourceType, "UsingCode");
+                var scriptCodeProp = ReflectionCache.GetProperty(scriptSourceType, "ScriptCode");
+                var additionalCodeProp = ReflectionCache.GetProperty(scriptSourceType, "AdditionalCode");
 
                 if (usingCodeProp != null && usingCodeProp.CanWrite && vbCode.TryGetValue("imports", out var importsObj))
                 {
@@ -175,7 +177,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             catch (Exception ex)
             {
+#if DEBUG
                 Debug.WriteLine($"[VBScriptHandler] Error applying VB script code: {ex.Message}");
+#endif
             }
         }
     }

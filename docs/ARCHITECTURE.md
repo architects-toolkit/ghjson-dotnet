@@ -285,6 +285,195 @@ public class MyCustomTypeSerializer : IDataTypeSerializer
 }
 ```
 
+## Parameter Settings
+
+Parameter settings configure input and output parameters on components. All boolean flags use the `is*` prefix per the GhJSON schema.
+
+### Parameter Settings Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `parameterName` | string | **Required**. The name of the parameter. |
+| `nickName` | string | Custom nickname for the parameter. |
+| `dataMapping` | string | Data tree mapping mode: `"None"`, `"Flatten"`, `"Graft"`. |
+| `expression` | string | Expression that transforms parameter data. Presence implies the parameter has an expression. |
+| `access` | string | Data access mode for script parameters: `"item"`, `"list"`, `"tree"`. |
+| `typeHint` | string | Type hint for script parameters (e.g., `"int"`, `"double"`, `"Point3d"`). |
+| `isPrincipal` | boolean | Whether this is the principal (master) input parameter. Affects parameter matching behavior. |
+| `isRequired` | boolean | Whether this parameter is required (cannot be removed). Applicable to variable parameter components. |
+| `isReparameterized` | boolean | Whether the parameter domain is reparameterized. |
+| `isReversed` | boolean | Whether to reverse the parameter data order. |
+| `isSimplified` | boolean | Whether to simplify the parameter data tree. |
+| `isInverted` | boolean | Whether to invert boolean values (`Param_Boolean` only). |
+| `isUnitized` | boolean | Whether to unitize vectors (`Param_Vector` only). |
+| `internalizedData` | object | Internalized data for the parameter (data tree format). |
+
+### Connection Endpoints
+
+Connections reference parameters using either `paramName` or `paramIndex`:
+
+```json
+{
+  "from": { "id": 1, "paramName": "Number" },
+  "to": { "id": 2, "paramIndex": 0 }
+}
+```
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | integer | **Required**. The integer ID of the component. |
+| `paramName` | string | Parameter name (required if `paramIndex` is not provided). |
+| `paramIndex` | integer | Zero-based parameter index (required if `paramName` is not provided). |
+
+Use `paramIndex` for reliable matching when parameter names may vary due to localization or custom nicknames.
+
+---
+
+## Metadata Properties
+
+The `metadata` object contains document-level information:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `title` | string | The title of the definition. |
+| `description` | string | A description of what this definition does. |
+| `version` | string | Version of the definition itself (incremented on each save). |
+| `author` | string | The author of this definition. |
+| `created` | string | Creation timestamp in ISO 8601 format. |
+| `modified` | string | Last modification timestamp in ISO 8601 format. |
+| `rhinoVersion` | string | The Rhino version this definition was created with. |
+| `grasshopperVersion` | string | The Grasshopper version this definition was created with. |
+| `tags` | string[] | List of tags for categorizing and searching definitions. |
+| `dependencies` | string[] | List of required plugin dependencies. |
+| `componentCount` | integer | Total number of components in the document. |
+| `connectionCount` | integer | Total number of connections in the document. |
+| `groupCount` | integer | Total number of groups in the document. |
+| `generatorName` | string | Name of the tool that generated this GhJSON file. |
+| `generatorVersion` | string | Version of the tool that generated this file. |
+| `extensions` | object | Extension point for metadata produced by object handlers. |
+
+---
+
+## Component State and Extensions
+
+### Component State
+
+The `componentState` object contains UI-specific state. Only three properties are defined in the core schema:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `selected` | boolean | Whether the component is currently selected on the canvas. |
+| `locked` | boolean | Whether the component is locked (disabled). |
+| `hidden` | boolean | Whether the component preview is hidden. |
+| `extensions` | object | Extension point for component-specific properties. |
+
+All other component-specific properties (panel text, slider values, script code, etc.) are stored in the `extensions` object.
+
+### Extensions Mechanism
+
+Extensions allow component handlers to add specialized properties without modifying the core schema. Extensions are namespaced to avoid conflicts:
+
+- `gh.*` - Reserved for native Grasshopper component extensions
+- `vendor.*` - Third-party vendor extensions
+
+**Extension locations:**
+
+- `metadata.extensions` - Document-level extensions
+- `componentState.extensions` - Component-level extensions
+
+**Built-in Grasshopper extensions:**
+
+| Extension Key | Description |
+|---------------|-------------|
+| `gh.panel` | Panel text, font, alignment, bounds, multiline, wrap settings |
+| `gh.scribble` | Scribble text, font, corners |
+| `gh.valuelist` | Value list items, list mode, selected indices |
+| `gh.numberslider` | Slider value, rounding mode |
+| `gh.vbscript` | VB Script code sections (imports, script, additional) |
+
+**Example with extensions:**
+
+```json
+{
+  "name": "Panel",
+  "id": 1,
+  "componentState": {
+    "selected": false,
+    "locked": false,
+    "hidden": false,
+    "extensions": {
+      "gh.panel": {
+        "value": "Hello World",
+        "multiline": true,
+        "wrap": true,
+        "alignment": 0,
+        "bounds": "bounds:150x100",
+        "font": {
+          "name": "Arial",
+          "size": 14,
+          "bold": false,
+          "italic": false
+        }
+      }
+    }
+  }
+}
+```
+
+---
+
+## File Format Requirements
+
+### File Extension
+
+GhJSON files use the `.ghjson` extension.
+
+### Encoding
+
+GhJSON files MUST be encoded in UTF-8 without BOM.
+
+### MIME Type
+
+The recommended MIME type for GhJSON files is:
+
+```text
+application/vnd.grasshopper.ghjson+json
+```
+
+### Schema URL
+
+The canonical JSON Schema is available at:
+
+```text
+https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json
+```
+
+---
+
+## Validation Hierarchy
+
+GhJSON validation occurs at three levels:
+
+### 1. Schema Validation (GhJSON.Core)
+
+- JSON Schema conformance
+- Extension schema validation
+- Property type checking
+
+### 2. Structural Validation (GhJSON.Core)
+
+- Unique component IDs
+- Connection reference integrity (all endpoint `id` values reference existing components)
+- Group membership validity (all `members` reference existing component IDs)
+
+### 3. Grasshopper Validation (GhJSON.Grasshopper)
+
+- Component existence in installed libraries (by `componentGuid` and/or `name`)
+- Parameter matching rules (resolving `paramName`/`paramIndex` against instantiated components)
+- Type compatibility rules for connections
+
+---
+
 ## Object Serialization and Deserialization Process
 
 The object serialization is designed to extend compatibility with new components. Thus, the processing logic is quite complex, but robust.

@@ -6,18 +6,19 @@
 - [ ] isUnitized
 - [ ] isReparameterized
 - [ ] isPrincipal
-- [ ] Number sliders
-- [ ] Panel
-  - [ ] Size
-  - [ ] Color
-  - [ ] Value
-- [ ] Color swatch
+- [ ] Expression
+- [x] Number sliders
+- [x] Panel
+  - [x] Size
+  - [x] Color
+  - [x] Value
+- [x] Color swatch
 - [ ] Button custom values
 - [ ] Boolean toggle state
-- [ ] Correct pivot position on non-edit mode in gh_put
-- [ ] Value lists
+- [x] Value lists
 - [ ] Script components:
   - [ ] Modifiers in C#
   - [ ] Modifiers in Python3
   - [ ] Additional inputs
   - [ ] Additional outputs
+- [ ] Correct pivot position on non-edit mode in gh_put

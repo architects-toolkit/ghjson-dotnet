@@ -112,12 +112,10 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             if (obj is GH_NumberSlider slider &&
                 component.ComponentState?.Extensions != null &&
-                component.ComponentState.Extensions.TryGetValue(ExtensionKey, out var extData))
+                component.ComponentState.Extensions.TryGetValue(ExtensionKey, out var extData) &&
+                extData is Dictionary<string, object> sliderData)
             {
-                if (extData is Dictionary<string, object> sliderData)
-                {
-                    ApplySliderData(slider, sliderData);
-                }
+                ApplySliderData(slider, sliderData);
             }
         }
 

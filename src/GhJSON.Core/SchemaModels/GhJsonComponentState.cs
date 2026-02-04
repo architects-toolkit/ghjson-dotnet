@@ -50,6 +50,7 @@ namespace GhJSON.Core.SchemaModels
         /// Keys are extension identifiers, values are extension-specific objects.
         /// </summary>
         [JsonProperty("extensions", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(GhJSON.Core.Serialization.ExtensionsDictionaryConverter))]
         public Dictionary<string, object>? Extensions { get; set; }
 
         /// <summary>

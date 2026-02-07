@@ -34,13 +34,16 @@ Thank you for your interest in contributing to GhJSON.NET!
 ```
 ghjson-dotnet/
 ├── src/
-│   ├── GhJSON.Core/           # Platform-independent models & validation
-│   └── GhJSON.Grasshopper/    # Grasshopper integration
+│   ├── GhJSON.Core/                      # Platform-independent models & operations
+│   └── GhJSON.Grasshopper/              # Grasshopper integration
 ├── tests/
-│   └── GhJSON.Core.Tests/     # Unit tests
+│   ├── GhJSON.Core.Tests/               # Core unit tests
+│   ├── GhJSON.Grasshopper.Tests/        # Grasshopper integration tests
+│   └── GhJSON.Grasshopper.TestComponents/ # Test components for GH tests
+├── tools/                                # Build and utility scripts
 ├── .github/
-│   └── workflows/             # CI/CD workflows
-└── docs/                      # Documentation
+│   └── workflows/                        # CI/CD workflows
+└── docs/                                 # Documentation
 ```
 
 ## Pull Request Process

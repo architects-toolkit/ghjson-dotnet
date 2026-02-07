@@ -29,6 +29,9 @@
   - [x] MarshInputs via IScriptComponent
 - [x] Component grouping (auto-discovery of groups containing serialized components)
 - [ ] Correct pivot position on non-edit mode in gh_put
-- [ ] gh_get component connection depth
-- [ ] gh_get component filters
-- [ ] gh_put component reconnect on edit mode
+- [x] gh_get component connection depth
+- [x] gh_get component filters
+- [x] gh_get metadata
+- [x] gh_put component reconnect on edit mode
+- [ ] Ladybug components support
+- [ ] Scribble support

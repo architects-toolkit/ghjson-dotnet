@@ -102,21 +102,19 @@ namespace GhJSON.Core
     /// </summary>
     public static class GhJson
     {
-        // Schema management
-        public static string GetSchema(string version);
-        public static MigrationResult MigrateSchema(GhJsonDocument doc, string targetVersion);
-        public static GhJsonDocument MigrateSchema(GhJsonDocument doc, string targetVersion);
+        // Schema version
+        public static string CurrentVersion { get; }
 
-        // Document management  (immutable builders used like CreateComponentObject().WithId("123").WithName("MyComponent").Build())
-        public static GhJsonDocument CreateDocument();
-        public static GhJsonSchema CreateSchemaProperty();                              // Builder that creates the "schema" property of the document
-        public static GhJsonMetadata CreateMetadataProperty();                          // Builder that creates the "documentMetadata" property of the schema
-        public static GhJsonComponent CreateComponentObject();                          // Builder that creates a component object (componentData in schema)
-        public static GhJsonComponentParameter CreateComponentParameterObject();        // Builder that creates a parameter object (parameterSettings in schema)
-        public static GhJsonComponentState CreateComponentStateObject();                // Builder that creates a component state object (componentState in schema)
-        public static GhJsonConnection CreateConnectionObject();                        // Builder that creates a connection object (connectionData in schema)
-        public static GhJsonConnectionEndpoint CreateConnectionEndpointObject();        // Builder that creates a connection endpoint object (connectionEndpoint in schema)
-        public static GhJsonGroup CreateGroupObject();                                  // Builder that creates a group object (groupData in schema)
+        // Document creation (mutable POCOs + immutable DocumentBuilder)
+        public static DocumentBuilder CreateDocumentBuilder();
+        public static DocumentBuilder CreateDocumentBuilder(GhJsonDocument document);
+        public static GhJsonMetadata CreateMetadataProperty();
+        public static GhJsonComponent CreateComponentObject();
+        public static GhJsonParameterSettings CreateComponentParameterObject();
+        public static GhJsonComponentState CreateComponentStateObject();
+        public static GhJsonConnection CreateConnectionObject();
+        public static GhJsonConnectionEndpoint CreateConnectionEndpointObject();
+        public static GhJsonGroup CreateGroupObject();
 
         // Input/Output
         public static GhJsonDocument FromFile(string path);
@@ -124,30 +122,28 @@ namespace GhJSON.Core
         public static GhJsonDocument FromJson(string json);
         public static void ToFile(GhJsonDocument doc, string path, WriteOptions? options = null);
         public static string ToJson(GhJsonDocument doc, WriteOptions? options = null);
-        
-        // Validation (this only validates against the schema)
+
+        // Validation
         public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
         public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard);
         public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
         public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard);
-        
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard);
+
         // Fix
         public static FixResult Fix(GhJsonDocument doc, FixOptions? options = null);
-        public static GhJsonDocument Fix(GhJsonDocument doc, FixOptions? options = null);
         public static FixResult FixMetadata(GhJsonDocument doc);
-        public static GhJsonDocument FixMetadata(GhJsonDocument doc);
         public static FixResult AssignMissingIds(GhJsonDocument doc);
-        public static GhJsonDocument AssignMissingIds(GhJsonDocument doc);
         public static FixResult ReassignIds(GhJsonDocument doc);
-        public static GhJsonDocument ReassignIds(GhJsonDocument doc);
         public static FixResult GenerateMissingInstanceGuids(GhJsonDocument doc);
-        public static GhJsonDocument GenerateMissingInstanceGuids(GhJsonDocument doc);
         public static FixResult RegenerateInstanceGuids(GhJsonDocument doc);
-        public static GhJsonDocument RegenerateInstanceGuids(GhJsonDocument doc);
-        
+
         // Merge
         public static MergeResult Merge(GhJsonDocument baseDoc, GhJsonDocument incomingDoc, MergeOptions? options = null);
-        public static GhJsonDocument Merge(GhJsonDocument baseDoc, GhJsonDocument incomingDoc, MergeOptions? options = null);
+
+        // Schema Migration
+        public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null);
+        public static bool NeedsMigration(GhJsonDocument doc, string? targetVersion = null);
     }
 }
 ```
@@ -176,35 +172,39 @@ namespace GhJSON.Grasshopper
     /// </summary>
     public static class GhJsonGrasshopper
     {
-        // Serialize (GH → GhJSON) (use immutable builders from GhJson.Core)
+        // Serialize (GH → GhJSON)
         public static GhJsonDocument Serialize(
             IEnumerable<IGH_DocumentObject> objects,
             SerializationOptions? options = null);
-        
-        // Deserialize (GhJSON → GH objects, not placed)
+
+        // Deserialize (GhJSON → GH objects, not placed on canvas)
         public static DeserializationResult Deserialize(
             GhJsonDocument document,
             DeserializationOptions? options = null);
-        
+
         // Get (read from canvas)
         public static GhJsonDocument Get(GetOptions? options = null);
         public static GhJsonDocument GetSelected();
         public static GhJsonDocument GetByGuids(IEnumerable<Guid> guids);
-        [...]
-        
+
         // Put (place on canvas)
         public static PutResult Put(
             GhJsonDocument document,
             PutOptions? options = null);
-        
-        // Data Type Extensability
+
+        // Query (filter & select from canvas)
+        public static CanvasSelector Select();
+        public static CanvasSelector Select(GH_Document document);
+        public static CanvasSelector Select(IEnumerable<IGH_DocumentObject> objects);
+
+        // Data Type Extensibility
         public static void RegisterCustomDataTypeSerializer<T>(IDataTypeSerializer<T> serializer);
         public static void UnregisterCustomDataTypeSerializer<T>();
         public static IEnumerable<IDataTypeSerializer> GetRegisteredDataTypeSerializers();
 
-        // Object Handler Extensability
-        public static void RegisterCustomObjectHandler<T>(IObjectHandler<T> handler);
-        public static void UnregisterCustomObjectHandler<T>();
+        // Object Handler Extensibility
+        public static void RegisterCustomObjectHandler(IObjectHandler handler);
+        public static void UnregisterCustomObjectHandler(IObjectHandler handler);
         public static IEnumerable<IObjectHandler> GetRegisteredObjectHandlers();
     }
 }
@@ -407,7 +407,7 @@ Extensions allow component handlers to add specialized properties without modify
         "multiline": true,
         "wrap": true,
         "alignment": 0,
-        "bounds": "bounds:150x100",
+        "bounds": "150x100",
         "font": {
           "name": "Arial",
           "size": 14,

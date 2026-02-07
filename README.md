@@ -1,17 +1,20 @@
 # GhJSON.NET
 
-.NET implementation of the [GhJSON format](https://architects-toolkit.github.io/ghjson-spec/) for Grasshopper definition serialization.
+[![Schema Version](https://img.shields.io/badge/schema-v1.0-blue)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+
+.NET implementation of the [GhJSON specification](https://architects-toolkit.github.io/ghjson-spec/) for Grasshopper definition serialization.
 
 ## Overview
 
-GhJSON is a JSON-based format for representing Grasshopper definitions. This library provides:
+GhJSON is a JSON-based format for representing [Grasshopper](https://discourse.mcneel.com/c/grasshopper) definitions. This library provides:
 
-- **GhJSON.Core**: Platform-independent models and validation
-- **GhJSON.Grasshopper**: Grasshopper integration for serialization/deserialization
+- **GhJSON.Core** — Platform-independent document model and operations (read, write, validate, fix, merge, migrate)
+- **GhJSON.Grasshopper** — Grasshopper integration (serialize from canvas, place on canvas, data type serializers, object handlers)
 
 ## Documentation
 
-See the documentation index at [`docs/index.md`](./docs/index.md).
+See the [documentation index](./docs/index.md) for detailed guides and architecture.
 
 ## Installation
 
@@ -28,12 +31,15 @@ dotnet add package GhJSON.Grasshopper
 ### Serialization (Grasshopper Canvas → GhJSON)
 
 ```csharp
+using GhJSON.Core;
 using GhJSON.Grasshopper;
-using GhJSON.Grasshopper.Serialization;
 
-// Serialize selected components from the active canvas
-var document = GhJsonGrasshopper.GetSelected(SerializationOptions.Optimized);
-var json = document.ToJson();
+// Serialize all objects from the active canvas
+var document = GhJsonGrasshopper.Get();
+string json = GhJson.ToJson(document);
+
+// Or serialize only selected objects
+var selected = GhJsonGrasshopper.GetSelected();
 ```
 
 ### Deserialization (GhJSON → Grasshopper Canvas)
@@ -42,9 +48,9 @@ var json = document.ToJson();
 using GhJSON.Core;
 using GhJSON.Grasshopper;
 
-// Parse and place on the active canvas
-var document = GhJson.Parse(json);
-var put = GhJsonGrasshopper.Put(document);
+// Parse JSON and place on the active canvas
+var document = GhJson.FromJson(json);
+var result = GhJsonGrasshopper.Put(document);
 ```
 
 ### Validation
@@ -52,31 +58,59 @@ var put = GhJsonGrasshopper.Put(document);
 ```csharp
 using GhJSON.Core;
 
-var validationResult = GhJson.Validate(json);
-if (!validationResult.IsValid)
+var result = GhJson.Validate(json);
+if (!result.IsValid)
 {
-    // validationResult.Errors / validationResult.Warnings
+    foreach (var error in result.Errors)
+    {
+        Console.WriteLine(error.Message);
+    }
 }
+
+// Or quick check
+bool isValid = GhJson.IsValid(json);
+```
+
+### Building Documents Programmatically
+
+```csharp
+using GhJSON.Core;
+using GhJSON.Core.SchemaModels;
+
+var slider = new GhJsonComponent
+{
+    Name = "Number Slider",
+    Id = 1,
+    Pivot = new GhJsonPivot(100, 100),
+};
+
+var doc = GhJson.CreateDocumentBuilder()
+    .AddComponent(slider)
+    .Build();
 ```
 
 ## GhJSON Format
 
-See the [GhJSON Specification](https://architects-toolkit.github.io/ghjson-spec/) or the [GhJSON-spec repo](https://github.com/architects-toolkit/ghjson-spec) for the complete format definition.
+See the [GhJSON Specification](https://architects-toolkit.github.io/ghjson-spec/) or the [ghjson-spec repo](https://github.com/architects-toolkit/ghjson-spec) for the complete format definition.
 
 ### Example
 
 ```json
 {
-  "schemaVersion": "1.0",
+  "schema": "1.0",
   "components": [
     {
       "name": "Number Slider",
-      "id": 1,
       "componentGuid": "57da07bd-ecab-415d-9d86-af36d7073abc",
       "instanceGuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "id": 1,
       "pivot": "100,200",
       "componentState": {
-        "value": "5<0,10>"
+        "extensions": {
+          "gh.numberslider": {
+            "value": "5<0,10>"
+          }
+        }
       }
     }
   ],
@@ -91,3 +125,8 @@ Apache-2.0
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Related Projects
+
+- [ghjson-spec](https://github.com/architects-toolkit/ghjson-spec) — GhJSON format specification
+- [SmartHopper](https://github.com/architects-toolkit/SmartHopper) — AI-powered Grasshopper plugin (uses GhJSON)

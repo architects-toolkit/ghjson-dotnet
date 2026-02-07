@@ -127,14 +127,16 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 settings.IsReversed = true;
             }
 
-            // Reparameterized - use cached reflection for curve parameters
-            var reparameterizedProperty = ReflectionCache.GetProperty(param.GetType(), "Reparameterized");
-            if (reparameterizedProperty != null)
+            // Reparameterize - available on Param_Curve and Param_Surface
+            var reparameterizeProperty = ReflectionCache.GetProperty(param.GetType(), "Reparameterize");
+            if (reparameterizeProperty != null)
             {
-                var reparameterizedValue = reparameterizedProperty.GetValue(param);
-                if (reparameterizedValue is bool reparameterized && reparameterized)
+                var reparameterizeValue = reparameterizeProperty.GetValue(param);
+                Debug.WriteLine($"[IOModifiersHandler.Serialize] Param '{param.Name}' Reparameterize value: {reparameterizeValue}");
+                if (reparameterizeValue is bool reparameterize && reparameterize)
                 {
                     settings.IsReparameterized = true;
+                    Debug.WriteLine($"[IOModifiersHandler.Serialize] Set IsReparameterized=true for param '{param.Name}'");
                 }
             }
 
@@ -149,26 +151,37 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
             }
 
-            // Unitized - use cached reflection for vector parameters
-            var unitizedProperty = ReflectionCache.GetProperty(param.GetType(), "Unitized");
-            if (unitizedProperty != null)
+            // Unitize - use cached reflection for vector parameters
+            var unitizeProperty = ReflectionCache.GetProperty(param.GetType(), "Unitize");
+            if (unitizeProperty != null)
             {
-                var unitizedValue = unitizedProperty.GetValue(param);
-                if (unitizedValue is bool unitized && unitized)
+                var unitizeValue = unitizeProperty.GetValue(param);
+                Debug.WriteLine($"[IOModifiersHandler.Serialize] Param '{param.Name}' Unitize value: {unitizeValue}");
+                if (unitizeValue is bool unitize && unitize)
                 {
                     settings.IsUnitized = true;
+                    Debug.WriteLine($"[IOModifiersHandler.Serialize] Set IsUnitized=true for param '{param.Name}'");
                 }
             }
 
             // IsPrincipal - use cached reflection for GH_Param<T>
+            // Note: IsPrincipal returns GH_PrincipalState enum (IsPrincipal, IsNotPrincipal, CannotBePrincipal)
             var isPrincipalProperty = ReflectionCache.GetProperty(param.GetType(), "IsPrincipal");
             if (isPrincipalProperty != null)
             {
                 var isPrincipalValue = isPrincipalProperty.GetValue(param);
-                if (isPrincipalValue is bool isPrincipal && isPrincipal)
+                Debug.WriteLine($"[IOModifiersHandler.Serialize] Param '{param.Name}' IsPrincipal value: {isPrincipalValue}");
+                
+                // Check if the enum value toString is "IsPrincipal"
+                if (isPrincipalValue != null && isPrincipalValue.ToString() == "IsPrincipal")
                 {
                     settings.IsPrincipal = true;
+                    Debug.WriteLine($"[IOModifiersHandler.Serialize] Set IsPrincipal=true for param '{param.Name}'");
                 }
+            }
+            else
+            {
+                Debug.WriteLine($"[IOModifiersHandler.Serialize] IsPrincipal property not found for param '{param.Name}' (type: {param.GetType().Name})");
             }
 
             // Expression - use cached reflection for GH_Param<T>
@@ -238,13 +251,14 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 param.Reverse = true;
             }
 
-            // Reparameterized - use cached reflection for curve parameters
+            // Reparameterize - available on Param_Curve and Param_Surface
             if (settings.IsReparameterized == true)
             {
-                var reparameterizedProperty = ReflectionCache.GetProperty(param.GetType(), "Reparameterized");
-                if (reparameterizedProperty != null && reparameterizedProperty.CanWrite)
+                var reparameterizeProperty = ReflectionCache.GetProperty(param.GetType(), "Reparameterize");
+                if (reparameterizeProperty != null && reparameterizeProperty.CanWrite)
                 {
-                    reparameterizedProperty.SetValue(param, true);
+                    reparameterizeProperty.SetValue(param, true);
+                    Debug.WriteLine($"[IOModifiersHandler.Deserialize] Set Reparameterize=true for param '{param.Name}'");
                 }
             }
 
@@ -258,23 +272,26 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
             }
 
-            // Unitized - use cached reflection for vector parameters
+            // Unitize - use cached reflection for vector parameters
             if (settings.IsUnitized == true)
             {
-                var unitizedProperty = ReflectionCache.GetProperty(param.GetType(), "Unitized");
-                if (unitizedProperty != null && unitizedProperty.CanWrite)
+                var unitizeProperty = ReflectionCache.GetProperty(param.GetType(), "Unitize");
+                if (unitizeProperty != null && unitizeProperty.CanWrite)
                 {
-                    unitizedProperty.SetValue(param, true);
+                    unitizeProperty.SetValue(param, true);
+                    Debug.WriteLine($"[IOModifiersHandler.Deserialize] Set Unitize=true for param '{param.Name}'");
                 }
             }
 
-            // IsPrincipal - use cached reflection for GH_Param<T>
+            // IsPrincipal - use SetPrincipal(bool, bool, bool) method on GH_Param<T>
             if (settings.IsPrincipal == true)
             {
-                var isPrincipalProperty = ReflectionCache.GetProperty(param.GetType(), "IsPrincipal");
-                if (isPrincipalProperty != null && isPrincipalProperty.CanWrite)
+                var setPrincipalMethod = ReflectionCache.GetMethod(param.GetType(), "SetPrincipal");
+                if (setPrincipalMethod != null)
                 {
-                    isPrincipalProperty.SetValue(param, true);
+                    // SetPrincipal(isPrincipal, isNotPrincipal, cannotBePrincipal)
+                    setPrincipalMethod.Invoke(param, new object[] { true, false, false });
+                    Debug.WriteLine($"[IOModifiersHandler.Deserialize] Set IsPrincipal=true for param '{param.Name}'");
                 }
             }
 

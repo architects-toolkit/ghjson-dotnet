@@ -113,5 +113,23 @@ namespace GhJSON.Grasshopper.Serialization
             Debug.WriteLine($"[ObjectHandlerOrchestrator.Deserialize] Applied {handlerCount} handlers");
 #endif
         }
+
+        /// <summary>
+        /// Applies post-placement fixups for handlers that implement <see cref="IPostPlacementHandler"/>.
+        /// Must be called after the object has been added to the Grasshopper document, because some
+        /// properties (e.g., <c>IScriptComponent</c> marshalling options) are reset by <c>AddedToDocument</c>.
+        /// </summary>
+        /// <param name="component">The source GhJSON component definition.</param>
+        /// <param name="obj">The placed document object (already in the document).</param>
+        public static void PostPlacement(GhJsonComponent component, IGH_DocumentObject obj)
+        {
+            foreach (var handler in ObjectHandlerRegistry.GetAll())
+            {
+                if (handler is IPostPlacementHandler postHandler && handler.CanHandle(component))
+                {
+                    postHandler.PostPlacement(component, obj);
+                }
+            }
+        }
     }
 }

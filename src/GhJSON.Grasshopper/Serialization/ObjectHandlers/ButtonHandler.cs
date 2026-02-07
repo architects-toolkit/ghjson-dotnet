@@ -75,14 +75,26 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 return;
             }
 
+            bool expressionsSet = false;
+
             if (buttonData.TryGetValue("normal", out var normal))
             {
                 button.ExpressionNormal = normal?.ToString() ?? "False";
+                expressionsSet = true;
             }
 
             if (buttonData.TryGetValue("pressed", out var pressed))
             {
                 button.ExpressionPressed = pressed?.ToString() ?? "True";
+                expressionsSet = true;
+            }
+
+            // Evaluate the new expressions so the button computes its normal/pressed values.
+            // EvaluateExpressions() is the correct API; ExpireSolution() would trigger a full
+            // document recompute which is unnecessary and can cause side effects during placement.
+            if (expressionsSet)
+            {
+                button.EvaluateExpressions();
             }
         }
     }

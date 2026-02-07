@@ -22,6 +22,7 @@ using System.Drawing;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Deserialization;
+using GhJSON.Grasshopper.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -90,8 +91,12 @@ namespace GhJSON.Grasshopper.PutOperations
                         (float)(component.Pivot.Y + options.Offset.Y));
                 }
 
-                // Add to document
+                // Add to document (triggers AddedToDocument which may reset some properties)
                 ghDoc.AddObject(obj, false);
+
+                // Apply post-placement fixups for properties that get reset by AddedToDocument
+                ObjectHandlerOrchestrator.PostPlacement(component, obj);
+
                 result.PlacedObjects.Add(obj);
                 result.ComponentsPlaced++;
 

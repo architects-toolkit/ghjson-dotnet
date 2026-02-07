@@ -3,22 +3,32 @@
 - [x] isInverted
 - [x] Restore Groups
 - [x] Restore Connections
-- [ ] isUnitized
-- [ ] isReparameterized
-- [ ] isPrincipal
-- [ ] Expression
+- [x] isUnitized
+- [x] isReparameterized
+- [x] isPrincipal
+- [x] Expression
 - [x] Number sliders
 - [x] Panel
   - [x] Size
   - [x] Color
   - [x] Value
 - [x] Color swatch
-- [ ] Button custom values
-- [ ] Boolean toggle state
+- [x] Button custom values
+- [x] Boolean toggle state
 - [x] Value lists
-- [ ] Script components:
-  - [ ] Modifiers in C#
-  - [ ] Modifiers in Python3
-  - [ ] Additional inputs
-  - [ ] Additional outputs
+- [x] Script components:
+  - [x] Modifiers in C#
+  - [x] Modifiers in Python3
+  - [x] Additional inputs
+  - [x] Additional outputs
+  - [x] out parameter modifiers
+  - [x] Additional inputs and outputs for vb script component
+  - [x] ScriptVariableParam type captured before clearing (fixes InvalidCastException)
+  - [x] Marshalling output guids (MarshGuids via IScriptComponent)
+  - [x] Graft output lines (MarshOutputs via IScriptComponent)
+  - [x] MarshInputs via IScriptComponent
+- [x] Component grouping (auto-discovery of groups containing serialized components)
 - [ ] Correct pivot position on non-edit mode in gh_put
+- [ ] gh_get component connection depth
+- [ ] gh_get component filters
+- [ ] gh_put component reconnect on edit mode

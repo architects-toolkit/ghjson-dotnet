@@ -44,8 +44,14 @@ namespace GhJSON.Grasshopper.Shared
         private static readonly ConcurrentDictionary<Type, PropertyInfo[]> PropertiesCache = new();
 
         /// <summary>
+        /// Binding flags for property lookup: public and non-public instance properties, including inherited.
+        /// </summary>
+        private const BindingFlags PropertyBindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
+
+        /// <summary>
         /// Gets a cached PropertyInfo for the specified type and property name.
         /// Uses a static dictionary to cache reflection results and avoid repeated lookups.
+        /// Searches public and non-public instance properties, including inherited properties.
         /// </summary>
         /// <param name="type">The type to get the property from.</param>
         /// <param name="propertyName">The name of the property.</param>
@@ -59,14 +65,33 @@ namespace GhJSON.Grasshopper.Shared
                 return cachedProperty;
             }
 
-            var property = type.GetProperty(propertyName);
+            // First try with full binding flags
+            var property = type.GetProperty(propertyName, PropertyBindingFlags);
+
+            // If not found, also check base types explicitly for properties that may not flatten
+            if (property == null)
+            {
+                var currentType = type.BaseType;
+                while (currentType != null && property == null)
+                {
+                    property = currentType.GetProperty(propertyName, PropertyBindingFlags);
+                    currentType = currentType.BaseType;
+                }
+            }
+
             PropertyCache[key] = property;
             return property;
         }
 
         /// <summary>
+        /// Binding flags for method lookup: public and non-public instance methods, including inherited.
+        /// </summary>
+        private const BindingFlags MethodBindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
+
+        /// <summary>
         /// Gets a cached MethodInfo for the specified type and method name.
         /// Uses a static dictionary to cache reflection results and avoid repeated lookups.
+        /// Searches public and non-public instance methods, including inherited methods.
         /// </summary>
         /// <param name="type">The type to get the method from.</param>
         /// <param name="methodName">The name of the method.</param>
@@ -80,7 +105,20 @@ namespace GhJSON.Grasshopper.Shared
                 return cachedMethod;
             }
 
-            var method = type.GetMethod(methodName);
+            // First try with full binding flags
+            var method = type.GetMethod(methodName, MethodBindingFlags);
+
+            // If not found, also check base types explicitly
+            if (method == null)
+            {
+                var currentType = type.BaseType;
+                while (currentType != null && method == null)
+                {
+                    method = currentType.GetMethod(methodName, MethodBindingFlags);
+                    currentType = currentType.BaseType;
+                }
+            }
+
             MethodCache[key] = method;
             return method;
         }

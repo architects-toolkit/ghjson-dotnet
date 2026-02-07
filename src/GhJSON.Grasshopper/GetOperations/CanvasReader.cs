@@ -133,10 +133,34 @@ namespace GhJSON.Grasshopper.GetOperations
                 builder = builder.AddConnections(connections);
             }
 
-            // Extract groups
-            if (options.IncludeGroups && groups.Any())
+            // Extract groups — include any groups whose members overlap with serialized components,
+            // even if the group itself was not in the original object list.
+            if (options.IncludeGroups)
             {
-                builder = builder.AddGroups(ExtractGroups(groups, guidToId, ref nextId));
+                var effectiveGroups = groups;
+                if (!effectiveGroups.Any())
+                {
+                    // Auto-discover groups from the active document that contain serialized components
+                    var doc = Instances.ActiveCanvas?.Document;
+                    if (doc != null)
+                    {
+                        effectiveGroups = doc.Objects
+                            .OfType<GH_Group>()
+                            .Where(g => g.ObjectIDs.Any(id => guidToId.ContainsKey(id)))
+                            .ToList();
+#if DEBUG
+                        if (effectiveGroups.Any())
+                        {
+                            Debug.WriteLine($"[CanvasReader.CreateDocument] Auto-discovered {effectiveGroups.Count} groups from active document");
+                        }
+#endif
+                    }
+                }
+
+                if (effectiveGroups.Any())
+                {
+                    builder = builder.AddGroups(ExtractGroups(effectiveGroups, guidToId, ref nextId));
+                }
             }
 
             return builder.Build();

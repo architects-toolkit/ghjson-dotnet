@@ -18,7 +18,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
 using Grasshopper;
@@ -89,10 +91,10 @@ namespace GhJSON.Grasshopper.GetOperations
             Debug.WriteLine($"[CanvasReader.GetFromDocument] SelectedOnly={options.SelectedOnly}, Objects={objects.Count}");
 #endif
 
-            return CreateDocument(objects, options);
+            return CreateDocument(objects, options, doc);
         }
 
-        internal static GhJsonDocument CreateDocument(List<IGH_DocumentObject> objects, GetOptions options)
+        internal static GhJsonDocument CreateDocument(List<IGH_DocumentObject> objects, GetOptions options, GH_Document? ghDocument = null)
         {
             var builder = GhJSON.Core.GhJson.CreateDocumentBuilder();
 
@@ -124,30 +126,26 @@ namespace GhJSON.Grasshopper.GetOperations
 #endif
 
             // Extract connections
+            List<GhJsonConnection>? extractedConnections = null;
             if (options.IncludeConnections)
             {
-                var connections = ExtractConnections(components, guidToId);
+                extractedConnections = ExtractConnections(components, guidToId);
 #if DEBUG
-                Debug.WriteLine($"[CanvasReader.CreateDocument] Extracted {connections.Count} connections");
+                Debug.WriteLine($"[CanvasReader.CreateDocument] Extracted {extractedConnections.Count} connections");
 #endif
-                builder = builder.AddConnections(connections);
-            }
-
-            // Generate metadata when requested
-            if (options.IncludeMetadata)
-            {
-                builder = builder.WithMetadata(BuildMetadata(components, guidToId));
+                builder = builder.AddConnections(extractedConnections);
             }
 
             // Extract groups — include any groups whose members overlap with serialized components,
             // even if the group itself was not in the original object list.
+            List<GhJsonGroup>? extractedGroups = null;
             if (options.IncludeGroups)
             {
                 var effectiveGroups = groups;
                 if (!effectiveGroups.Any())
                 {
                     // Auto-discover groups from the active document that contain serialized components
-                    var doc = Instances.ActiveCanvas?.Document;
+                    var doc = ghDocument ?? Instances.ActiveCanvas?.Document;
                     if (doc != null)
                     {
                         effectiveGroups = doc.Objects
@@ -165,8 +163,20 @@ namespace GhJSON.Grasshopper.GetOperations
 
                 if (effectiveGroups.Any())
                 {
-                    builder = builder.AddGroups(ExtractGroups(effectiveGroups, guidToId, ref nextId));
+                    extractedGroups = ExtractGroups(effectiveGroups, guidToId, ref nextId);
+                    builder = builder.AddGroups(extractedGroups);
                 }
+            }
+
+            // Generate metadata when requested (after connections/groups so counts are available)
+            if (options.IncludeMetadata)
+            {
+                builder = builder.WithMetadata(MetadataBuilder.Build(
+                    components,
+                    extractedConnections,
+                    extractedGroups,
+                    ghDocument,
+                    options));
             }
 
             return builder.Build();
@@ -297,70 +307,6 @@ namespace GhJSON.Grasshopper.GetOperations
             }
 
             return result;
-        }
-
-        private static GhJsonMetadata BuildMetadata(
-            List<IGH_DocumentObject> components,
-            Dictionary<Guid, int> guidToId)
-        {
-            var metadata = new GhJsonMetadata
-            {
-                Modified = DateTime.UtcNow,
-                ComponentCount = components.Count,
-                GeneratorName = "ghjson-dotnet",
-            };
-
-            // Rhino version
-            try
-            {
-                metadata.RhinoVersion = Rhino.RhinoApp.Version.ToString();
-            }
-            catch
-            {
-                // Rhino might not be available in all contexts
-            }
-
-            // Grasshopper version
-            try
-            {
-                var ghAssembly = typeof(Instances).Assembly;
-                metadata.GrasshopperVersion = ghAssembly.GetName().Version?.ToString();
-            }
-            catch
-            {
-                // Ignore if assembly version is unavailable
-            }
-
-            // Collect non-standard plugin dependencies from component assemblies
-            try
-            {
-                var deps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var grasshopperAssembly = typeof(Instances).Assembly.GetName().Name;
-
-                foreach (var obj in components)
-                {
-                    var asmName = obj.GetType().Assembly.GetName().Name;
-                    if (asmName != null &&
-                        !asmName.StartsWith("Grasshopper", StringComparison.OrdinalIgnoreCase) &&
-                        !asmName.StartsWith("RhinoCommon", StringComparison.OrdinalIgnoreCase) &&
-                        !asmName.StartsWith("GH_IO", StringComparison.OrdinalIgnoreCase) &&
-                        !asmName.Equals(grasshopperAssembly, StringComparison.OrdinalIgnoreCase))
-                    {
-                        deps.Add(asmName);
-                    }
-                }
-
-                if (deps.Count > 0)
-                {
-                    metadata.Dependencies = new List<string>(deps);
-                }
-            }
-            catch
-            {
-                // Ignore dependency collection errors
-            }
-
-            return metadata;
         }
     }
 }

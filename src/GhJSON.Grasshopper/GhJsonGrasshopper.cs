@@ -57,6 +57,13 @@ namespace GhJSON.Grasshopper
                 IncludeInternalizedData = options.IncludeInternalizedData,
                 IncludeRuntimeMessages = options.IncludeRuntimeMessages,
                 IncludeMetadata = options.IncludeMetadata,
+                MetadataTitle = options.MetadataTitle,
+                MetadataDescription = options.MetadataDescription,
+                MetadataVersion = options.MetadataVersion,
+                MetadataAuthor = options.MetadataAuthor,
+                MetadataTags = options.MetadataTags,
+                MetadataGeneratorName = options.MetadataGeneratorName,
+                MetadataGeneratorVersion = options.MetadataGeneratorVersion,
             };
 
             // Delegate to shared document creation logic

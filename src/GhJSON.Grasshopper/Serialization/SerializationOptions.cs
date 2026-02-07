@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+using System.Collections.Generic;
+
 namespace GhJSON.Grasshopper.Serialization
 {
     /// <summary>
@@ -62,5 +64,47 @@ namespace GhJSON.Grasshopper.Serialization
         /// (Rhino/Grasshopper versions, timestamps, plugin dependencies, counts).
         /// </summary>
         public bool IncludeMetadata { get; set; } = false;
+
+        #region Metadata overrides
+
+        /// <summary>
+        /// Gets or sets an explicit title for the metadata.
+        /// When null, defaults to the Grasshopper document file name (without extension).
+        /// </summary>
+        public string? MetadataTitle { get; set; }
+
+        /// <summary>
+        /// Gets or sets an explicit description for the metadata.
+        /// </summary>
+        public string? MetadataDescription { get; set; }
+
+        /// <summary>
+        /// Gets or sets an explicit definition version string for the metadata.
+        /// </summary>
+        public string? MetadataVersion { get; set; }
+
+        /// <summary>
+        /// Gets or sets an explicit author for the metadata.
+        /// </summary>
+        public string? MetadataAuthor { get; set; }
+
+        /// <summary>
+        /// Gets or sets explicit tags for the metadata.
+        /// </summary>
+        public List<string>? MetadataTags { get; set; }
+
+        /// <summary>
+        /// Gets or sets an explicit generator name for the metadata.
+        /// When null, defaults to "ghjson-dotnet".
+        /// </summary>
+        public string? MetadataGeneratorName { get; set; }
+
+        /// <summary>
+        /// Gets or sets an explicit generator version for the metadata.
+        /// When null, defaults to the ghjson-dotnet assembly version.
+        /// </summary>
+        public string? MetadataGeneratorVersion { get; set; }
+
+        #endregion
     }
 }

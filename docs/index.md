@@ -5,6 +5,7 @@ This folder contains documentation for the **ghjson-dotnet** project.
 ## Start here
 
 - [Usage](./Usage/index.md)
+  - [Metadata](./Usage/metadata.md)
 - [Architecture](./ARCHITECTURE.md)
 - [NuGet publishing](./NUGET-PUBLISHING.md)
 

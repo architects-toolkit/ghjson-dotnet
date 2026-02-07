@@ -38,12 +38,12 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         protected abstract string ComponentName { get; }
 
-        public bool CanHandle(IGH_DocumentObject obj)
+        public virtual bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is IGH_Component comp && comp.ComponentGuid == this.ComponentGuid;
         }
 
-        public bool CanHandle(GhJsonComponent component)
+        public virtual bool CanHandle(GhJsonComponent component)
         {
             return component.Name == this.ComponentName ||
                    component.ComponentGuid == this.ComponentGuid;
@@ -375,7 +375,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         #region Post-Placement (IPostPlacementHandler)
 
         /// <inheritdoc/>
-        public void PostPlacement(GhJsonComponent component, IGH_DocumentObject obj)
+        public virtual void PostPlacement(GhJsonComponent component, IGH_DocumentObject obj)
         {
             if (obj is not IGH_Component scriptComp ||
                 component.ComponentState?.Extensions == null ||

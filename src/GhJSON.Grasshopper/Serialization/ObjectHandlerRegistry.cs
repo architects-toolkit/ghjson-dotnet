@@ -135,6 +135,7 @@ namespace GhJSON.Grasshopper.Serialization
             Register(new PythonScriptHandler());
             Register(new IronPythonScriptHandler());
             Register(new VBScriptHandler());
+            Register(new GhPythonScriptHandler());
         }
     }
 }

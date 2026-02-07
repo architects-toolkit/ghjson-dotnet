@@ -624,6 +624,13 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 return true;
             }
 
+            // Check old GhPython component (ZuiPythonComponent from GhPython.dll)
+            // This covers Ladybug Tools, Honeybee, Dragonfly, and the generic GhPython Script.
+            if (IsGhPythonComponent(comp))
+            {
+                return true;
+            }
+
             // Fallback: match by GUID for legacy components (VB.NET)
             return comp is IGH_VariableParameterComponent &&
                    ScriptComponentGuids.Contains(comp.ComponentGuid);
@@ -632,6 +639,15 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         private static bool HasIScriptComponentInterface(IGH_Component comp)
         {
             return comp.GetType().GetInterfaces().Any(i => i.Name == "IScriptComponent");
+        }
+
+        /// <summary>
+        /// Checks if the component is an old GhPython component (<c>ZuiPythonComponent</c> from GhPython.dll).
+        /// This covers Ladybug Tools, Honeybee, Dragonfly, and the generic GhPython Script component.
+        /// </summary>
+        private static bool IsGhPythonComponent(IGH_Component comp)
+        {
+            return comp.GetType().Name == "ZuiPythonComponent";
         }
 
         private static bool HasScriptExtension(GhJsonComponent component)
@@ -644,7 +660,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             return component.ComponentState.Extensions.ContainsKey("gh.csharp") ||
                    component.ComponentState.Extensions.ContainsKey("gh.python") ||
                    component.ComponentState.Extensions.ContainsKey("gh.ironpython") ||
-                   component.ComponentState.Extensions.ContainsKey("gh.vbscript");
+                   component.ComponentState.Extensions.ContainsKey("gh.vbscript") ||
+                   component.ComponentState.Extensions.ContainsKey("gh.ghpython");
         }
 
         private static IGH_Param? FindParamByName(IList<IGH_Param> parameters, string name)

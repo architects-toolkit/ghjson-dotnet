@@ -133,6 +133,12 @@ namespace GhJSON.Grasshopper.GetOperations
                 builder = builder.AddConnections(connections);
             }
 
+            // Generate metadata when requested
+            if (options.IncludeMetadata)
+            {
+                builder = builder.WithMetadata(BuildMetadata(components, guidToId));
+            }
+
             // Extract groups — include any groups whose members overlap with serialized components,
             // even if the group itself was not in the original object list.
             if (options.IncludeGroups)
@@ -291,6 +297,70 @@ namespace GhJSON.Grasshopper.GetOperations
             }
 
             return result;
+        }
+
+        private static GhJsonMetadata BuildMetadata(
+            List<IGH_DocumentObject> components,
+            Dictionary<Guid, int> guidToId)
+        {
+            var metadata = new GhJsonMetadata
+            {
+                Modified = DateTime.UtcNow,
+                ComponentCount = components.Count,
+                GeneratorName = "ghjson-dotnet",
+            };
+
+            // Rhino version
+            try
+            {
+                metadata.RhinoVersion = Rhino.RhinoApp.Version.ToString();
+            }
+            catch
+            {
+                // Rhino might not be available in all contexts
+            }
+
+            // Grasshopper version
+            try
+            {
+                var ghAssembly = typeof(Instances).Assembly;
+                metadata.GrasshopperVersion = ghAssembly.GetName().Version?.ToString();
+            }
+            catch
+            {
+                // Ignore if assembly version is unavailable
+            }
+
+            // Collect non-standard plugin dependencies from component assemblies
+            try
+            {
+                var deps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var grasshopperAssembly = typeof(Instances).Assembly.GetName().Name;
+
+                foreach (var obj in components)
+                {
+                    var asmName = obj.GetType().Assembly.GetName().Name;
+                    if (asmName != null &&
+                        !asmName.StartsWith("Grasshopper", StringComparison.OrdinalIgnoreCase) &&
+                        !asmName.StartsWith("RhinoCommon", StringComparison.OrdinalIgnoreCase) &&
+                        !asmName.StartsWith("GH_IO", StringComparison.OrdinalIgnoreCase) &&
+                        !asmName.Equals(grasshopperAssembly, StringComparison.OrdinalIgnoreCase))
+                    {
+                        deps.Add(asmName);
+                    }
+                }
+
+                if (deps.Count > 0)
+                {
+                    metadata.Dependencies = new List<string>(deps);
+                }
+            }
+            catch
+            {
+                // Ignore dependency collection errors
+            }
+
+            return metadata;
         }
     }
 }

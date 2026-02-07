@@ -73,6 +73,17 @@ namespace GhJSON.Grasshopper.Deserialization
             Debug.WriteLine($"[ComponentInstantiator.Create] Created object: {obj.Name}, Type: {obj.GetType().Name}");
 #endif
 
+            // Preserve instance GUID when not regenerating
+            if (!options.RegenerateInstanceGuids &&
+                component.InstanceGuid.HasValue &&
+                component.InstanceGuid.Value != Guid.Empty)
+            {
+                obj.NewInstanceGuid(component.InstanceGuid.Value);
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Preserved InstanceGuid: {component.InstanceGuid.Value}");
+#endif
+            }
+
             // Create default attributes
             obj.CreateAttributes();
 

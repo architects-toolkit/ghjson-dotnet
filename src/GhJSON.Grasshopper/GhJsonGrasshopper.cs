@@ -56,6 +56,7 @@ namespace GhJSON.Grasshopper
                 IncludeGroups = options.IncludeGroups,
                 IncludeInternalizedData = options.IncludeInternalizedData,
                 IncludeRuntimeMessages = options.IncludeRuntimeMessages,
+                IncludeMetadata = options.IncludeMetadata,
             };
 
             // Delegate to shared document creation logic

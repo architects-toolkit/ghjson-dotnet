@@ -94,7 +94,6 @@ namespace GhJSON.Grasshopper.Query
             { "RH", "RHINO" },
             { "RHINOCEROS", "RHINO" },
             { "KANGAROOPHYSICS", "KANGAROO" },
-            { "SCRIPT", "SCRIPT" },
             { "SCRIPTS", "SCRIPT" },
         };
 
@@ -139,6 +138,12 @@ namespace GhJSON.Grasshopper.Query
                     if (synonyms != null && synonyms.TryGetValue(tag, out var mapped))
                     {
                         tag = mapped;
+                    }
+                    else
+                    {
+                        // Canonical tags (not in synonyms) must be uppercased
+                        // to match the switch labels in CanvasSelector.MatchesAttribute()
+                        tag = tag.ToUpperInvariant();
                     }
 
                     if (isInclude)

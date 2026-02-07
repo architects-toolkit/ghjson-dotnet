@@ -56,5 +56,11 @@ namespace GhJSON.Grasshopper.Serialization
         /// Gets or sets a value indicating whether to assign sequential IDs.
         /// </summary>
         public bool AssignSequentialIds { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to include document metadata
+        /// (Rhino/Grasshopper versions, timestamps, plugin dependencies, counts).
+        /// </summary>
+        public bool IncludeMetadata { get; set; } = false;
     }
 }

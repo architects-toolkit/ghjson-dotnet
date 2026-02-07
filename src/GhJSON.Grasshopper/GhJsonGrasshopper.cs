@@ -191,6 +191,39 @@ namespace GhJSON.Grasshopper
 
         #endregion
 
+        #region Query (filter & select from canvas)
+
+        /// <summary>
+        /// Creates a <see cref="Query.CanvasSelector"/> over all objects on the active canvas.
+        /// </summary>
+        /// <returns>A fluent selector for filtering canvas objects.</returns>
+        public static Query.CanvasSelector Select()
+        {
+            return Query.CanvasSelector.FromActiveCanvas();
+        }
+
+        /// <summary>
+        /// Creates a <see cref="Query.CanvasSelector"/> over a specific document.
+        /// </summary>
+        /// <param name="document">The Grasshopper document to query.</param>
+        /// <returns>A fluent selector for filtering canvas objects.</returns>
+        public static Query.CanvasSelector Select(GH_Document document)
+        {
+            return Query.CanvasSelector.From(document);
+        }
+
+        /// <summary>
+        /// Creates a <see cref="Query.CanvasSelector"/> over an explicit set of objects.
+        /// </summary>
+        /// <param name="objects">The objects to query.</param>
+        /// <returns>A fluent selector for filtering canvas objects.</returns>
+        public static Query.CanvasSelector Select(IEnumerable<IGH_DocumentObject> objects)
+        {
+            return Query.CanvasSelector.From(objects);
+        }
+
+        #endregion
+
         #region Object Handler Extensibility
 
         /// <summary>

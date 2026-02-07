@@ -400,8 +400,21 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         private static readonly string[] MarshPropertyNames = { "MarshGuids", "MarshOutputs", "MarshInputs" };
 
         /// <summary>
+        /// Maps <c>IScriptComponent</c> property names to their GhJSON extension key names.
+        /// <c>MarshGuids=true</c> on the API means "Avoid Marshalling Output Guids" is enabled,
+        /// so we use descriptive key names that match the Grasshopper UI terminology.
+        /// </summary>
+        private static readonly Dictionary<string, string> MarshToJsonKey = new()
+        {
+            ["MarshGuids"] = "avoidMarshalGuids",
+            ["MarshOutputs"] = "avoidGraftOutputs",
+            ["MarshInputs"] = "avoidMarshalInputs",
+        };
+
+        /// <summary>
         /// Serializes <c>IScriptComponent</c> marshalling options (MarshGuids, MarshOutputs, MarshInputs)
-        /// into the extension data dictionary. Only non-default (false) values are stored.
+        /// into the extension data dictionary. Only non-default (<c>true</c>) values are stored.
+        /// On <c>IScriptComponent</c>, <c>true</c> means the "Avoid" option is enabled (non-default).
         /// </summary>
         private static void SerializeMarshOptions(IGH_Component comp, Dictionary<string, object> data)
         {
@@ -418,12 +431,13 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 if (prop != null && prop.CanRead)
                 {
                     var value = prop.GetValue(comp);
-                    if (value is bool b && !b)
+                    if (value is bool b && b)
                     {
-                        // Store only when false (= "avoid"), true is the default
-                        data[ToCamelCase(propName)] = false;
+                        // Store only when true (= "avoid" is enabled), false is the default
+                        var jsonKey = MarshToJsonKey[propName];
+                        data[jsonKey] = true;
 #if DEBUG
-                        Debug.WriteLine($"[BaseScriptHandler] Serialized {propName}=false");
+                        Debug.WriteLine($"[BaseScriptHandler] Serialized {jsonKey}=true (from {propName}=true)");
 #endif
                     }
                 }
@@ -432,6 +446,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         /// <summary>
         /// Deserializes <c>IScriptComponent</c> marshalling options from the extension data dictionary.
+        /// Supports both current keys (<c>avoidMarshalGuids</c>, etc.) and legacy keys (<c>marshGuids</c>, etc.).
         /// Uses the concrete type's interface map to invoke the actual setter, which is more
         /// reliable than calling <see cref="PropertyInfo.SetValue"/> on an interface property.
         /// </summary>
@@ -447,9 +462,16 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             foreach (var propName in MarshPropertyNames)
             {
-                var key = ToCamelCase(propName);
-                if (!data.TryGetValue(key, out var valObj) ||
-                    !bool.TryParse(valObj?.ToString(), out var val))
+                // Try current key first, then fall back to legacy key
+                var jsonKey = MarshToJsonKey[propName];
+                bool val;
+
+                if (data.TryGetValue(jsonKey, out var valObj) &&
+                    bool.TryParse(valObj?.ToString(), out val))
+                {
+                    // Current format: value maps directly to the IScriptComponent property
+                }
+                else
                 {
                     continue;
                 }

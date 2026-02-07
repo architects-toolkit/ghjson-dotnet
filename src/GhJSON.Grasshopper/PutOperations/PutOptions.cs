@@ -58,5 +58,18 @@ namespace GhJSON.Grasshopper.PutOperations
         /// Gets or sets a value indicating whether to skip invalid components.
         /// </summary>
         public bool SkipInvalidComponents { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to automatically calculate offset
+        /// to place new components below existing canvas content.
+        /// When true and Offset is (0,0), the offset will be calculated automatically.
+        /// </summary>
+        public bool AutoOffset { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets the vertical spacing (in pixels) between existing canvas content
+        /// and new components when AutoOffset is enabled.
+        /// </summary>
+        public float AutoOffsetSpacing { get; set; } = 100f;
     }
 }

@@ -28,10 +28,10 @@
   - [x] Graft output lines (MarshOutputs via IScriptComponent)
   - [x] MarshInputs via IScriptComponent
 - [x] Component grouping (auto-discovery of groups containing serialized components)
-- [ ] Correct pivot position on non-edit mode in gh_put
 - [x] gh_get component connection depth
 - [x] gh_get component filters
 - [x] gh_get metadata
 - [x] gh_put component reconnect on edit mode
-- [ ] Ladybug components support
+- [x] Ladybug components support
 - [ ] Scribble support
+- [x] Correct pivot position on non-edit mode in gh_put

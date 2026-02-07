@@ -63,6 +63,28 @@ namespace GhJSON.Grasshopper.PutOperations
                 SkipInvalidComponents = options.SkipInvalidComponents
             };
 
+            // Calculate effective offset
+            var effectiveOffset = options.Offset;
+            var hasPivots = document.Components.Any(c => c.Pivot != null);
+
+            if (hasPivots && options.AutoOffset && options.Offset.X == 0 && options.Offset.Y == 0)
+            {
+                var autoOffset = CalculateAutoOffset(document.Components, ghDoc, options.AutoOffsetSpacing);
+                if (autoOffset != PointF.Empty)
+                {
+                    effectiveOffset = autoOffset;
+#if DEBUG
+                    Debug.WriteLine($"[CanvasPlacer.Put] Using auto-calculated offset: ({effectiveOffset.X:F2}, {effectiveOffset.Y:F2})");
+#endif
+                }
+            }
+#if DEBUG
+            else if (options.Offset.X != 0 || options.Offset.Y != 0)
+            {
+                Debug.WriteLine($"[CanvasPlacer.Put] Using explicit offset: ({effectiveOffset.X:F2}, {effectiveOffset.Y:F2})");
+            }
+#endif
+
             // Place components
             var idToObject = new Dictionary<int, IGH_DocumentObject>();
 
@@ -87,8 +109,8 @@ namespace GhJSON.Grasshopper.PutOperations
                 if (obj.Attributes != null && component.Pivot != null)
                 {
                     obj.Attributes.Pivot = new PointF(
-                        (float)(component.Pivot.X + options.Offset.X),
-                        (float)(component.Pivot.Y + options.Offset.Y));
+                        (float)(component.Pivot.X + effectiveOffset.X),
+                        (float)(component.Pivot.Y + effectiveOffset.Y));
                 }
 
                 // Add to document (triggers AddedToDocument which may reset some properties)
@@ -281,6 +303,75 @@ namespace GhJSON.Grasshopper.PutOperations
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Calculates automatic offset to place new components below existing canvas content.
+        /// </summary>
+        /// <param name="components">The components to be placed.</param>
+        /// <param name="ghDoc">The Grasshopper document.</param>
+        /// <param name="spacing">Vertical spacing between existing content and new components.</param>
+        /// <returns>The calculated offset, or PointF.Empty if canvas is empty or no pivots exist.</returns>
+        private static PointF CalculateAutoOffset(
+            IReadOnlyList<GhJsonComponent> components,
+            GH_Document ghDoc,
+            float spacing)
+        {
+            // Find components that have pivots
+            var componentsWithPivots = components.Where(c => c.Pivot != null).ToList();
+            if (componentsWithPivots.Count == 0)
+            {
+#if DEBUG
+                Debug.WriteLine("[CanvasPlacer.CalculateAutoOffset] No components with pivots, skipping auto-offset");
+#endif
+                return PointF.Empty;
+            }
+
+            // Get all existing objects on the canvas
+            var existingObjects = ghDoc.ActiveObjects().ToList();
+            if (existingObjects.Count == 0)
+            {
+#if DEBUG
+                Debug.WriteLine("[CanvasPlacer.CalculateAutoOffset] Canvas is empty, no offset needed");
+#endif
+                return PointF.Empty;
+            }
+
+            // Find the lowest Y coordinate (bottom edge) of existing canvas content
+            float lowestY = float.MinValue;
+            foreach (var obj in existingObjects)
+            {
+                if (obj.Attributes != null)
+                {
+                    float bottomEdge = obj.Attributes.Pivot.Y + obj.Attributes.Bounds.Height;
+                    if (bottomEdge > lowestY)
+                    {
+                        lowestY = bottomEdge;
+                    }
+                }
+            }
+
+            // Add spacing buffer
+            lowestY += spacing;
+
+            // Find the topmost Y coordinate among new components
+            float minComponentY = float.MaxValue;
+            foreach (var component in componentsWithPivots)
+            {
+                if (component.Pivot!.Y < minComponentY)
+                {
+                    minComponentY = (float)component.Pivot.Y;
+                }
+            }
+
+            // Calculate offset to align topmost new component with lowestY
+            float offsetY = lowestY - minComponentY;
+
+#if DEBUG
+            Debug.WriteLine($"[CanvasPlacer.CalculateAutoOffset] Calculated offset: (0, {offsetY:F2}) - lowestY={lowestY:F2}, minComponentY={minComponentY:F2}, spacing={spacing}");
+#endif
+
+            return new PointF(0, offsetY);
         }
     }
 }

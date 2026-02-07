@@ -29,7 +29,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     {
         private const string ExtensionKey = "gh.button";
 
-        private static readonly Guid ButtonGuid = new Guid("8f9cfa8e-8593-4b15-8b39-5c5e8b07a6c8");
+        private static readonly Guid ButtonGuid = new Guid("a8b97322-2d53-47cd-905e-e3a78807825d");
 
         public int Priority => 100;
 

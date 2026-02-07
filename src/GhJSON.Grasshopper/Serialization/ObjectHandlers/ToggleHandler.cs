@@ -29,7 +29,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     {
         private const string ExtensionKey = "gh.toggle";
 
-        private static readonly Guid ToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3eba1d739dec");
+        private static readonly Guid ToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
 
         public int Priority => 100;
 
@@ -42,7 +42,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public bool CanHandle(GhJsonComponent component)
         {
-            return component.Name == "Toggle" ||
+            return component.Name == "Boolean Toggle" ||
+                component.Name == "Toggle" ||
                 component.ComponentGuid == ToggleGuid;
         }
 

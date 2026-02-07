@@ -159,6 +159,28 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     settings.IsUnitized = true;
                 }
             }
+
+            // IsPrincipal - use cached reflection for GH_Param<T>
+            var isPrincipalProperty = ReflectionCache.GetProperty(param.GetType(), "IsPrincipal");
+            if (isPrincipalProperty != null)
+            {
+                var isPrincipalValue = isPrincipalProperty.GetValue(param);
+                if (isPrincipalValue is bool isPrincipal && isPrincipal)
+                {
+                    settings.IsPrincipal = true;
+                }
+            }
+
+            // Expression - use cached reflection for GH_Param<T>
+            var expressionProperty = ReflectionCache.GetProperty(param.GetType(), "Expression");
+            if (expressionProperty != null)
+            {
+                var expressionValue = expressionProperty.GetValue(param);
+                if (expressionValue is string expression && !string.IsNullOrEmpty(expression))
+                {
+                    settings.Expression = expression;
+                }
+            }
         }
 
         private static void DeserializeModifiers(
@@ -243,6 +265,26 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 if (unitizedProperty != null && unitizedProperty.CanWrite)
                 {
                     unitizedProperty.SetValue(param, true);
+                }
+            }
+
+            // IsPrincipal - use cached reflection for GH_Param<T>
+            if (settings.IsPrincipal == true)
+            {
+                var isPrincipalProperty = ReflectionCache.GetProperty(param.GetType(), "IsPrincipal");
+                if (isPrincipalProperty != null && isPrincipalProperty.CanWrite)
+                {
+                    isPrincipalProperty.SetValue(param, true);
+                }
+            }
+
+            // Expression - use cached reflection for GH_Param<T>
+            if (!string.IsNullOrEmpty(settings.Expression))
+            {
+                var expressionProperty = ReflectionCache.GetProperty(param.GetType(), "Expression");
+                if (expressionProperty != null && expressionProperty.CanWrite)
+                {
+                    expressionProperty.SetValue(param, settings.Expression);
                 }
             }
         }

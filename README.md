@@ -108,7 +108,7 @@ See the [GhJSON Specification](https://architects-toolkit.github.io/ghjson-spec/
       "componentState": {
         "extensions": {
           "gh.numberslider": {
-            "value": "5<0,10>"
+            "value": "5<0~10>"
           }
         }
       }

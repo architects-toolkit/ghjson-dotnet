@@ -396,6 +396,16 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
                     if (!string.IsNullOrEmpty(serialized))
                     {
+                        // Skip empty text values (e.g., "text:" with no content)
+                        if (serialized.StartsWith("text:", StringComparison.OrdinalIgnoreCase) &&
+                            serialized.Length == "text:".Length)
+                        {
+#if DEBUG
+                            Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPING empty text value at {path}[{i}]");
+#endif
+                            continue;
+                        }
+
                         branchData[itemKey] = serialized;
                     }
                     else
@@ -405,7 +415,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 #if DEBUG
                         Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Serialization failed, using fallback: '{fallback}'");
 #endif
-                        branchData[itemKey] = fallback;
+                        // Only add fallback if it has actual content (not just "text:")
+                        if (fallback.Length > "text:".Length)
+                        {
+                            branchData[itemKey] = fallback;
+                        }
                     }
                 }
 

@@ -1,0 +1,39 @@
+name: 'Update Version'
+description: 'Update the version in Directory.Build.props'
+inputs:
+  new-version:
+    description: 'New version to set'
+    required: true
+  branch:
+    description: 'Branch name (for context)'
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: 'Current version from Directory.Build.props (before update)'
+    value: ${{ steps.get-version.outputs.version }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get version from Directory.Build.props
+      id: get-version
+      shell: bash
+      run: |
+        VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+        echo "Current version: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Update version in Directory.Build.props
+      id: update-version
+      shell: bash
+      run: |
+        if [[ -z "${{ inputs.new-version }}" ]]; then
+          echo "Error: new-version input is required"
+          exit 1
+        fi
+
+        echo "Updating version from ${{ steps.get-version.outputs.version }} to ${{ inputs.new-version }}"
+        sed -i "s/<Version>.*<\/Version>/<Version>${{ inputs.new-version }}<\/Version>/" Directory.Build.props
+        echo "Updated Directory.Build.props with new version: ${{ inputs.new-version }}"

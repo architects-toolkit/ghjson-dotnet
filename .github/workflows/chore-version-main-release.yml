@@ -1,0 +1,73 @@
+name: 🔄 Prepare Release for Main
+
+# Description: Automatically strips the date component from the version in Directory.Build.props
+# when a pull request targets the main branch. Updates badges and changelog accordingly.
+# Commits the changes back to the PR branch.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Directory.Build.props'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    name: 🔄 Prepare Release for Main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Get current version
+        id: get-version
+        uses: ./.github/actions/versioning/get-version
+
+      - name: Strip date from version
+        id: strip-date
+        shell: bash
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          echo "Original version: $VERSION"
+          if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([a-zA-Z0-9]+)\.[0-9]{6}$ ]]; then
+            BASE="${BASH_REMATCH[1]}"
+            PRE="${BASH_REMATCH[2]}"
+            NEW_VERSION="$BASE-$PRE"
+          else
+            echo "No date suffix to remove, version unchanged"
+            NEW_VERSION="$VERSION"
+          fi
+          echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version in Directory.Build.props
+        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version
+        uses: ./.github/actions/versioning/update-version
+        with:
+          new-version: ${{ steps.strip-date.outputs.new-version }}
+
+      - name: Update badges
+        id: update-badges
+        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version
+        uses: ./.github/actions/documentation/update-badges
+
+      - name: Create release section in changelog
+        id: update-changelog
+        uses: ./.github/actions/documentation/update-changelog
+        with:
+          action: create-release
+          version: ${{ steps.strip-date.outputs.new-version }}
+
+      - name: Commit and push changes
+        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version || steps.update-changelog.outputs.updated == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Directory.Build.props README.md CHANGELOG.md
+          git diff --cached --quiet || git commit -m "chore: prepare release ${{ steps.strip-date.outputs.new-version }} for main"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}

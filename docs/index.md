@@ -9,6 +9,7 @@ This folder contains documentation for the **ghjson-dotnet** project — the .NE
   - [Name Resolution](./Usage/name-resolution.md) — Fuzzy matching for component and parameter names
 - [Architecture](./ARCHITECTURE.md) — Project structure, API surface, extensibility, and design decisions
 - [NuGet Publishing](./NUGET-PUBLISHING.md) — Release workflow and NuGet package publishing
+- [Release Workflow](../.github/workflows/RELEASE_WORKFLOW.md) — CI/CD workflows, PR validations, and release process
 
 ## Packages
 

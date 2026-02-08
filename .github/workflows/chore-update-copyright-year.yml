@@ -1,0 +1,95 @@
+name: 🗓️ Update Copyright Year
+
+# Description: Automatically updates copyright year in license headers and Directory.Build.props.
+# Runs on January 1st at 00:00 UTC each year, or manually via workflow_dispatch.
+#
+# Actions performed:
+# 1. Updates all C# file license headers with current year via Update-LicenseHeaders.ps1
+# 2. Updates copyright year in Directory.Build.props via Update-CopyrightYear.ps1
+# 3. Creates a PR to dev with the changes
+#
+# Permissions:
+# - contents:write - Required to commit changes
+# - pull-requests:write - Required to create PRs
+
+on:
+  schedule:
+    # Run at 00:00 UTC on January 1st every year
+    - cron: '0 0 1 1 *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-copyright-year:
+    name: 🗓️ Update Copyright Year
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Get current year
+        id: year
+        shell: pwsh
+        run: |
+          $year = (Get-Date).Year
+          echo "year=$year" >> $env:GITHUB_OUTPUT
+          Write-Host "Current year: $year"
+
+      - name: Update license headers in C# files
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File .\tools\Update-LicenseHeaders.ps1
+
+      - name: Update copyright year in Directory.Build.props
+        shell: pwsh
+        run: |
+          pwsh -ExecutionPolicy Bypass -File .\tools\Update-CopyrightYear.ps1
+
+      - name: Check for changes
+        id: check-changes
+        shell: pwsh
+        run: |
+          $changes = git status --porcelain
+          if ($changes) {
+            echo "has-changes=true" >> $env:GITHUB_OUTPUT
+            Write-Host "Changes detected:"
+            Write-Host $changes
+          } else {
+            echo "has-changes=false" >> $env:GITHUB_OUTPUT
+            Write-Host "No changes detected - copyright year is already up to date"
+          }
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.has-changes == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update copyright year to ${{ steps.year.outputs.year }}"
+          title: "chore: update copyright year to ${{ steps.year.outputs.year }}"
+          body: |
+            This PR updates the copyright year across the repository to **${{ steps.year.outputs.year }}**.
+
+            ## Changes
+            - ✅ Updated license headers in all C# source files
+            - ✅ Updated copyright year in `Directory.Build.props`
+
+            This is an automated PR created by the **Update Copyright Year** workflow.
+
+            **Trigger:** Scheduled run (January 1st) or manual workflow dispatch
+          branch: "chore/update-copyright-year-${{ steps.year.outputs.year }}"
+          base: dev
+          delete-branch: true
+          labels: |
+            chore
+            automated
+
+      - name: No changes needed
+        if: steps.check-changes.outputs.has-changes == 'false'
+        run: |
+          Write-Host "✅ Copyright year is already up to date. No PR created." -ForegroundColor Green
+        shell: pwsh

@@ -1,8 +1,9 @@
 # GhJSON.NET
 
-[![Package Version](https://img.shields.io/badge/version-1.1.0-blue)](https://www.nuget.org/packages/GhJSON.Core/1.1.0)
-[![Schema Version](https://img.shields.io/badge/schema-v1.0-blue)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![Package Version](https://img.shields.io/badge/version-1.0.0-brightgreen?style=for-the-badge)](https://www.nuget.org/packages/GhJSON.Core)
+[![Status](https://img.shields.io/badge/status-Stable-brightgreen?style=for-the-badge)](https://github.com/architects-toolkit/ghjson-dotnet)
+[![Schema Version](https://img.shields.io/badge/schema-v1.0-blue?style=for-the-badge)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
+[![License](https://img.shields.io/badge/license-Apache--2.0-white?style=for-the-badge)](LICENSE)
 
 .NET implementation of the [GhJSON specification](https://architects-toolkit.github.io/ghjson-spec/) for Grasshopper definition serialization.
 

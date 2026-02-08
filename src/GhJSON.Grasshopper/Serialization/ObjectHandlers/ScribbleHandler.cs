@@ -29,8 +29,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     /// <summary>
     /// Handler for Scribble component state.
-    /// Serializes text content, corners (relative to pivot), and font settings.
-    /// Corners are stored as relative positions to allow proper offset handling during placement.
+    /// Serializes text content, rotation angle, corners (relative to pivot), and font settings.
+    /// Deserialization mirrors native GH_Scribble.Read() via reflection to preserve rotation.
     /// </summary>
     internal sealed class ScribbleHandler : IObjectHandler, IPostPlacementHandler
     {
@@ -83,14 +83,21 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                         FormatPoint(b.X - pivot.X, b.Y - pivot.Y),
                         FormatPoint(d.X - pivot.X, d.Y - pivot.Y)
                     };
+
+                    // Store rotation angle (degrees) from A→B direction for clarity.
+                    var dx = (double)(b.X - a.X);
+                    var dy = (double)(b.Y - a.Y);
+                    var angleDeg = Math.Atan2(dy, dx) * (180.0 / Math.PI);
+                    scribbleData["rotation"] = Math.Round(angleDeg, 6);
                 }
 
-                // Serialize font settings
+                // Serialize font settings as separate fields
                 if (scribble.Font != null)
                 {
                     scribbleData["fontFamily"] = scribble.Font.FontFamily.Name;
                     scribbleData["fontSize"] = scribble.Font.Size;
-                    scribbleData["fontStyle"] = scribble.Font.Style.ToString();
+                    scribbleData["bold"] = scribble.Font.Bold;
+                    scribbleData["italic"] = scribble.Font.Italic;
                 }
 
                 component.ComponentState.Extensions[ExtensionKey] = scribbleData;
@@ -100,17 +107,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Deserialize(GhJsonComponent component, IGH_DocumentObject obj)
         {
-            if (obj is GH_Scribble scribble &&
-                component.ComponentState?.Extensions != null &&
-                component.ComponentState.Extensions.TryGetValue(ExtensionKey, out var extData))
-            {
-                if (extData is Dictionary<string, object> scribbleData)
-                {
-                    // Apply everything in PostPlacement after the pivot is finalized with offsets.
-                    // (Setting Text/Font triggers internal layout recomputation that depends on
-                    // the current corner basis, so ordering matters.)
-                }
-            }
+            // All work is deferred to PostPlacement so that the pivot is finalized first.
         }
 
         /// <inheritdoc/>
@@ -122,73 +119,199 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             {
                 if (extData is Dictionary<string, object> scribbleData)
                 {
-                    // Important: establish corner basis (rotation) first, then apply text/font.
-                    ApplyCornerBasis(scribble, scribbleData);
-                    ApplyTextAndFont(scribble, scribbleData);
+                    // Mirror native GH_Scribble.Read() via reflection:
+                    // 1. Set m_corners field directly (with rotation)
+                    // 2. Set m_text field directly (bypass property setter)
+                    // 3. Set m_font field directly (bypass property setter)
+                    // 4. Invoke RecomputeLayout() once (preserves rotation from corners)
+                    // This avoids premature RecomputeLayout calls from property setters
+                    // that would reset corners to axis-aligned.
+                    ApplyViaReflection(scribble, scribbleData);
                 }
             }
         }
 
-        private static void ApplyTextAndFont(GH_Scribble scribble, Dictionary<string, object> data)
+        /// <summary>
+        /// Applies text, font, and corners via reflection to mirror native GH_Scribble.Read().
+        /// This ensures rotation is preserved by setting all fields before any RecomputeLayout call.
+        /// </summary>
+        private static void ApplyViaReflection(GH_Scribble scribble, Dictionary<string, object> data)
+        {
+            try
+            {
+                var scribbleType = typeof(GH_Scribble);
+
+                // 1. Build rotated corners from stored offsets + current pivot
+                var corners = BuildAbsoluteCorners(scribble, data);
+                if (corners != null)
+                {
+                    var cornersField = ReflectionCache.GetField(scribbleType, "m_corners");
+                    if (cornersField != null)
+                    {
+                        cornersField.SetValue(scribble, corners);
+#if DEBUG
+                        Debug.WriteLine($"[ScribbleHandler] Set m_corners via reflection: A=({corners[0].X:F1},{corners[0].Y:F1}), B=({corners[1].X:F1},{corners[1].Y:F1})");
+#endif
+                    }
+                }
+
+                // 2. Set m_text directly (bypasses Text setter which triggers RecomputeLayout)
+                if (data.TryGetValue("text", out var textVal))
+                {
+                    var textField = ReflectionCache.GetField(scribbleType, "m_text");
+                    if (textField != null)
+                    {
+                        textField.SetValue(scribble, textVal?.ToString() ?? string.Empty);
+                    }
+                }
+
+                // 3. Set m_font directly (bypasses Font setter which triggers RecomputeLayout)
+                var font = BuildFont(data);
+                if (font != null)
+                {
+                    var fontField = ReflectionCache.GetField(scribbleType, "m_font");
+                    if (fontField != null)
+                    {
+                        fontField.SetValue(scribble, font);
+                    }
+                }
+
+                // 4. Invoke RecomputeLayout() once — preserves rotation direction from corners,
+                //    recalculates corner distances to match the actual text size.
+                var recomputeMethod = ReflectionCache.GetMethod(scribbleType, "RecomputeLayout");
+                if (recomputeMethod != null)
+                {
+                    recomputeMethod.Invoke(scribble, null);
+#if DEBUG
+                    Debug.WriteLine("[ScribbleHandler] Invoked RecomputeLayout via reflection");
+#endif
+                }
+
+                // 5. Expire layout so rendering picks up the changes
+                scribble.Attributes?.ExpireLayout();
+            }
+            catch (Exception ex)
+            {
+#if DEBUG
+                Debug.WriteLine($"[ScribbleHandler] Error in ApplyViaReflection: {ex.Message}");
+#endif
+                // Fallback: apply text and font via property setters (rotation may be lost)
+                ApplyTextAndFontFallback(scribble, data);
+            }
+        }
+
+        /// <summary>
+        /// Builds absolute corner positions from stored offsets relative to the current pivot.
+        /// Returns a 4-element PointF array [A, B, C, D], or null if corners are not available.
+        /// </summary>
+        private static PointF[]? BuildAbsoluteCorners(GH_Scribble scribble, Dictionary<string, object> data)
+        {
+            if (!data.TryGetValue("corners", out var cornersVal))
+            {
+                return null;
+            }
+
+            // Support both List<object> (from JSON round-trip) and List<string> (in-memory)
+            List<string>? cornerStrings = null;
+            if (cornersVal is List<object> objList && objList.Count >= 3)
+            {
+                cornerStrings = new List<string>(objList.Count);
+                foreach (var item in objList)
+                {
+                    cornerStrings.Add(item?.ToString() ?? string.Empty);
+                }
+            }
+            else if (cornersVal is List<string> strList && strList.Count >= 3)
+            {
+                cornerStrings = strList;
+            }
+
+            if (cornerStrings == null || cornerStrings.Count < 3)
+            {
+                return null;
+            }
+
+            var pivot = scribble.Attributes?.Pivot ?? PointF.Empty;
+
+            // 3 stored corners [A, B, D] as offsets relative to pivot.
+            var a = ParsePoint(cornerStrings[0]);
+            var b = ParsePoint(cornerStrings[1]);
+            var d = ParsePoint(cornerStrings[2]);
+
+            var pA = new PointF(pivot.X + a.X, pivot.Y + a.Y);
+            var pB = new PointF(pivot.X + b.X, pivot.Y + b.Y);
+            var pD = new PointF(pivot.X + d.X, pivot.Y + d.Y);
+
+            // Corner C is derived via parallelogram rule: C = B + D - A
+            var pC = new PointF(pB.X + pD.X - pA.X, pB.Y + pD.Y - pA.Y);
+
+            return new PointF[] { pA, pB, pC, pD };
+        }
+
+        /// <summary>
+        /// Builds a Font from serialized data, supporting both new (bold/italic) and legacy (fontStyle) formats.
+        /// </summary>
+        private static Font? BuildFont(Dictionary<string, object> data)
+        {
+            bool hasFamily = data.TryGetValue("fontFamily", out var familyVal);
+            bool hasSize = data.TryGetValue("fontSize", out var sizeValObj);
+
+            if (!hasFamily && !hasSize)
+            {
+                return null;
+            }
+
+            try
+            {
+                var family = familyVal?.ToString() ?? "Arial";
+                var size = hasSize && float.TryParse(sizeValObj?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var fs) ? fs : 12f;
+
+                // Prefer separate bold/italic fields; fall back to combined fontStyle
+                FontStyle style = FontStyle.Regular;
+                if (data.TryGetValue("bold", out var boldVal) || data.TryGetValue("italic", out var italicVal))
+                {
+                    if (boldVal is bool bBold && bBold)
+                    {
+                        style |= FontStyle.Bold;
+                    }
+
+                    if (data.TryGetValue("italic", out var itVal2) && itVal2 is bool bItalic && bItalic)
+                    {
+                        style |= FontStyle.Italic;
+                    }
+                }
+                else if (data.TryGetValue("fontStyle", out var styleValObj) &&
+                         Enum.TryParse<FontStyle>(styleValObj?.ToString(), out var parsed))
+                {
+                    style = parsed;
+                }
+
+                return new Font(family, size, style);
+            }
+            catch (Exception ex)
+            {
+#if DEBUG
+                Debug.WriteLine($"[ScribbleHandler] Error building font: {ex.Message}");
+#endif
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Fallback: apply text and font via property setters if reflection fails.
+        /// Rotation may be lost, but at least text and font are correct.
+        /// </summary>
+        private static void ApplyTextAndFontFallback(GH_Scribble scribble, Dictionary<string, object> data)
         {
             if (data.TryGetValue("text", out var textVal))
             {
                 scribble.Text = textVal?.ToString() ?? string.Empty;
             }
 
-            // Apply font
-            bool hasFamily = data.TryGetValue("fontFamily", out var familyVal);
-            bool hasSize = data.TryGetValue("fontSize", out var sizeValObj);
-            bool hasStyle = data.TryGetValue("fontStyle", out var styleValObj);
-
-            if (hasFamily || hasSize || hasStyle)
+            var font = BuildFont(data);
+            if (font != null)
             {
-                try
-                {
-                    var family = familyVal?.ToString() ?? "Arial";
-                    var size = hasSize && float.TryParse(sizeValObj?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var fs) ? fs : 12f;
-                    var style = hasStyle && Enum.TryParse<FontStyle>(styleValObj?.ToString(), out var parsed) ? parsed : FontStyle.Regular;
-
-                    scribble.Font = new Font(family, size, style);
-                }
-                catch (Exception ex)
-                {
-#if DEBUG
-                    Debug.WriteLine($"[ScribbleHandler] Error applying font: {ex.Message}");
-#endif
-                }
-            }
-        }
-
-        private static void ApplyCornerBasis(GH_Scribble scribble, Dictionary<string, object> data)
-        {
-            try
-            {
-                if (!data.TryGetValue("corners", out var cornersVal) ||
-                    cornersVal is not List<object> cornersList ||
-                    cornersList.Count < 3)
-                {
-                    return;
-                }
-
-                var pivot = scribble.Attributes?.Pivot ?? PointF.Empty;
-                var type = scribble.GetType();
-
-                // 3 corners [A, B, D] relative to pivot.
-                // Corner C is derived as B + D - A (parallelogram rule).
-                var a = ParsePoint(cornersList[0]);
-                var b = ParsePoint(cornersList[1]);
-                var d = ParsePoint(cornersList[2]);
-
-                SetCorner(type, scribble, "Corner1", new PointF(pivot.X + a.X, pivot.Y + a.Y));
-                SetCorner(type, scribble, "Corner2", new PointF(pivot.X + b.X, pivot.Y + b.Y));
-                SetCorner(type, scribble, "Corner4", new PointF(pivot.X + d.X, pivot.Y + d.Y));
-            }
-            catch (Exception ex)
-            {
-#if DEBUG
-                Debug.WriteLine($"[ScribbleHandler] Error applying corners: {ex.Message}");
-#endif
+                scribble.Font = font;
             }
         }
 
@@ -215,18 +338,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                    float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
                 ? new PointF(x, y)
                 : PointF.Empty;
-        }
-
-        private static void SetCorner(Type scribbleType, GH_Scribble scribble, string cornerName, PointF value)
-        {
-            var prop = ReflectionCache.GetProperty(scribbleType, cornerName);
-            if (prop != null && prop.CanWrite)
-            {
-                prop.SetValue(scribble, value);
-#if DEBUG
-                Debug.WriteLine($"[ScribbleHandler] Set {cornerName} to ({value.X}, {value.Y})");
-#endif
-            }
         }
     }
 }

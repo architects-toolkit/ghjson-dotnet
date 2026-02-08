@@ -124,6 +124,51 @@ namespace GhJSON.Grasshopper.Shared
         }
 
         /// <summary>
+        /// Cache for FieldInfo objects keyed by type and field name.
+        /// </summary>
+        private static readonly ConcurrentDictionary<(Type Type, string FieldName), FieldInfo?> FieldCache = new();
+
+        /// <summary>
+        /// Binding flags for field lookup: public and non-public instance fields, including inherited.
+        /// </summary>
+        private const BindingFlags FieldBindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy;
+
+        /// <summary>
+        /// Gets a cached FieldInfo for the specified type and field name.
+        /// Uses a static dictionary to cache reflection results and avoid repeated lookups.
+        /// Searches public and non-public instance fields, including inherited fields.
+        /// </summary>
+        /// <param name="type">The type to get the field from.</param>
+        /// <param name="fieldName">The name of the field.</param>
+        /// <returns>The FieldInfo if found; otherwise, null.</returns>
+        public static FieldInfo? GetField(Type type, string fieldName)
+        {
+            var key = (type, fieldName);
+
+            if (FieldCache.TryGetValue(key, out var cachedField))
+            {
+                return cachedField;
+            }
+
+            // First try with full binding flags
+            var field = type.GetField(fieldName, FieldBindingFlags);
+
+            // If not found, also check base types explicitly
+            if (field == null)
+            {
+                var currentType = type.BaseType;
+                while (currentType != null && field == null)
+                {
+                    field = currentType.GetField(fieldName, FieldBindingFlags);
+                    currentType = currentType.BaseType;
+                }
+            }
+
+            FieldCache[key] = field;
+            return field;
+        }
+
+        /// <summary>
         /// Gets all properties for the specified type, cached for performance.
         /// </summary>
         /// <param name="type">The type to get properties from.</param>

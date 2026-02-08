@@ -17,6 +17,8 @@
 
 using System;
 using System.Diagnostics;
+using System.Linq;
+using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
 using Grasshopper;
@@ -59,6 +61,15 @@ namespace GhJSON.Grasshopper.Deserialization
                 Debug.WriteLine($"[ComponentInstantiator.Create] Trying to create by name: {component.Name}");
 #endif
                 obj = CreateByName(component.Name, component.Library);
+
+                // Fallback to fuzzy name resolution (alias + approximate matching)
+                if (obj == null)
+                {
+#if DEBUG
+                    Debug.WriteLine($"[ComponentInstantiator.Create] Exact name match failed, trying fuzzy resolution: {component.Name}");
+#endif
+                    obj = CreateByFuzzyName(component.Name, component.Library);
+                }
             }
 
             if (obj == null)
@@ -163,9 +174,50 @@ namespace GhJSON.Grasshopper.Deserialization
                         return true;
                     }
                 }
+
+                // Try fuzzy resolution as fallback
+                var resolvedName = ResolveComponentName(component.Name, component.Library);
+                if (resolvedName != null)
+                {
+                    return true;
+                }
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Attempts to create a component using fuzzy name resolution.
+        /// First checks the alias dictionary, then fuzzy-matches against all registered components.
+        /// </summary>
+        private static IGH_DocumentObject? CreateByFuzzyName(string name, string? library)
+        {
+            var resolvedName = ResolveComponentName(name, library);
+            if (resolvedName == null)
+            {
+                return null;
+            }
+
+#if DEBUG
+            Debug.WriteLine($"[ComponentInstantiator.CreateByFuzzyName] Resolved '{name}' → '{resolvedName}'");
+#endif
+
+            return CreateByName(resolvedName, library);
+        }
+
+        /// <summary>
+        /// Resolves a component name using alias lookup and fuzzy matching against
+        /// all components registered in the Grasshopper component server.
+        /// </summary>
+        private static string? ResolveComponentName(string name, string? library)
+        {
+            var knownNames = Instances.ComponentServer.ObjectProxies
+                .Where(p => string.IsNullOrEmpty(library) ||
+                            p.Desc.Category.Equals(library, StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Desc.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            return ComponentNameResolver.Resolve(name, knownNames);
         }
     }
 }

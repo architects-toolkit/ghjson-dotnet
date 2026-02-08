@@ -40,6 +40,7 @@ ghjson-dotnet/
 │   │   ├── Validation/                 # Schema validation
 │   │   ├── FixOperations/              # Schema fix operations
 │   │   ├── MergeOperations/            # Schema merge operations
+│   │   ├── NameResolution/             # Fuzzy name matching for components and parameters
 │   │   ├── TidyUpOperations/           # Schema tidy up operations
 │   │   └── GhJson.cs                   # Main façade entry point
 │   │
@@ -144,6 +145,12 @@ namespace GhJSON.Core
         // Schema Migration
         public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null);
         public static bool NeedsMigration(GhJsonDocument doc, string? targetVersion = null);
+
+        // Name Resolution
+        public static string? ResolveComponentAlias(string input);
+        public static string? ResolveComponentName(string input, IEnumerable<string> knownComponentNames, int maxLevenshteinDistance = 3);
+        public static string? ResolveParameterAlias(string input);
+        public static string? ResolveParameterName(string input, IEnumerable<string> knownParameterNames, int maxLevenshteinDistance = 2);
     }
 }
 ```
@@ -489,10 +496,11 @@ The object serialization is designed to extend compatibility with new components
 ### Deserialization process
 
 1. The Deserialize method receives a list of GhJsonComponent.
-2. For each component, the ObjectHandlerOrchestrator checks all compatible handlers and applies all them in the priority order.
-3. For property value deserialization, the ObjectHandlerOrchestrator checks for compatible DataTypeSerializers. This is easier than serialization, because all DataTypes use a prefix to identify the data type.
-4. Subsequent handlers will never set again properties that were already set by previous handlers. This protection is ensured at ObjectHandlerOrchestrator level, not at IObjectHandler level.
-5. For special components or specific data types, custom handlers can set additional properties to the IGH_DocumentObject from the componentState property of the component schema.
+2. For each component, `ComponentInstantiator` tries to create the object by GUID first, then by exact name, then by fuzzy name resolution (alias dictionary + approximate matching via `ComponentNameResolver`).
+3. For each component, the ObjectHandlerOrchestrator checks all compatible handlers and applies all them in the priority order.
+4. For property value deserialization, the ObjectHandlerOrchestrator checks for compatible DataTypeSerializers. This is easier than serialization, because all DataTypes use a prefix to identify the data type.
+5. Subsequent handlers will never set again properties that were already set by previous handlers. This protection is ensured at ObjectHandlerOrchestrator level, not at IObjectHandler level.
+6. For special components or specific data types, custom handlers can set additional properties to the IGH_DocumentObject from the componentState property of the component schema.
 
 ```csharp
 public interface IObjectHandler

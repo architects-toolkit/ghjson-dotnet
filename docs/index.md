@@ -6,6 +6,7 @@ This folder contains documentation for the **ghjson-dotnet** project — the .NE
 
 - [Usage Guide](./Usage/index.md) — Quick start, code examples, and common patterns
   - [Metadata](./Usage/metadata.md) — Document metadata configuration and auto-population
+  - [Name Resolution](./Usage/name-resolution.md) — Fuzzy matching for component and parameter names
 - [Architecture](./ARCHITECTURE.md) — Project structure, API surface, extensibility, and design decisions
 - [NuGet Publishing](./NUGET-PUBLISHING.md) — Release workflow and NuGet package publishing
 

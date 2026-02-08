@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.Serialization;
@@ -233,8 +234,25 @@ namespace GhJSON.Grasshopper.PutOperations
             // Fallback to name
             if (!string.IsNullOrEmpty(endpoint.ParamName))
             {
-                return parameters.FirstOrDefault(p =>
+                // Exact match first
+                var exactMatch = parameters.FirstOrDefault(p =>
                     p.Name.Equals(endpoint.ParamName, StringComparison.OrdinalIgnoreCase));
+                if (exactMatch != null)
+                {
+                    return exactMatch;
+                }
+
+                // Fuzzy name resolution fallback
+                var knownNames = parameters.Select(p => p.Name);
+                var resolvedName = ParameterNameResolver.Resolve(endpoint.ParamName, knownNames);
+                if (resolvedName != null)
+                {
+#if DEBUG
+                    Debug.WriteLine($"[CanvasPlacer.GetParameter] Fuzzy resolved param '{endpoint.ParamName}' \u2192 '{resolvedName}'");
+#endif
+                    return parameters.FirstOrDefault(p =>
+                        p.Name.Equals(resolvedName, StringComparison.OrdinalIgnoreCase));
+                }
             }
 
             return null;

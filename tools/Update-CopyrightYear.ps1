@@ -19,22 +19,32 @@ if (-not (Test-Path $propsPath)) {
 # Read the file
 $content = Get-Content $propsPath -Raw
 
-# Pattern to match: Copyright (c) 2024-YYYY Marc Roca Musach
-# We want to update the end year to current year
-$pattern = '(<Copyright>Copyright \(c\) \d{4}-)(\d{4})( Marc Roca Musach</Copyright>)'
+$initialYear = 2026
+
+# Pattern to match: Copyright (c) YYYY or Copyright (c) YYYY-YYYY
+$pattern = '(<Copyright>Copyright \(c\) )(\d{4})(?:-(\d{4}))?( Marc Roca Musach</Copyright>)'
 
 if ($content -match $pattern) {
-    $oldYear = $Matches[2]
+    $existingInitialYear = $Matches[2]
+    $existingEndYear = if ($Matches[3]) { $Matches[3] } else { $existingInitialYear }
     
-    if ($oldYear -eq $currentYear) {
-        Write-Host "Copyright year is already up to date: $currentYear" -ForegroundColor Green
+    # Determine the new format
+    if ($currentYear -eq $initialYear) {
+        $newYearText = "$initialYear"
+    }
+    else {
+        $newYearText = "$initialYear-$currentYear"
+    }
+    
+    if ($existingEndYear -eq $currentYear -and $existingInitialYear -eq $initialYear) {
+        Write-Host "Copyright year is already up to date: $newYearText" -ForegroundColor Green
         
         if ($Check) {
             exit 0
         }
     }
     else {
-        Write-Host "Updating copyright year from $oldYear to $currentYear"
+        Write-Host "Updating copyright year from $existingInitialYear-$existingEndYear to $newYearText"
         
         if ($Check) {
             Write-Host "Copyright year update required." -ForegroundColor Yellow
@@ -42,12 +52,12 @@ if ($content -match $pattern) {
         }
         
         # Update the year
-        $newContent = $content -replace $pattern, "`$1$currentYear`$3"
+        $newContent = $content -replace $pattern, "`$1$newYearText`$4"
         
         # Write back to file
         Set-Content $propsPath $newContent -NoNewline
         
-        Write-Host "Successfully updated copyright year to $currentYear" -ForegroundColor Green
+        Write-Host "Successfully updated copyright year to $newYearText" -ForegroundColor Green
     }
 }
 else {

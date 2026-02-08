@@ -11,7 +11,7 @@ Set-Location (Resolve-Path $Root)
 $newHeader = @'
 /*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-{current_year} Marc Roca Musach
+ * Copyright (C) {year} Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,16 @@ $newHeader = @'
 '@
 
 $currentYear = (Get-Date).Year
-$newHeader = $newHeader.Replace('{current_year}', $currentYear)
+$initialYear = 2026
+
+if ($currentYear -eq $initialYear) {
+    $yearRange = "$initialYear"
+}
+else {
+    $yearRange = "$initialYear-$currentYear"
+}
+
+$newHeader = $newHeader.Replace('{year}', $yearRange)
  
 function Remove-ExistingHeader {
     param(

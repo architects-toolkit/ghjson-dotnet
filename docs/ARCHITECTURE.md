@@ -392,10 +392,17 @@ Extensions allow component handlers to add specialized properties without modify
 
 | Extension Key | Description |
 |---------------|-------------|
+| `gh.numberslider` | Slider value, rounding mode |
 | `gh.panel` | Panel text, font, alignment, bounds, multiline, wrap settings |
 | `gh.scribble` | Scribble text, font, corners |
 | `gh.valuelist` | Value list items, list mode, selected indices |
-| `gh.numberslider` | Slider value, rounding mode |
+| `gh.button` | Button state |
+| `gh.toggle` | Toggle state |
+| `gh.colourswatch` | Colour swatch value |
+| `gh.csharp` | C# Script code, marshalling options |
+| `gh.python` | Python 3 Script code, marshalling options |
+| `gh.ironpython` | IronPython Script code, marshalling options |
+| `gh.ghpython` | Legacy GhPython script code |
 | `gh.vbscript` | VB Script code sections (imports, script, additional) |
 
 **Example with extensions:**
@@ -535,8 +542,17 @@ ObjectHandlerRegistry.Register(new IOModifiersHandler(), priority: 0);
 ObjectHandlerRegistry.Register(new InternalizedDataHandler(), priority: 0);
 
 // Extension objects (their data is in the extensions property in componentState)
-ObjectHandlerRegistry.Register(new NumberSliderHandler(), priority: 100); // Will serialize and deserialize number slider value, interval, and rounding
-ObjectHandlerRegistry.Register(new PanelHandler(), priority: 100); // Will serialize and deserialize panel text, font, color, alignment, etc.
-ObjectHandlerRegistry.Register(new ScribbleHandler(), priority: 100); // Will serialize and deserialize scribble data, size, etc.
-ObjectHandlerRegistry.Register(new ValueListHandler(), priority: 100); // Will serialize and deserialize value list options, and selected options
+ObjectHandlerRegistry.Register(new NumberSliderHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new PanelHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ScribbleHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ValueListHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ButtonHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ToggleHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ColorSwatchHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ScriptIOHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new CSharpScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new PythonScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new IronPythonScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new VBScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new GhPythonScriptHandler(), priority: 100);
 ```

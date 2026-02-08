@@ -91,6 +91,85 @@ var doc = GhJson.CreateDocumentBuilder()
     .Build();
 ```
 
+## Supported Features
+
+### Core Operations (GhJSON.Core)
+
+- **Read/Write** — Parse GhJSON from string, file, or stream; serialize back to JSON or file
+- **Document Builder** — Fluent API for programmatic document construction
+- **Validation** — Schema conformance, structural integrity (unique IDs, connection references, group membership)
+- **Fix** — Auto-repair metadata, assign missing IDs, regenerate instance GUIDs
+- **Merge** — Combine two GhJSON documents with configurable conflict resolution
+- **Schema Migration** — Migrate documents between schema versions
+- **Name Resolution** — Fuzzy matching for component and parameter names (alias dictionaries + Levenshtein distance)
+
+### Grasshopper Integration (GhJSON.Grasshopper)
+
+- **Serialize** — Read objects from the Grasshopper canvas into GhJSON documents
+- **Deserialize** — Instantiate Grasshopper objects from GhJSON (without placing on canvas)
+- **Get** — Query the active canvas with filters (selection, GUIDs, viewport)
+- **Put** — Place GhJSON documents on the canvas with positioning and connection wiring
+- **Delete** — Remove objects from the canvas by GUID with batch undo support
+- **Query** — Fluent `CanvasSelector` API with viewport, GUID, type, category, and attribute filters
+- **Grasshopper Validation** — Component existence checks, parameter matching, type compatibility
+
+### Supported Data Types
+
+All data types use a `prefix:value` string format for explicit type identification. The following serializers are registered by default:
+
+| Type | Prefix | Format | Example |
+|------|--------|--------|---------|
+| Text | `text` | `text:value` | `text:Hello World` |
+| Number | `number` | `number:value` | `number:3.14159` |
+| Integer | `integer` | `integer:value` | `integer:42` |
+| Boolean | `boolean` | `boolean:value` | `boolean:true` |
+| Color | `argb` | `argb:A,R,G,B` | `argb:255,128,64,255` |
+| Point3d | `pointXYZ` | `pointXYZ:x,y,z` | `pointXYZ:10.5,20.0,30.5` |
+| Vector3d | `vectorXYZ` | `vectorXYZ:x,y,z` | `vectorXYZ:1.0,0.0,0.0` |
+| Line | `line2p` | `line2p:x1,y1,z1;x2,y2,z2` | `line2p:0,0,0;10,10,10` |
+| Plane | `planeOXY` | `planeOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz` | `planeOXY:0,0,0;1,0,0;0,1,0` |
+| Circle | `circleCNRS` | `circleCNRS:cx,cy,cz;nx,ny,nz;r;sx,sy,sz` | `circleCNRS:0,0,0;0,0,1;5.0;5,0,0` |
+| Arc | `arc3P` | `arc3P:x1,y1,z1;x2,y2,z2;x3,y3,z3` | `arc3P:0,0,0;5,5,0;10,0,0` |
+| Box | `boxOXY` | `boxOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz;x0,x1;y0,y1;z0,z1` | `boxOXY:0,0,0;1,0,0;0,1,0;-5,5;-5,5;0,10` |
+| Rectangle | `rectangleCXY` | `rectangleCXY:cx,cy,cz;xx,xy,xz;yx,yy,yz;w,h` | `rectangleCXY:0,0,0;1,0,0;0,1,0;10,5` |
+| Interval | `interval` | `interval:min<max` | `interval:0.0<10.0` |
+| Bounds | `bounds` | `bounds:WxH` | `bounds:100x200` |
+
+Custom data type serializers can be registered via `DataTypeRegistry.Register()`.
+
+### Supported Component Handlers
+
+Object handlers serialize and deserialize component-specific properties via the `componentState.extensions` mechanism:
+
+| Handler | Extension Key | Description |
+|---------|---------------|-------------|
+| Number Slider | `gh.numberslider` | Slider value and rounding mode |
+| Panel | `gh.panel` | Text, font, alignment, bounds, multiline, wrap settings |
+| Scribble | `gh.scribble` | Scribble text, font, corners |
+| Value List | `gh.valuelist` | List items, list mode, selected indices |
+| Button | `gh.button` | Button state |
+| Toggle | `gh.toggle` | Toggle state |
+| Colour Swatch | `gh.colourswatch` | Colour swatch value |
+| C# Script | `gh.csharp` | Script code, marshalling options |
+| Python 3 Script | `gh.python` | Script code, marshalling options |
+| IronPython Script | `gh.ironpython` | Script code, marshalling options |
+| GhPython Script | `gh.ghpython` | Legacy GhPython script code |
+| VB Script | `gh.vbscript` | VB script code sections (imports, script, additional) |
+
+Core handlers (applied to all objects):
+
+- **IdentificationHandler** — Component name, GUID, instance GUID
+- **PivotHandler** — Canvas position
+- **SelectedPropertyHandler** — Selection state
+- **LockedPropertyHandler** — Lock (disabled) state
+- **HiddenPropertyHandler** — Preview visibility state
+- **RuntimeMessagesHandler** — Error, warning, remark messages
+- **IOIdentificationHandler** — Input/output parameter identification
+- **IOModifiersHandler** — Data mapping, expressions, reverse, simplify, invert, reparameterize
+- **InternalizedDataHandler** — Persistent/internalized parameter data
+
+Custom object handlers can be registered via `ObjectHandlerRegistry.Register()`.
+
 ## GhJSON Format
 
 See the [GhJSON Specification](https://architects-toolkit.github.io/ghjson-spec/) or the [ghjson-spec repo](https://github.com/architects-toolkit/ghjson-spec) for the complete format definition.

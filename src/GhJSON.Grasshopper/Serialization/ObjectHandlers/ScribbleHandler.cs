@@ -249,7 +249,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         }
 
         /// <summary>
-        /// Builds a Font from serialized data, supporting both new (bold/italic) and legacy (fontStyle) formats.
+        /// Builds a Font from serialized bold/italic fields.
         /// </summary>
         private static Font? BuildFont(Dictionary<string, object> data)
         {
@@ -266,24 +266,16 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 var family = familyVal?.ToString() ?? "Arial";
                 var size = hasSize && float.TryParse(sizeValObj?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var fs) ? fs : 12f;
 
-                // Prefer separate bold/italic fields; fall back to combined fontStyle
+                // Build style from separate bold/italic fields
                 FontStyle style = FontStyle.Regular;
-                if (data.TryGetValue("bold", out var boldVal) || data.TryGetValue("italic", out var italicVal))
+                if (data.TryGetValue("bold", out var boldVal) && boldVal is bool bBold && bBold)
                 {
-                    if (boldVal is bool bBold && bBold)
-                    {
-                        style |= FontStyle.Bold;
-                    }
-
-                    if (data.TryGetValue("italic", out var itVal2) && itVal2 is bool bItalic && bItalic)
-                    {
-                        style |= FontStyle.Italic;
-                    }
+                    style |= FontStyle.Bold;
                 }
-                else if (data.TryGetValue("fontStyle", out var styleValObj) &&
-                         Enum.TryParse<FontStyle>(styleValObj?.ToString(), out var parsed))
+
+                if (data.TryGetValue("italic", out var italicVal) && italicVal is bool bItalic && bItalic)
                 {
-                    style = parsed;
+                    style |= FontStyle.Italic;
                 }
 
                 return new Font(family, size, style);

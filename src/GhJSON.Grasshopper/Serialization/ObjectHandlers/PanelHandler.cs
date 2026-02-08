@@ -220,7 +220,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 panel.Properties.DrawPaths = paths;
             }
 
-            // Apply color using ColorSerializer; fallback to legacy comma format
+            // Apply color using ColorSerializer
             if (data.TryGetValue("color", out var colorVal))
             {
                 try

@@ -446,7 +446,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         /// <summary>
         /// Deserializes <c>IScriptComponent</c> marshalling options from the extension data dictionary.
-        /// Supports both current keys (<c>avoidMarshalGuids</c>, etc.) and legacy keys (<c>marshGuids</c>, etc.).
         /// Uses the concrete type's interface map to invoke the actual setter, which is more
         /// reliable than calling <see cref="PropertyInfo.SetValue"/> on an interface property.
         /// </summary>
@@ -462,7 +461,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             foreach (var propName in MarshPropertyNames)
             {
-                // Try current key first, then fall back to legacy key
+                // Try current key first
                 var jsonKey = MarshToJsonKey[propName];
                 bool val;
 

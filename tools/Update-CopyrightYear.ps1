@@ -8,59 +8,61 @@ param(
 
 Set-Location (Resolve-Path $Root)
 
-$propsPath = "..\Directory.Build.props"
 $currentYear = (Get-Date).Year
-
-if (-not (Test-Path $propsPath)) {
-    Write-Host "Error: Directory.Build.props not found at $propsPath" -ForegroundColor Red
-    exit 1
-}
-
-# Read the file
-$content = Get-Content $propsPath -Raw
-
 $initialYear = 2026
+$changedCount = 0
 
-# Pattern to match: Copyright (c) YYYY or Copyright (c) YYYY-YYYY
-$pattern = '(<Copyright>Copyright \(c\) )(\d{4})(?:-(\d{4}))?( Marc Roca Musach</Copyright>)'
-
-if ($content -match $pattern) {
-    $existingInitialYear = $Matches[2]
-    $existingEndYear = if ($Matches[3]) { $Matches[3] } else { $existingInitialYear }
-    
-    # Determine the new format
-    if ($currentYear -eq $initialYear) {
-        $newYearText = "$initialYear"
-    }
-    else {
-        $newYearText = "$initialYear-$currentYear"
-    }
-    
-    if ($existingEndYear -eq $currentYear -and $existingInitialYear -eq $initialYear) {
-        Write-Host "Copyright year is already up to date: $newYearText" -ForegroundColor Green
-        
-        if ($Check) {
-            exit 0
-        }
-    }
-    else {
-        Write-Host "Updating copyright year from $existingInitialYear-$existingEndYear to $newYearText"
-        
-        if ($Check) {
-            Write-Host "Copyright year update required." -ForegroundColor Yellow
-            exit 1
-        }
-        
-        # Update the year
-        $newContent = $content -replace $pattern, "`$1$newYearText`$4"
-        
-        # Write back to file
-        Set-Content $propsPath $newContent -NoNewline
-        
-        Write-Host "Successfully updated copyright year to $newYearText" -ForegroundColor Green
-    }
+# Determine the new year format
+if ($currentYear -eq $initialYear) {
+    $newYears = "$initialYear"
 }
 else {
-    Write-Host "Error: Could not find copyright pattern in Directory.Build.props" -ForegroundColor Red
-    exit 1
+    $newYears = "$initialYear-$currentYear"
 }
+
+# Update Directory.Build.props
+$propsPath = "Directory.Build.props"
+if (Test-Path $propsPath) {
+    try {
+        $content = [System.IO.File]::ReadAllText($propsPath, [System.Text.Encoding]::UTF8)
+        $originalContent = $content
+
+        # <Copyright> tag
+        $tagPattern = '(<Copyright>Copyright \(c\) )(\d{4})(?:-(\d{4}))?( Marc Roca Musach</Copyright>)'
+        if ($content -match $tagPattern) {
+            $startYear = [int]$Matches[2]
+            $endYear = if ($Matches[3]) { [int]$Matches[3] } else { $startYear }
+            
+            if (-not ($endYear -eq $currentYear -and $startYear -eq $initialYear)) {
+                $replacement = '$1' + $newYears + '$4'
+                $content = [System.Text.RegularExpressions.Regex]::Replace($content, $tagPattern, $replacement)
+            }
+        }
+
+        if ($content -ne $originalContent) {
+            $changedCount++
+            if (-not $Check) {
+                [System.IO.File]::WriteAllText($propsPath, $content, [System.Text.Encoding]::UTF8)
+                Write-Host "Updated copyright year to $newYears : $propsPath"
+            }
+        }
+    }
+    catch {
+        Write-Host "Error updating ${propsPath}: $($_.Exception.Message)" -ForegroundColor Red
+        if ($Check) {
+            exit 2
+        }
+    }
+}
+
+if ($Check) {
+    if ($changedCount -gt 0) {
+        Write-Host "Copyright year update required in $changedCount file(s)." -ForegroundColor Yellow
+        exit 1
+    }
+
+    Write-Host "All copyright years already up to date." -ForegroundColor Green
+    exit 0
+}
+
+Write-Host "Copyright year update complete. Updated $changedCount file(s)."

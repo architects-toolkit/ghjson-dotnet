@@ -199,6 +199,34 @@ namespace GhJSON.Grasshopper
 
         #endregion
 
+        #region Delete (remove from canvas)
+
+        /// <summary>
+        /// Deletes objects from the canvas by their GUIDs.
+        /// </summary>
+        /// <param name="guids">The GUIDs of objects to delete.</param>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted/failed/skipped GUIDs.</returns>
+        public static DeleteOperations.DeleteResult Delete(
+            IEnumerable<Guid> guids,
+            DeleteOperations.DeleteOptions? options = null)
+        {
+            return DeleteOperations.CanvasDeleter.DeleteByGuids(guids, options);
+        }
+
+        /// <summary>
+        /// Clears all objects from the canvas.
+        /// </summary>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted/skipped GUIDs.</returns>
+        public static DeleteOperations.DeleteResult Clear(
+            DeleteOperations.DeleteOptions? options = null)
+        {
+            return DeleteOperations.CanvasDeleter.Clear(options);
+        }
+
+        #endregion
+
         #region Query (filter & select from canvas)
 
         /// <summary>

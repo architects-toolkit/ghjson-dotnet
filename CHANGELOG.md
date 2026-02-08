@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `NameResolver`: unified public facade exposed via `GhJson.ResolveComponentName()` / `GhJson.ResolveParameterName()`
 - Fuzzy fallback in `ComponentInstantiator` when exact name lookup fails during deserialization
 - Fuzzy fallback in `CanvasPlacer.GetParameter` when exact parameter name lookup fails during connection wiring
+- Delete operations (`GhJSON.Grasshopper.DeleteOperations`):
+  - `GhJsonGrasshopper.Delete()`: Delete specific objects from the canvas by GUID with batch undo support
+  - `GhJsonGrasshopper.Clear()`: Clear all objects from the canvas
+  - `DeleteOptions`: Configuration for deletion behavior (redraw)
+  - `DeleteResult`: Structured result with deleted/failed GUIDs and counts
+  - All operations register proper Grasshopper undo events for Ctrl+Z support
+- `CanvasSelector.WithViewport(RectangleF)`: New fluent filter to restrict query results to objects within a given viewport rectangle. Applied as step 0 (before GUID/type/category/attribute filters) using bounds intersection.
 
 ### Changed
 

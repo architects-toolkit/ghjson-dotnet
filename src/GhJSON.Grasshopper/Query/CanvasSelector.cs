@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -45,6 +46,7 @@ namespace GhJSON.Grasshopper.Query
         private readonly List<string> _typeTokens = new List<string>();
         private readonly List<string> _categoryTokens = new List<string>();
         private readonly List<Guid> _guidFilter = new List<Guid>();
+        private RectangleF? _viewportBounds;
         private int _connectionDepth;
 
         private CanvasSelector(List<IGH_DocumentObject> source)
@@ -154,6 +156,18 @@ namespace GhJSON.Grasshopper.Query
         }
 
         /// <summary>
+        /// Restricts the result set to objects whose pivot falls within the given viewport rectangle.
+        /// Typically obtained from <c>Instances.ActiveCanvas.Viewport.VisibleRegion</c>.
+        /// </summary>
+        /// <param name="bounds">The viewport rectangle in canvas coordinates.</param>
+        /// <returns>This selector for chaining.</returns>
+        public CanvasSelector WithViewport(RectangleF bounds)
+        {
+            _viewportBounds = bounds;
+            return this;
+        }
+
+        /// <summary>
         /// After all filters are applied, expands the result set by walking connections
         /// up to <paramref name="depth"/> hops in either direction.
         /// </summary>
@@ -173,6 +187,7 @@ namespace GhJSON.Grasshopper.Query
         /// Applies all accumulated filters and returns the matching objects.
         /// <para>
         /// Filter application order:
+        /// 0. Viewport bounds restriction
         /// 1. GUID restriction
         /// 2. Type filters (params/components/startnodes/endnodes/middlenodes/isolatednodes)
         /// 3. Category filters
@@ -184,6 +199,17 @@ namespace GhJSON.Grasshopper.Query
         public List<IGH_DocumentObject> Execute()
         {
             var objects = new List<IGH_DocumentObject>(_source);
+
+            // 0. Viewport bounds restriction
+            if (_viewportBounds.HasValue)
+            {
+                var vp = _viewportBounds.Value;
+                objects = objects.Where(o =>
+                {
+                    var bounds = o.Attributes?.Bounds;
+                    return bounds.HasValue && vp.IntersectsWith(bounds.Value);
+                }).ToList();
+            }
 
             // 1. GUID restriction
             if (_guidFilter.Count > 0)

@@ -73,33 +73,6 @@ The release process is automated via GitHub Actions:
 2. **Release Published** → Builds packages and attaches to release
 3. **Manual Trigger** → Publishes packages to NuGet
 
-### Setting Up NuGet Publishing
-
-To enable NuGet publishing, you need to configure the `NUGET_API_KEY` secret:
-
-1. Go to [nuget.org](https://nuget.org) and sign in
-2. Go to your account settings → API Keys
-3. Create a new API key with:
-   - **Key name**: `ghjson-dotnet`
-   - **Select scopes**: Push
-   - **Select packages**: `GhJSON.*` (glob pattern)
-   - **Expiration**: 365 days
-4. Copy the API key
-5. In your GitHub repository:
-   - Go to Settings → Secrets and variables → Actions
-   - Create a new secret named `NUGET_API_KEY`
-   - Paste the API key value
-
-### Manual Publishing
-
-To publish packages manually:
-
-1. Go to Actions → "Publish to NuGet"
-2. Click "Run workflow"
-3. Optionally specify a release tag (defaults to latest)
-4. Enable "Dry run" to test without publishing
-5. Click "Run workflow"
-
 ## License
 
 By contributing, you agree that your contributions will be licensed under the Apache-2.0 license.

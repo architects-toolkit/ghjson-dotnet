@@ -1,6 +1,6 @@
 # GhJSON.NET
 
-[![Package Version](https://img.shields.io/badge/version-1.0.0-blue)](https://www.nuget.org/packages/GhJSON.Core/1.0.0)
+[![Package Version](https://img.shields.io/badge/version-1.0.1-blue)](https://www.nuget.org/packages/GhJSON.Core/1.0.1)
 [![Schema Version](https://img.shields.io/badge/schema-v1.0-blue)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
 [![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
 

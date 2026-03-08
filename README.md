@@ -1,7 +1,7 @@
 # GhJSON.NET
 
-[![Package Version](https://img.shields.io/badge/version-1.1.0-brightgreen?style=for-the-badge)](https://www.nuget.org/packages/GhJSON.Core)
-[![Status](https://img.shields.io/badge/status-Stable-brightgreen?style=for-the-badge)](https://github.com/architects-toolkit/ghjson-dotnet)
+[![Package Version](https://img.shields.io/badge/version-1.1.0--dev.260308-brown?style=for-the-badge)](https://www.nuget.org/packages/GhJSON.Core)
+[![Status](https://img.shields.io/badge/status-Unstable%20Development-brown?style=for-the-badge)](https://github.com/architects-toolkit/ghjson-dotnet)
 [![Schema Version](https://img.shields.io/badge/schema-v1.0-blue?style=for-the-badge)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
 [![License](https://img.shields.io/badge/license-Apache--2.0-white?style=for-the-badge)](LICENSE)
 

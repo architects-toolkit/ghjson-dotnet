@@ -38,6 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `DeleteResult`: Structured result with deleted/failed GUIDs and counts
   - All operations register proper Grasshopper undo events for Ctrl+Z support
 - `CanvasSelector.WithViewport(RectangleF)`: New fluent filter to restrict query results to objects within a given viewport rectangle. Applied as step 0 (before GUID/type/category/attribute filters) using bounds intersection.
+- **Dependency Graph Layout Engine**: New algorithm-based layout system with Sugiyama implementation
+  - `LayoutEngine.CalculateLayout()` - Main entry point for layout calculations
+  - `LayoutOptions` - Configurable spacing and algorithm selection
+  - `LayoutResult` - Structured output with positions, islands, and diagnostics
+  - `LayoutAlgorithm` enum - Extensible algorithm selector (currently Sugiyama only)
+  - Internal modular Sugiyama implementation: LayerAssignment, EdgeConcentration, RowOrdering, CrossingMinimizer, CoordinateAssigner
+  - `GraphBuilder` - Converts GhJsonDocument to internal graph representation
+  - `IslandDetector` - Identifies disconnected component groups
 
 ### Changed
 

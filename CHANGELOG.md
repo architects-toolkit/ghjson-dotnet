@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Automatic ID assignment in `DocumentBuilder.Build()`: Components lacking both `id` and `instanceGuid` now automatically receive sequential IDs before validation, eliminating the need for callers to manually assign IDs to new components
 - CI/CD infrastructure adapted from SmartHopper project:
   - Reusable composite actions: `get-version`, `update-version`, `update-badges`, `update-changelog`
   - Automatic version badge update workflow (`chore-version-badge.yml`)

@@ -227,15 +227,20 @@ namespace GhJSON.Core
 
             /// <summary>
             /// Builds an immutable <see cref="GhJsonDocument"/> and validates basic reference integrity.
+            /// Components lacking both 'id' and 'instanceGuid' will automatically receive sequential IDs.
             /// </summary>
             /// <returns>The built document.</returns>
             /// <exception cref="InvalidOperationException">Thrown when the builder produces an invalid document.</exception>
             public GhJsonDocument Build()
             {
+                // Auto-assign IDs to components lacking both id and instanceGuid
+                var workingComponents = this.components.ToList();
+                this.EnsureComponentIdentifiers(workingComponents);
+
                 var doc = new GhJsonDocument(
                     schema: string.IsNullOrWhiteSpace(this.schema) ? CurrentVersion : this.schema,
                     metadata: this.metadata,
-                    components: this.components,
+                    components: workingComponents,
                     connections: this.connections?.Any() == true ? this.connections : null,
                     groups: this.groups?.Any() == true ? this.groups : null);
 
@@ -247,6 +252,34 @@ namespace GhJSON.Core
                 }
 
                 return doc;
+            }
+
+            /// <summary>
+            /// Ensures all components have at least one identifier (id or instanceGuid).
+            /// Assigns sequential IDs to components lacking both.
+            /// </summary>
+            private void EnsureComponentIdentifiers(List<GhJsonComponent> components)
+            {
+                // Find components that need ID assignment (lacking both id and instanceGuid)
+                var needsId = components.Where(c => !c.Id.HasValue && !c.InstanceGuid.HasValue).ToList();
+                if (needsId.Count == 0)
+                {
+                    return;
+                }
+
+                // Calculate next available ID
+                var existingIds = new HashSet<int>(
+                    components
+                        .Where(c => c.Id.HasValue)
+                        .Select(c => c.Id!.Value));
+
+                var nextId = existingIds.Count > 0 ? existingIds.Max() + 1 : 1;
+
+                // Assign sequential IDs
+                foreach (var component in needsId)
+                {
+                    component.Id = nextId++;
+                }
             }
         }
     }

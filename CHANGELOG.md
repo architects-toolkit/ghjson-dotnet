@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Learning from Grasshopper MCP (https://github.com/alfredatnycu/grasshopper-mcp): This is an open-source MCP to connect Grasshopper with Claude Desktop using MIT License. This open-source license is compatible with our Apache License 2.0. That's why we are implementing some Grasshopper MCP features in GhJSON-dotnet. We implemented the following features:
   - Fuzzy name resolution for component and parameter names (`GhJSON.Core.NameResolution`)
     - `ComponentNameResolver`: alias dictionary + fuzzy matching for Grasshopper component names
+    - `ComponentTypeResolver`: pattern dictionary to prioritize/deprioritize certain component types (e.g. legacy script components)
     - `ParameterNameResolver`: alias dictionary + fuzzy matching for parameter names
     - `FuzzyMatcher`: core utility with exact, normalized, prefix, contains, and Levenshtein matching
     - `NameResolver`: unified public facade exposed via `GhJson.ResolveComponentName()` / `GhJson.ResolveParameterName()`

@@ -24,6 +24,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace GhJSON.Core.NameResolution
@@ -49,29 +50,36 @@ namespace GhJSON.Core.NameResolution
         {
             if (string.IsNullOrWhiteSpace(input) || candidates == null)
             {
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Returning null - input is null/whitespace or candidates is null");
                 return null;
             }
 
             var candidateList = candidates as IList<string> ?? candidates.ToList();
             if (candidateList.Count == 0)
             {
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Returning null - no candidates provided");
                 return null;
             }
+
+            Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Finding match for '{input}' among {candidateList.Count} candidates");
 
             // 1. Exact match (case-insensitive)
             var exact = candidateList.FirstOrDefault(c =>
                 string.Equals(c, input, StringComparison.OrdinalIgnoreCase));
             if (exact != null)
             {
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found exact match: '{exact}'");
                 return exact;
             }
 
             // 2. Normalized match (strip spaces, underscores, hyphens)
             var normalizedInput = Normalize(input);
+            Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Trying normalized match (input normalized to: '{normalizedInput}')");
             var normalizedMatch = candidateList.FirstOrDefault(c =>
                 string.Equals(Normalize(c), normalizedInput, StringComparison.OrdinalIgnoreCase));
             if (normalizedMatch != null)
             {
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found normalized match: '{normalizedMatch}'");
                 return normalizedMatch;
             }
 
@@ -81,8 +89,11 @@ namespace GhJSON.Core.NameResolution
                 .ToList();
             if (prefixMatches.Count == 1)
             {
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found unique prefix match: '{prefixMatches[0]}'");
                 return prefixMatches[0];
             }
+
+            Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Prefix matches: {prefixMatches.Count}");
 
             // 4. Contains match — return shortest if unique
             var containsMatches = candidateList
@@ -90,20 +101,32 @@ namespace GhJSON.Core.NameResolution
                 .ToList();
             if (containsMatches.Count == 1)
             {
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found unique contains match: '{containsMatches[0]}'");
                 return containsMatches[0];
             }
 
             if (containsMatches.Count > 1)
             {
-                return containsMatches.OrderBy(c => c.Length).First();
+                var shortest = containsMatches.OrderBy(c => c.Length).First();
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found {containsMatches.Count} contains matches, selecting shortest: '{shortest}'");
+                return shortest;
             }
+
+            Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Contains matches: {containsMatches.Count}");
 
             // 5. Levenshtein distance (only if enabled)
             if (maxLevenshteinDistance > 0)
             {
-                return FindByLevenshtein(normalizedInput, candidateList, maxLevenshteinDistance);
+                Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Trying Levenshtein distance (max distance: {maxLevenshteinDistance})");
+                var levenshteinMatch = FindByLevenshtein(normalizedInput, candidateList, maxLevenshteinDistance);
+                if (levenshteinMatch != null)
+                {
+                    Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found Levenshtein match: '{levenshteinMatch}'");
+                    return levenshteinMatch;
+                }
             }
 
+            Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] No match found for '{input}'");
             return null;
         }
 
@@ -188,6 +211,8 @@ namespace GhJSON.Core.NameResolution
             string? bestMatch = null;
             var bestDistance = int.MaxValue;
 
+            Debug.WriteLine($"[FuzzyMatcher.FindByLevenshtein] Searching among {candidates.Count} candidates, normalized input: '{normalizedInput}', max distance: {maxDistance}");
+
             foreach (var candidate in candidates)
             {
                 var normalizedCandidate = Normalize(candidate);
@@ -195,9 +220,19 @@ namespace GhJSON.Core.NameResolution
 
                 if (distance < bestDistance && distance <= maxDistance)
                 {
+                    Debug.WriteLine($"[FuzzyMatcher.FindByLevenshtein] New best match: '{candidate}' (distance: {distance})");
                     bestDistance = distance;
                     bestMatch = candidate;
                 }
+            }
+
+            if (bestMatch == null)
+            {
+                Debug.WriteLine($"[FuzzyMatcher.FindByLevenshtein] No match found within distance {maxDistance}");
+            }
+            else
+            {
+                Debug.WriteLine($"[FuzzyMatcher.FindByLevenshtein] Final best match: '{bestMatch}' with distance {bestDistance}");
             }
 
             return bestMatch;

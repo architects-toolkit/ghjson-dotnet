@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using GhJSON.Core.NameResolution;
@@ -113,10 +114,23 @@ namespace GhJSON.Grasshopper.Deserialization
             try
             {
                 var proxy = Instances.ComponentServer.EmitObjectProxy(componentGuid);
+#if DEBUG
+                if (proxy != null)
+                {
+                    Debug.WriteLine($"[CreateByGuid] Found proxy for GUID {componentGuid}: {proxy.Desc.Name} (Lib: {proxy.Desc.Category}, Type: {proxy.Type?.Name})");
+                }
+                else
+                {
+                    Debug.WriteLine($"[CreateByGuid] No proxy found for GUID: {componentGuid}");
+                }
+#endif
                 return proxy?.CreateInstance();
             }
-            catch
+            catch (Exception ex)
             {
+#if DEBUG
+                Debug.WriteLine($"[CreateByGuid] Exception creating component by GUID {componentGuid}: {ex.Message}");
+#endif
                 return null;
             }
         }
@@ -125,6 +139,8 @@ namespace GhJSON.Grasshopper.Deserialization
         {
             try
             {
+                var matches = new List<IGH_ObjectProxy>();
+                
                 // Search for component by name
                 foreach (var proxy in Instances.ComponentServer.ObjectProxies)
                 {
@@ -137,15 +153,72 @@ namespace GhJSON.Grasshopper.Deserialization
                             continue;
                         }
 
-                        return proxy.CreateInstance();
+                        matches.Add(proxy);
                     }
                 }
 
+#if DEBUG
+                if (matches.Count > 0)
+                {
+                    // Calculate scores for each match
+                    var scoredMatches = matches.Select(m => new
+                    {
+                        Proxy = m,
+                        Score = ComponentTypeResolver.CalculateTypePriorityScore(m.Type?.Name),
+                        TypeName = m.Type?.Name ?? "unknown"
+                    }).ToList();
+
+                    // Sort by score descending
+                    scoredMatches.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+                    Debug.WriteLine($"[CreateByName] Found {matches.Count} match(es) for '{name}'{(library != null ? $" in library '{library}'" : "")}:");
+                    foreach (var sm in scoredMatches)
+                    {
+                        var asmVersion = GetAssemblyVersion(sm.Proxy);
+                        Debug.WriteLine($"  - {sm.Proxy.Desc.Name} (Lib: {sm.Proxy.Desc.Category}, Ver: {asmVersion}, Type: {sm.TypeName}, Score: {sm.Score})");
+                    }
+                    
+                    // Select highest scored match
+                    var selected = scoredMatches[0].Proxy;
+                    Debug.WriteLine($"[CreateByName] Selected (highest score {scoredMatches[0].Score}): {selected.Desc.Name} from {selected.Desc.Category} (Type: {scoredMatches[0].TypeName})");
+                }
+                else
+                {
+                    Debug.WriteLine($"[CreateByName] No exact matches found for '{name}'");
+                }
+#endif
+
+                // Return highest scored match (or first if all scores equal)
+                var finalMatches = matches.Select(m => new
+                {
+                    Proxy = m,
+                    Score = ComponentTypeResolver.CalculateTypePriorityScore(m.Type?.Name)
+                }).OrderByDescending(x => x.Score).ToList();
+                
+                return finalMatches.FirstOrDefault()?.Proxy.CreateInstance();
+            }
+            catch (Exception ex)
+            {
+#if DEBUG
+                Debug.WriteLine($"[CreateByName] Exception creating component by name '{name}': {ex.Message}");
+#endif
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the assembly version from a component proxy for debugging purposes.
+        /// </summary>
+        private static string GetAssemblyVersion(IGH_ObjectProxy proxy)
+        {
+            try
+            {
+                var version = proxy.Type?.Assembly?.GetName()?.Version;
+                return version?.ToString() ?? "unknown";
             }
             catch
             {
-                return null;
+                return "unknown";
             }
         }
 
@@ -156,11 +229,18 @@ namespace GhJSON.Grasshopper.Deserialization
         /// <returns>True if the component can be created.</returns>
         public static bool CanInstantiate(GhJsonComponent component)
         {
+#if DEBUG
+            Debug.WriteLine($"[CanInstantiate] Checking if component can be instantiated: {component.Name ?? "unknown"}");
+#endif
+            
             if (component.ComponentGuid.HasValue && component.ComponentGuid != Guid.Empty)
             {
                 var proxy = Instances.ComponentServer.EmitObjectProxy(component.ComponentGuid.Value);
                 if (proxy != null)
                 {
+#if DEBUG
+                    Debug.WriteLine($"[CanInstantiate] Can instantiate by GUID: {component.ComponentGuid}");
+#endif
                     return true;
                 }
             }
@@ -171,6 +251,9 @@ namespace GhJSON.Grasshopper.Deserialization
                 {
                     if (proxy.Desc.Name.Equals(component.Name, StringComparison.OrdinalIgnoreCase))
                     {
+#if DEBUG
+                        Debug.WriteLine($"[CanInstantiate] Can instantiate by exact name match: {component.Name}");
+#endif
                         return true;
                     }
                 }
@@ -179,10 +262,16 @@ namespace GhJSON.Grasshopper.Deserialization
                 var resolvedName = ResolveComponentName(component.Name, component.Library);
                 if (resolvedName != null)
                 {
+#if DEBUG
+                    Debug.WriteLine($"[CanInstantiate] Can instantiate by fuzzy name resolution: {component.Name} → {resolvedName}");
+#endif
                     return true;
                 }
             }
 
+#if DEBUG
+            Debug.WriteLine($"[CanInstantiate] Cannot instantiate component: {component.Name ?? component.ComponentGuid?.ToString() ?? "unknown"}");
+#endif
             return false;
         }
 
@@ -217,7 +306,24 @@ namespace GhJSON.Grasshopper.Deserialization
                 .Select(p => p.Desc.Name)
                 .Distinct(StringComparer.OrdinalIgnoreCase);
 
-            return ComponentNameResolver.Resolve(name, knownNames);
+#if DEBUG
+            Debug.WriteLine($"[ResolveComponentName] Resolving '{name}' against {knownNames.Count()} known component names");
+#endif
+
+            var result = ComponentNameResolver.Resolve(name, knownNames);
+            
+#if DEBUG
+            if (result != null)
+            {
+                Debug.WriteLine($"[ResolveComponentName] Resolved '{name}' → '{result}'");
+            }
+            else
+            {
+                Debug.WriteLine($"[ResolveComponentName] Could not resolve '{name}'");
+            }
+#endif
+
+            return result;
         }
     }
 }

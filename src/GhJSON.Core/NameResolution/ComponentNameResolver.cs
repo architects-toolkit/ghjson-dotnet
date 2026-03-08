@@ -24,6 +24,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace GhJSON.Core.NameResolution
 {
@@ -158,6 +159,18 @@ namespace GhJSON.Core.NameResolution
             { "color", "Colour Swatch" },
             { "colourswatch", "Colour Swatch" },
             { "colorswatch", "Colour Swatch" },
+
+            // Script components
+            { "c#", "C# Script" },
+            { "c#script", "C# Script" },
+            { "csharp", "C# Script" },
+            { "cscript", "C# Script" },
+            { "python", "Python Script" },
+            { "py", "Python Script" },
+            { "pythonscript", "Python Script" },
+            { "vb", "VB Script" },
+            { "vbscript", "VB Script" },
+            { "ironpython", "IronPython Script" },
         };
 
         /// <summary>
@@ -170,11 +183,19 @@ namespace GhJSON.Core.NameResolution
         {
             if (string.IsNullOrWhiteSpace(input))
             {
+                Debug.WriteLine($"[ComponentNameResolver.ResolveAlias] Returning null - input is null/whitespace");
                 return null;
             }
 
             var normalized = FuzzyMatcher.Normalize(input);
-            return Aliases.TryGetValue(normalized, out var canonical) ? canonical : null;
+            if (Aliases.TryGetValue(normalized, out var canonical))
+            {
+                Debug.WriteLine($"[ComponentNameResolver.ResolveAlias] Resolved alias '{input}' (normalized: '{normalized}') → '{canonical}'");
+                return canonical;
+            }
+
+            Debug.WriteLine($"[ComponentNameResolver.ResolveAlias] No alias found for '{input}' (normalized: '{normalized}')");
+            return null;
         }
 
         /// <summary>
@@ -187,15 +208,31 @@ namespace GhJSON.Core.NameResolution
         /// <returns>The resolved component name, or null if no match is found.</returns>
         public static string? Resolve(string input, IEnumerable<string> knownComponentNames, int maxLevenshteinDistance = 3)
         {
+            Debug.WriteLine($"[ComponentNameResolver.Resolve] Resolving '{input}' with maxLevenshteinDistance={maxLevenshteinDistance}");
+
             // Try alias first
             var alias = ResolveAlias(input);
             if (alias != null)
             {
+                Debug.WriteLine($"[ComponentNameResolver.Resolve] Returning alias result: '{alias}'");
                 return alias;
             }
 
+            Debug.WriteLine($"[ComponentNameResolver.Resolve] No alias found, falling back to fuzzy matching");
+
             // Fuzzy match against known names
-            return FuzzyMatcher.FindBestMatch(input, knownComponentNames, maxLevenshteinDistance);
+            var fuzzyResult = FuzzyMatcher.FindBestMatch(input, knownComponentNames, maxLevenshteinDistance);
+            
+            if (fuzzyResult != null)
+            {
+                Debug.WriteLine($"[ComponentNameResolver.Resolve] Fuzzy match found: '{fuzzyResult}'");
+            }
+            else
+            {
+                Debug.WriteLine($"[ComponentNameResolver.Resolve] No fuzzy match found for '{input}'");
+            }
+
+            return fuzzyResult;
         }
     }
 }

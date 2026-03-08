@@ -46,9 +46,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Internal modular Sugiyama implementation: LayerAssignment, EdgeConcentration, RowOrdering, CrossingMinimizer, CoordinateAssigner
   - `GraphBuilder` - Converts GhJsonDocument to internal graph representation
   - `IslandDetector` - Identifies disconnected component groups
+- **Layout Façade Methods** in `GhJson.cs`:
+  - `GhJson.CalculateLayout()` - Calculate optimal component positions using dependency graph analysis
+  - `GhJson.AssignPivots()` - Apply calculated layout positions to document components
+  - `GhJson.ReorganizePivots()` - Convenience method combining calculate and assign operations
+- **Grasshopper-Aware Layout Refinements** in `GhJSON.Grasshopper/LayoutRefinements`:
+  - `BoundsAwareSpacing` - Adjusts spacing based on actual component bounds (width/height)
+  - `PortAlignment` - Aligns parameter components to input port positions
+  - `CollisionResolver` - Prevents component overlaps and minimizes connection lengths
+  - `LayoutRefinementEngine` - Orchestrates all refinement passes with configurable options
+  - `LayoutRefinementOptions` - Configuration for enabling/disabling specific refinements
 
 ### Changed
 
+- **CanvasPlacer** now uses new layout API with Grasshopper-aware refinements for improved component positioning
 - Updated README badges to `for-the-badge` style with version and status badges
 - Downgrade Rhino and Grasshopper dependencies to 8.0
 - TODO: Updated validation logic to use ghjson.schema.json v1.0

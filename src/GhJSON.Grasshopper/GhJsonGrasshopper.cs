@@ -115,6 +115,34 @@ namespace GhJSON.Grasshopper
             return result;
         }
 
+        /// <summary>
+        /// Checks if a component can be instantiated in the current Grasshopper environment.
+        /// Useful for pre-validation before calling <see cref="Deserialize"/> or <see cref="Put"/>.
+        /// </summary>
+        /// <param name="component">The component to check.</param>
+        /// <returns>True if the component can be instantiated; false otherwise.</returns>
+        public static bool CanInstantiate(GhJsonComponent component)
+        {
+            return ComponentInstantiator.CanInstantiate(component);
+        }
+
+        /// <summary>
+        /// Validates all components in a document to check if they can be instantiated.
+        /// Returns a dictionary mapping component index to validation result.
+        /// </summary>
+        /// <param name="document">The document to validate.</param>
+        /// <returns>A dictionary where keys are component indices and values indicate if that component can be instantiated.</returns>
+        public static Dictionary<int, bool> ValidateComponents(GhJsonDocument document)
+        {
+            var results = new Dictionary<int, bool>();
+            for (int i = 0; i < document.Components.Count; i++)
+            {
+                results[i] = ComponentInstantiator.CanInstantiate(document.Components[i]);
+            }
+
+            return results;
+        }
+
         #endregion
 
         #region Get (read from canvas)

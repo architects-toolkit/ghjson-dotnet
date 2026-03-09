@@ -4,6 +4,7 @@
 [![Status](https://img.shields.io/badge/status-Unstable%20Development-brown?style=for-the-badge)](https://github.com/architects-toolkit/ghjson-dotnet)
 [![Schema Version](https://img.shields.io/badge/schema-v1.0-blue?style=for-the-badge)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
 [![License](https://img.shields.io/badge/license-Apache--2.0-white?style=for-the-badge)](LICENSE)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/architects-toolkit/ghjson-dotnet)
 
 .NET implementation of the [GhJSON specification](https://architects-toolkit.github.io/ghjson-spec/) for Grasshopper definition serialization.
 

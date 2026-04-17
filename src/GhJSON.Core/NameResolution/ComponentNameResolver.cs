@@ -210,18 +210,35 @@ namespace GhJSON.Core.NameResolution
         {
             Debug.WriteLine($"[ComponentNameResolver.Resolve] Resolving '{input}' with maxLevenshteinDistance={maxLevenshteinDistance}");
 
-            // Try alias first
+            // Materialize candidates once so we can probe for exact membership.
+            var candidates = knownComponentNames as IList<string> ?? new List<string>(knownComponentNames);
+
+            // Try alias first; only return it directly if it exists exactly in the known set.
+            // Otherwise, prefer the alias as a better seed for fuzzy matching against the
+            // actual registered names (e.g. "python" → alias "Python Script" → fuzzy → "Python 3 Script").
             var alias = ResolveAlias(input);
+            string fuzzyInput = input;
             if (alias != null)
             {
-                Debug.WriteLine($"[ComponentNameResolver.Resolve] Returning alias result: '{alias}'");
-                return alias;
+                foreach (var candidate in candidates)
+                {
+                    if (string.Equals(candidate, alias, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Debug.WriteLine($"[ComponentNameResolver.Resolve] Alias '{alias}' exists in known names, returning it");
+                        return candidate;
+                    }
+                }
+
+                Debug.WriteLine($"[ComponentNameResolver.Resolve] Alias '{alias}' not in known names, using it as fuzzy seed");
+                fuzzyInput = alias;
+            }
+            else
+            {
+                Debug.WriteLine($"[ComponentNameResolver.Resolve] No alias found, falling back to fuzzy matching on input");
             }
 
-            Debug.WriteLine($"[ComponentNameResolver.Resolve] No alias found, falling back to fuzzy matching");
-
-            // Fuzzy match against known names
-            var fuzzyResult = FuzzyMatcher.FindBestMatch(input, knownComponentNames, maxLevenshteinDistance);
+            // Fuzzy match against known names using the (possibly aliased) input
+            var fuzzyResult = FuzzyMatcher.FindBestMatch(fuzzyInput, candidates, maxLevenshteinDistance);
             
             if (fuzzyResult != null)
             {

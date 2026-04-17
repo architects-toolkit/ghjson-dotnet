@@ -64,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Downgrade Rhino and Grasshopper dependencies to 8.0
 - TODO: Updated validation logic to use ghjson.schema.json v1.0
 
+### Fixed
+
+- `ComponentNameResolver.Resolve` no longer returns an alias result that does not exist in the known component names. Previously, `"Python"` resolved to the alias `"Python Script"` and was returned verbatim, failing to instantiate on Rhino 8 where the canonical name is `"Python 3 Script"`. The resolver now verifies alias membership in the known set and, when absent, uses the alias as a seed for fuzzy matching against the actual registered names (e.g. `"python"` → alias `"Python Script"` → fuzzy → `"Python 3 Script"`, Levenshtein distance 2).
+
 ## [1.0.0] - 2026-02-08
 
 - Initial release

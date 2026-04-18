@@ -112,7 +112,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             // Data mapping
             if (param.DataMapping != GH_DataMapping.None)
             {
-                settings.DataMapping = param.DataMapping.ToString();
+                settings.DataMapping = param.DataMapping.ToString().ToLowerInvariant();
             }
 
             // Simplify
@@ -233,7 +233,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             // Data mapping
             if (!string.IsNullOrEmpty(settings.DataMapping))
             {
-                if (System.Enum.TryParse<GH_DataMapping>(settings.DataMapping, out var mapping))
+                if (System.Enum.TryParse<GH_DataMapping>(settings.DataMapping, ignoreCase: true, out var mapping))
                 {
                     param.DataMapping = mapping;
                 }

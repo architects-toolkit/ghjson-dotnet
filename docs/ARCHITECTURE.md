@@ -302,7 +302,7 @@ Parameter settings configure input and output parameters on components. All bool
 |----------|------|-------------|
 | `parameterName` | string | **Required**. The name of the parameter. |
 | `nickName` | string | Custom nickname for the parameter. |
-| `dataMapping` | string | Data tree mapping mode: `"None"`, `"Flatten"`, `"Graft"`. |
+| `dataMapping` | string | Data tree mapping mode: `"none"`, `"flatten"`, `"graft"`. |
 | `expression` | string | Expression that transforms parameter data. Presence implies the parameter has an expression. |
 | `access` | string | Data access mode for script parameters: `"item"`, `"list"`, `"tree"`. |
 | `typeHint` | string | Type hint for script parameters (e.g., `"int"`, `"double"`, `"Point3d"`). |

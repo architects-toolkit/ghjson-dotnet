@@ -115,7 +115,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                 new GhJsonParameterSettings
                 {
                     ParameterName = "A",
-                    DataMapping = "Flatten"
+                    DataMapping = "flatten"
                 }
             };
             var doc = GhJson.CreateDocumentBuilder()
@@ -123,7 +123,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                 .Build();
 
             Assert.Single(component.InputSettings);
-            Assert.Equal("Flatten", component.InputSettings[0].DataMapping);
+            Assert.Equal("flatten", component.InputSettings[0].DataMapping);
         }
 
         [Fact]

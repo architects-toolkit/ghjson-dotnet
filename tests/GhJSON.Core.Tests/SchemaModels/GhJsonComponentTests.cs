@@ -99,7 +99,7 @@ namespace GhJSON.Core.Tests.SchemaModels
             
             var paramSettings = GhJson.CreateComponentParameterObject();
             paramSettings.ParameterName = "A";
-            paramSettings.DataMapping = "None";
+            paramSettings.DataMapping = "none";
             
             component.InputSettings = new System.Collections.Generic.List<GhJsonParameterSettings> { paramSettings };
 

@@ -71,13 +71,15 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_MissingRequiredComponents_ReturnsFalse()
         {
+            // The ghjson.schema.json v1.0 schema declares `components` as required, so a
+            // document lacking it is now a hard schema error (previously this was just a
+            // warning under the legacy structural-only validator).
             var json = @"{""schema"":""1.0""}";
 
             var result = GhJson.Validate(json);
 
-            Assert.True(result.IsValid);
-            Assert.Empty(result.Errors);
-            Assert.NotEmpty(result.Warnings);
+            Assert.False(result.IsValid);
+            Assert.NotEmpty(result.Errors);
         }
 
         [Fact]

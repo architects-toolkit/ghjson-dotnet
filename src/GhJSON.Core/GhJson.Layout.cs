@@ -18,6 +18,7 @@
 using System;
 using System.Linq;
 using GhJSON.Core.DependencyGraph;
+using GhJSON.Core.DependencyGraph.Internal;
 using GhJSON.Core.SchemaModels;
 
 namespace GhJSON.Core
@@ -75,8 +76,11 @@ namespace GhJSON.Core
             
             foreach (var component in document.Components)
             {
-                if (component.InstanceGuid.HasValue &&
-                    layoutResult.Positions.TryGetValue(component.InstanceGuid.Value, out var newPivot))
+                // Match by the same stable key used by GraphBuilder so layout flows through
+                // for components that only expose an integer Id (no InstanceGuid).
+                var key = GraphBuilder.GetStableKey(component);
+                if (key != Guid.Empty &&
+                    layoutResult.Positions.TryGetValue(key, out var newPivot))
                 {
                     var updatedComponent = new GhJsonComponent
                     {

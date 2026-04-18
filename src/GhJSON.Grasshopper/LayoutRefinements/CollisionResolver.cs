@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using Grasshopper;
@@ -24,12 +25,34 @@ using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.LayoutRefinements
 {
+    /// <summary>
+    /// Post-layout refinements that depend on the active Grasshopper canvas for
+    /// per-component bounds. When no canvas is available (e.g. headless tests) these
+    /// methods degrade into no-ops and emit a single diagnostic, rather than silently
+    /// mutating positions based on stale state.
+    /// </summary>
     internal static class CollisionResolver
     {
+        /// <summary>
+        /// Rounds X-coordinates to a stable bucket so that float drift introduced by
+        /// previous refinement passes does not fragment the column grouping.
+        /// </summary>
+        private const int ColumnRoundDigits = 3;
+
         public static Dictionary<Guid, PointF> AvoidCollisions(Dictionary<Guid, PointF> positions)
         {
             var result = new Dictionary<Guid, PointF>(positions);
-            var byColumn = positions.GroupBy(kvp => kvp.Value.X).OrderBy(g => g.Key);
+
+            var document = Instances.ActiveCanvas?.Document;
+            if (document == null)
+            {
+                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document; skipping.");
+                return result;
+            }
+
+            var byColumn = positions
+                .GroupBy(kvp => (float)Math.Round(kvp.Value.X, ColumnRoundDigits))
+                .OrderBy(g => g.Key);
 
             foreach (var col in byColumn)
             {
@@ -38,7 +61,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
                 foreach (var kvp in sorted)
                 {
-                    var obj = Instances.ActiveCanvas?.Document?.FindObject(kvp.Key, false);
+                    var obj = document.FindObject(kvp.Key, false);
                     if (obj?.Attributes?.Bounds == null)
                     {
                         continue;

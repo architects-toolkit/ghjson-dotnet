@@ -17,14 +17,21 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Text.Json.Nodes;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Core.Serialization;
+using Json.Schema;
 using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Core.Validation
 {
     /// <summary>
-    /// Validates GhJSON documents against the schema and performs structural validation.
+    /// Validates GhJSON documents against the official JSON Schema (v1.0) and performs
+    /// structural validation. Schema conformance runs at <see cref="ValidationLevel.Standard"/>
+    /// and <see cref="ValidationLevel.Strict"/>; <see cref="ValidationLevel.Minimal"/>
+    /// performs only basic structural checks.
     /// </summary>
     internal static class GhJsonValidator
     {
@@ -43,6 +50,9 @@ namespace GhJSON.Core.Validation
 
             if (level >= ValidationLevel.Standard)
             {
+                // JSON Schema conformance (ghjson.schema.json v1.0)
+                ValidateAgainstSchema(document, result);
+
                 // Connection reference integrity
                 ValidateConnections(document, result);
 
@@ -61,21 +71,190 @@ namespace GhJSON.Core.Validation
         }
 
         /// <summary>
-        /// Validates a JSON string as a GhJSON document.
+        /// Validates a JSON string as a GhJSON document. At <see cref="ValidationLevel.Standard"/>
+        /// and <see cref="ValidationLevel.Strict"/>, schema conformance runs against the
+        /// <em>raw</em> JSON input so that unknown properties (which are dropped by the
+        /// strongly-typed deserializer) are still reported.
         /// </summary>
         /// <param name="json">The JSON string to validate.</param>
         /// <param name="level">The validation level.</param>
         /// <returns>The validation result.</returns>
         public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard)
         {
+            GhJsonDocument document;
             try
             {
-                var document = Serialization.GhJsonSerializer.Deserialize(json);
-                return Validate(document, level);
+                document = Serialization.GhJsonSerializer.Deserialize(json);
             }
             catch (Exception ex)
             {
                 return ValidationResult.Failure($"Invalid JSON: {ex.Message}");
+            }
+
+            var result = new ValidationResult { IsValid = true };
+
+            if (level >= ValidationLevel.Standard)
+            {
+                // Schema-validate the raw JSON so unknown properties surface.
+                ValidateRawJsonAgainstSchema(json, result);
+            }
+
+            ValidateComponents(document, result);
+
+            if (level >= ValidationLevel.Standard)
+            {
+                ValidateConnections(document, result);
+                ValidateGroups(document, result);
+            }
+
+            if (level >= ValidationLevel.Strict)
+            {
+                ValidateSemantics(document, result);
+            }
+
+            result.IsValid = !result.HasErrors;
+            return result;
+        }
+
+        /// <summary>
+        /// Evaluates the raw JSON text against the official GhJSON schema. Used by the
+        /// string-based <see cref="Validate(string, ValidationLevel)"/> overload so that
+        /// properties dropped by the strongly-typed deserializer still produce errors.
+        /// </summary>
+        private static void ValidateRawJsonAgainstSchema(string json, ValidationResult result)
+        {
+            JsonSchema schema;
+            try
+            {
+                schema = SchemaLoader.MainSchema;
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(new ValidationMessage(
+                    $"Unable to load GhJSON schema for validation: {ex.Message}"));
+                return;
+            }
+
+            JsonNode? instance;
+            try
+            {
+                instance = JsonNode.Parse(json);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(new ValidationMessage($"Invalid JSON: {ex.Message}"));
+                return;
+            }
+
+            EvaluateSchema(schema, instance, result);
+        }
+
+        /// <summary>
+        /// Evaluates the document against the official GhJSON JSON Schema (v1.0, draft 2020-12).
+        /// Each non-conforming sub-evaluation is surfaced as a validation error. Failures
+        /// of the loader itself (e.g. missing embedded resources) are reported as a single
+        /// error so that the caller always gets an actionable result.
+        /// </summary>
+        private static void ValidateAgainstSchema(GhJsonDocument document, ValidationResult result)
+        {
+            JsonSchema schema;
+            try
+            {
+                schema = SchemaLoader.MainSchema;
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(new ValidationMessage(
+                    $"Unable to load GhJSON schema for validation: {ex.Message}"));
+                return;
+            }
+
+            JsonNode? instance;
+            try
+            {
+                var json = GhJsonSerializer.Serialize(document);
+                instance = JsonNode.Parse(json);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(new ValidationMessage(
+                    $"Unable to serialize document for schema validation: {ex.Message}"));
+                return;
+            }
+
+            EvaluateSchema(schema, instance, result);
+        }
+
+        private static void EvaluateSchema(JsonSchema schema, JsonNode? instance, ValidationResult result)
+        {
+            var options = new EvaluationOptions
+            {
+                OutputFormat = OutputFormat.List,
+                EvaluateAs = SpecVersion.Draft202012,
+            };
+
+            EvaluationResults evaluation;
+            try
+            {
+                evaluation = schema.Evaluate(instance, options);
+            }
+            catch (Exception ex)
+            {
+                // Defensive: never let schema engine exceptions propagate as crashes.
+                Debug.WriteLine($"[GhJsonValidator] Schema evaluation threw: {ex}");
+                result.Errors.Add(new ValidationMessage(
+                    $"Schema evaluation error: {ex.Message}"));
+                return;
+            }
+
+            if (evaluation.IsValid)
+            {
+                return;
+            }
+
+            var emittedAny = false;
+            foreach (var detail in FlattenDetails(evaluation))
+            {
+                if (detail.IsValid || detail.HasErrors == false || detail.Errors == null)
+                {
+                    continue;
+                }
+
+                var path = detail.InstanceLocation?.ToString();
+                foreach (var error in detail.Errors)
+                {
+                    // error.Key identifies the failed keyword, error.Value is the message.
+                    var message = string.IsNullOrWhiteSpace(error.Value)
+                        ? $"Schema violation at '{error.Key}'"
+                        : error.Value;
+                    result.Errors.Add(new ValidationMessage(message, path));
+                    emittedAny = true;
+                }
+            }
+
+            if (!emittedAny)
+            {
+                // The root evaluation reported failure but no per-keyword message was
+                // flattened (e.g. under Basic output mode). Fall back to a generic error.
+                result.Errors.Add(new ValidationMessage(
+                    "Document does not conform to the GhJSON v1.0 schema."));
+            }
+        }
+
+        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root)
+        {
+            yield return root;
+            if (root.Details == null)
+            {
+                yield break;
+            }
+
+            foreach (var child in root.Details)
+            {
+                foreach (var node in FlattenDetails(child))
+                {
+                    yield return node;
+                }
             }
         }
 

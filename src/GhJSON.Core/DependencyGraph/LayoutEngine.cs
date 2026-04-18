@@ -56,7 +56,7 @@ namespace GhJSON.Core.DependencyGraph
                 switch (options.Algorithm)
                 {
                     case LayoutAlgorithm.Sugiyama:
-                        ApplySugiyamaLayout(islandNodes, options);
+                        ApplySugiyamaLayout(islandNodes, options, diagnostics);
                         break;
                     default:
                         throw new NotSupportedException($"Layout algorithm {options.Algorithm} is not supported");
@@ -91,9 +91,15 @@ namespace GhJSON.Core.DependencyGraph
             return new LayoutResult(allPositions, islandIds, diagnostics);
         }
 
-        private static void ApplySugiyamaLayout(List<LayoutNode> nodes, LayoutOptions options)
+        private static void ApplySugiyamaLayout(List<LayoutNode> nodes, LayoutOptions options, List<string>? diagnostics = null)
         {
-            LayerAssignment.AssignLayers(nodes);
+            LayerAssignment.AssignLayers(nodes, out var cycleNodes);
+            if (diagnostics != null && cycleNodes.Count > 0)
+            {
+                diagnostics.Add(
+                    $"Detected {cycleNodes.Count} component(s) participating in dependency cycles; cycle edges treated as same-layer.");
+            }
+
             nodes = EdgeConcentration.InsertHubNodes(nodes);
             RowOrdering.AssignRows(nodes);
             CrossingMinimizer.MinimizeCrossings(nodes);

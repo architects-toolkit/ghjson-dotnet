@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/extensions/gh.ironpython.schema.json",
+  "title": "GhJSON Extension: gh.ironpython (v1.0)",
+  "description": "Extension for IronPython Script component state",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "IronPython 2 script code"
+    },
+    "showStandardOutput": {
+      "type": "boolean",
+      "description": "Whether to show standard output parameter (default: true)"
+    },
+    "avoidMarshalGuids": {
+      "type": "boolean",
+      "description": "Avoid Marshalling Output Guids - true when enabled (default: false)"
+    },
+    "avoidGraftOutputs": {
+      "type": "boolean",
+      "description": "Avoid Grafting Output Lines - true when enabled (default: false)"
+    },
+    "avoidMarshalInputs": {
+      "type": "boolean",
+      "description": "Avoid Marshalling Inputs - true when enabled (default: false)"
+    },
+    "outModifiers": {
+      "type": "object",
+      "description": "Modifiers for the 'out' standard output parameter",
+      "properties": {
+        "isSimplified": {
+          "type": "boolean",
+          "description": "Simplify output data tree"
+        },
+        "isReversed": {
+          "type": "boolean",
+          "description": "Reverse output data tree"
+        },
+        "dataMapping": {
+          "type": "string",
+          "enum": ["None", "Flatten", "Graft"],
+          "description": "Data mapping mode for output"
+        },
+        "expression": {
+          "type": "string",
+          "description": "Expression applied to the output"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["code"],
+  "additionalProperties": false
+}

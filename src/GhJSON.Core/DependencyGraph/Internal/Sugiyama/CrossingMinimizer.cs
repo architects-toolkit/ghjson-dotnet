@@ -24,16 +24,25 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
 {
     internal static class CrossingMinimizer
     {
+        /// <summary>
+        /// Hard iteration cap for the crossing-minimization loop. Prevents theoretical
+        /// oscillation between two equivalent orderings that never converge. 24 iterations
+        /// is comfortably above what Sugiyama converges in for realistic graphs.
+        /// </summary>
+        private const int MaxIterations = 24;
+
         public static void MinimizeCrossings(List<LayoutNode> nodes)
         {
             bool changed;
+            var iterations = 0;
             do
             {
                 var oldY = nodes.ToDictionary(n => n.ComponentId, n => n.Pivot.Y);
                 ApplySinglePass(nodes);
                 changed = nodes.Any(n => Math.Abs(n.Pivot.Y - oldY[n.ComponentId]) > 0.001f);
+                iterations++;
             }
-            while (changed);
+            while (changed && iterations < MaxIterations);
         }
 
         private static void ApplySinglePass(List<LayoutNode> nodes)

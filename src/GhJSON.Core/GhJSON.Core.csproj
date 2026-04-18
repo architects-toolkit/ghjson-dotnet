@@ -40,7 +40,9 @@
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <!-- Embed schema files for validation -->
+  <!-- Embed schema files for validation.
+       The committed snapshot under Validation/Schemas/v1.0 is authoritative at build time.
+       Run tools/Sync-Schemas.ps1 to refresh it from the published ghjson-spec. -->
   <ItemGroup>
     <EmbeddedResource Include="Validation\Schemas\**\*.json" />
   </ItemGroup>

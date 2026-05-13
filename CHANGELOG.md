@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Diff and patch operations (`GhJSON.Core.DiffOperations`, `GhJSON.Core.PatchModels`):
+  - `GhJson.Diff(left, right, options?)` / `GhJson.DiffToPatch(...)` compare two `GhJsonDocument` instances and produce a `GhPatchDocument` describing the differences
+  - `GhJson.ApplyPatch(baseDoc, patch, options?)` applies a `GhPatchDocument` to a base document, recording any conflicts in the result
+  - `GhJson.PatchFromJson` / `GhJson.PatchToJson` / `GhJson.PatchFromFile` / `GhJson.PatchToFile` for `.ghpatch` serialization
+  - `GhJson.ValidatePatch(...)` for structural patch validation
+  - Identity precedence for matching: `instanceGuid` > `id` > structural fingerprint (`componentGuid` + `name` + optional `pivot`)
+  - Connection identity: canonical `paramName`, with fallback to `paramIndex`
+  - `DiffOptions` defaults: ignore runtime messages, metadata counters and timestamps; pivots are diffed by default
+  - `ApplyPatchOptions` defaults: `VerifyBase = true` (refuses apply on base checksum mismatch), `ContinueOnConflict = true`, `RenumberCollidingAddedIds = true`
+  - Conflict kinds: `MatchNotFound`, `MatchAmbiguous`, `InstanceGuidCollision`, `ConnectionAlreadyPresent`, `ConnectionNotFound`, `DanglingMember`, `BaseChecksumMismatch`, `SchemaVersionMismatch`
+  - Implements the sibling `.ghpatch` profile defined in [ghjson-spec](https://architects-toolkit.github.io/ghjson-spec/)
 - Automatic ID assignment in `DocumentBuilder.Build()`: Components lacking both `id` and `instanceGuid` now automatically receive sequential IDs before validation, eliminating the need for callers to manually assign IDs to new components
 - CI/CD infrastructure adapted from SmartHopper project:
   - Reusable composite actions: `get-version`, `update-version`, `update-badges`, `update-changelog`

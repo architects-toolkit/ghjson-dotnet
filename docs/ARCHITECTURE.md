@@ -40,6 +40,8 @@ ghjson-dotnet/
 │   │   ├── Validation/                 # Schema validation
 │   │   ├── FixOperations/              # Schema fix operations
 │   │   ├── MergeOperations/            # Schema merge operations
+│   │   ├── DiffOperations/             # Diff/patch operations on `.ghpatch` documents
+│   │   ├── PatchModels/                # Strongly-typed model for `.ghpatch` documents
 │   │   ├── NameResolution/             # Fuzzy name matching for components and parameters
 │   │   ├── TidyUpOperations/           # Schema tidy up operations
 │   │   └── GhJson.cs                   # Main façade entry point
@@ -141,6 +143,18 @@ namespace GhJSON.Core
 
         // Merge
         public static MergeResult Merge(GhJsonDocument baseDoc, GhJsonDocument incomingDoc, MergeOptions? options = null);
+
+        // Diff & Patch (`.ghpatch` sibling profile)
+        public static DiffResult Diff(GhJsonDocument left, GhJsonDocument right, DiffOptions? options = null);
+        public static GhPatchDocument DiffToPatch(GhJsonDocument left, GhJsonDocument right, DiffOptions? options = null);
+        public static GhPatchDocument PatchFromJson(string json);
+        public static string PatchToJson(GhPatchDocument patch, WriteOptions? options = null);
+        public static GhPatchDocument PatchFromFile(string path);
+        public static void PatchToFile(GhPatchDocument patch, string path, WriteOptions? options = null);
+        public static ApplyPatchResult ApplyPatch(GhJsonDocument baseDoc, GhPatchDocument patch, ApplyPatchOptions? options = null);
+        public static ApplyPatchResult ApplyPatch(string baseJson, string patchJson, ApplyPatchOptions? options = null);
+        public static ValidationResult ValidatePatch(GhPatchDocument patch);
+        public static ValidationResult ValidatePatch(string patchJson);
 
         // Schema Migration
         public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null);

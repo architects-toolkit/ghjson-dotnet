@@ -238,6 +238,87 @@ var mergeResult = GhJson.Merge(baseDoc, incomingDoc);
 var mergedDoc = mergeResult.Document;
 ```
 
+## Diff and Patch Operations
+
+The library implements the `.ghpatch` sibling profile from
+[ghjson-spec](https://architects-toolkit.github.io/ghjson-spec/). Patches are
+semantic per-entity descriptions of additions, removals and modifications keyed
+by GhJSON identity (`instanceGuid` > `id` > structural fingerprint).
+
+```csharp
+using GhJSON.Core;
+using GhJSON.Core.DiffOperations;
+using GhJSON.Core.PatchModels;
+
+// Generate a diff between two documents
+var diffResult = GhJson.Diff(left, right);
+GhPatchDocument patch = diffResult.Patch;
+
+Console.WriteLine($"Components ops: {diffResult.ComponentOpCount}, " +
+                  $"connections ops: {diffResult.ConnectionOpCount}, " +
+                  $"groups ops: {diffResult.GroupOpCount}");
+
+// Serialize the patch to a `.ghpatch` file
+GhJson.PatchToFile(patch, "edit.ghpatch");
+
+// Load a `.ghpatch` file and apply it to a base document
+var loaded = GhJson.PatchFromFile("edit.ghpatch");
+var applyResult = GhJson.ApplyPatch(left, loaded);
+
+if (applyResult.Success && !applyResult.HasConflicts)
+{
+    // Round-trip: applyResult.Document is semantically equal to `right`.
+}
+else
+{
+    foreach (var c in applyResult.Conflicts)
+    {
+        Console.WriteLine($"[{c.Kind}] {c.Message} ({c.Path})");
+    }
+}
+```
+
+### Diff Options
+
+```csharp
+var options = new DiffOptions
+{
+    IgnoreRuntimeMessages = true,    // errors / warnings / remarks on components
+    IgnoreMetadataCounters = true,   // metadata.componentCount, connectionCount, groupCount
+    IgnoreMetadataTimestamps = true, // metadata.created, modified
+    IgnorePivots = false,            // canvas positions are diffed by default
+    IncludeBaseChecksum = true,      // emit sha256 in patch.base for verification
+};
+
+var diff = GhJson.Diff(left, right, options);
+```
+
+### Apply Options
+
+```csharp
+var options = new ApplyPatchOptions
+{
+    VerifyBase = true,                // refuse to apply on base checksum mismatch
+    ContinueOnConflict = true,        // collect all conflicts, don't throw on first
+    RenumberCollidingAddedIds = true, // reassign component ids on collision
+};
+
+var apply = GhJson.ApplyPatch(baseDoc, patch, options);
+```
+
+### Patch Validation
+
+```csharp
+var result = GhJson.ValidatePatch(patch);
+if (!result.IsValid)
+{
+    foreach (var error in result.Errors)
+    {
+        Console.WriteLine($"{error.Path}: {error.Message}");
+    }
+}
+```
+
 ## Schema Migration
 
 ```csharp

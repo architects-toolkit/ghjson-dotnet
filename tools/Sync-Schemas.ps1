@@ -22,7 +22,7 @@ $ErrorActionPreference = 'Stop'
 
 if (-not $BaseUrl.EndsWith('/')) { $BaseUrl += '/' }
 
-$destRoot = Join-Path $Root 'src\GhJSON.Core\Validation\Schemas\v1.0'
+$destRoot = Join-Path $Root 'src/GhJSON.Core/Validation/Schemas/v1.0'
 if (-not (Test-Path $destRoot)) {
     New-Item -ItemType Directory -Force -Path $destRoot | Out-Null
 }
@@ -82,7 +82,7 @@ $drift = $false
 
 foreach ($rel in $files) {
     $url = $BaseUrl + $rel
-    $dest = Join-Path $destRoot ($rel -replace '/', '\')
+    $dest = Join-Path $destRoot $rel
     $destDir = Split-Path -Parent $dest
     if (-not (Test-Path $destDir)) {
         New-Item -ItemType Directory -Force -Path $destDir | Out-Null

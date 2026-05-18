@@ -46,7 +46,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         public virtual bool CanHandle(GhJsonComponent component)
         {
             return component.Name == this.ComponentName ||
-                   component.ComponentGuid == this.ComponentGuid;
+                   component.ComponentGuid == this.ComponentGuid ||
+                   component.ComponentState?.Extensions?.ContainsKey(this.ExtensionKey) == true;
         }
 
         public virtual void Serialize(IGH_DocumentObject obj, GhJsonComponent component)

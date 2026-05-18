@@ -73,6 +73,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ComponentNameResolver` Python aliases now resolve to `"Python 3 Script"` (Rhino 8 canonical name) instead of legacy `"Python Script"`
+- `ComponentNameResolver` alias dictionary expanded with missing entries: `"python3"`, `"ghpython"`, `"python script"`, `"csharp script"`, `"c# component"`, `"number slider"` (with space), `"str"`, `"string"` (→ Text), `"streamfilter"`, `"filter"` (→ Stream Filter)
 - `ComponentNameResolver` alias verification — no longer returns aliases absent from the known set; falls back to fuzzy matching
 - `GraphBuilder` GUID collision — id-only components now get stable synthetic keys instead of collapsing to `Guid.Empty`
 - `CanvasDeleter` race condition — now blocks until UI thread completion; result reflects actual deletion outcome

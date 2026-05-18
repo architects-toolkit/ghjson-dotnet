@@ -62,6 +62,36 @@ namespace GhJSON.Core.Tests.SpecCompliance
         }
 
         [Fact]
+        public void Panel_BoundsAsString_Passes()
+        {
+            var json = Wrap(@"{""gh.panel"":{""text"":""hi"",""multiline"":false,""wrap"":false,""bounds"":""50x40""}}");
+
+            var result = GhJson.Validate(json, ValidationLevel.Standard);
+
+            Assert.True(result.IsValid, string.Join(";", result.Errors));
+        }
+
+        [Fact]
+        public void Panel_BoundsAsArray_Fails()
+        {
+            var json = Wrap(@"{""gh.panel"":{""text"":""hi"",""multiline"":false,""wrap"":false,""bounds"":[50,40]}}");
+
+            var result = GhJson.Validate(json, ValidationLevel.Standard);
+
+            Assert.False(result.IsValid);
+        }
+
+        [Fact]
+        public void Panel_BoundsInvalidFormat_Fails()
+        {
+            var json = Wrap(@"{""gh.panel"":{""text"":""hi"",""multiline"":false,""wrap"":false,""bounds"":""invalid""}}");
+
+            var result = GhJson.Validate(json, ValidationLevel.Standard);
+
+            Assert.False(result.IsValid);
+        }
+
+        [Fact]
         public void UnknownExtensionKey_IsAccepted()
         {
             // additionalProperties: { type: object } in extensions registry.

@@ -70,6 +70,7 @@ namespace GhJSON.Core.NameResolution
             { "slider", "Number Slider" },
             { "numberslider", "Number Slider" },
             { "numslider", "Number Slider" },
+            { "number slider", "Number Slider" },
             { "panel", "Panel" },
             { "point", "Point" },
             { "pt", "Point" },
@@ -81,6 +82,8 @@ namespace GhJSON.Core.NameResolution
             { "int", "Integer" },
             { "boolean", "Boolean" },
             { "bool", "Boolean" },
+            { "str", "Text" },
+            { "string", "Text" },
             { "toggle", "Boolean Toggle" },
             { "booleantoggle", "Boolean Toggle" },
 
@@ -160,17 +163,26 @@ namespace GhJSON.Core.NameResolution
             { "colourswatch", "Colour Swatch" },
             { "colorswatch", "Colour Swatch" },
 
+            // Stream components
+            { "streamfilter", "Stream Filter" },
+            { "filter", "Stream Filter" },
+
             // Script components
             { "c#", "C# Script" },
             { "c#script", "C# Script" },
+            { "c# component", "C# Script" },
             { "csharp", "C# Script" },
+            { "csharp script", "C# Script" },
             { "cscript", "C# Script" },
-            { "python", "Python Script" },
-            { "py", "Python Script" },
-            { "pythonscript", "Python Script" },
+            { "python", "Python 3 Script" },
+            { "py", "Python 3 Script" },
+            { "python3", "Python 3 Script" },
+            { "pythonscript", "Python 3 Script" },
+            { "python script", "Python 3 Script" },
+            { "ghpython", "Python 3 Script" },
             { "vb", "VB Script" },
             { "vbscript", "VB Script" },
-            { "ironpython", "IronPython Script" },
+            { "ironpython", "IronPython 2 Script" },
         };
 
         /// <summary>
@@ -215,7 +227,7 @@ namespace GhJSON.Core.NameResolution
 
             // Try alias first; only return it directly if it exists exactly in the known set.
             // Otherwise, prefer the alias as a better seed for fuzzy matching against the
-            // actual registered names (e.g. "python" → alias "Python Script" → fuzzy → "Python 3 Script").
+            // actual registered names (e.g. "python" → alias "Python 3 Script").
             var alias = ResolveAlias(input);
             string fuzzyInput = input;
             if (alias != null)

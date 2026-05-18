@@ -182,7 +182,7 @@ namespace GhJSON.Core.NameResolution
             { "ghpython", "Python 3 Script" },
             { "vb", "VB Script" },
             { "vbscript", "VB Script" },
-            { "ironpython", "IronPython Script" },
+            { "ironpython", "IronPython 2 Script" },
         };
 
         /// <summary>

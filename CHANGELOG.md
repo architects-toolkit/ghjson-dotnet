@@ -11,35 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Automatic Component Layout
 
-- **Dependency Graph Layout Engine** with Sugiyama algorithm for automatic, intelligent component positioning
-  - `GhJson.CalculateLayout()` — analyze connections and compute optimal positions
-  - `GhJson.AssignPivots()` — apply calculated positions to components
-  - `GhJson.ReorganizePivots()` — one-shot layout + apply
-  - Handles disconnected component groups as separate "islands"
-  - Detects and gracefully handles cyclic connections (reports via diagnostics)
-- **Grasshopper-Aware Layout Refinements** for production-ready visuals
-  - `BoundsAwareSpacing` — respects actual component sizes
-  - `PortAlignment` — aligns source components to target input ports
-  - `CollisionResolver` — prevents overlaps and shortens connection lengths
-  - Configurable via `LayoutRefinementOptions`
+- **Dependency Graph Layout Engine**: New algorithm-based layout system with Sugiyama implementation
+  - `LayoutEngine.CalculateLayout()` - Main entry point for layout calculations
+  - `LayoutOptions` - Configurable spacing and algorithm selection
+  - `LayoutResult` - Structured output with positions, islands, and diagnostics
+  - `LayoutAlgorithm` enum - Extensible algorithm selector (currently Sugiyama only)
+  - Internal modular Sugiyama implementation: LayerAssignment, EdgeConcentration, RowOrdering, CrossingMinimizer, CoordinateAssigner
+  - `GraphBuilder` - Converts GhJsonDocument to internal graph representation
+  - `IslandDetector` - Identifies disconnected component groups
+- **Layout Façade Methods** in `GhJson.cs`:
+  - `GhJson.CalculateLayout()` - Calculate optimal component positions using dependency graph analysis
+  - `GhJson.AssignPivots()` - Apply calculated layout positions to document components
+  - `GhJson.ReorganizePivots()` - Convenience method combining calculate and assign operations
+- **Grasshopper-Aware Layout Refinements** in `GhJSON.Grasshopper/LayoutRefinements`:
+  - `BoundsAwareSpacing` - Adjusts spacing based on actual component bounds (width/height)
+  - `PortAlignment` - Aligns parameter components to input port positions
+  - `CollisionResolver` - Prevents component overlaps and minimizes connection lengths
+  - `LayoutRefinementEngine` - Orchestrates all refinement passes with configurable options
+  - `LayoutRefinementOptions` - Configuration for enabling/disabling specific refinements
 
 #### Fuzzy Name Resolution (AI-Friendly)
 
 - **Smart component name matching** when exact names are unknown or misspelled
-  - Alias dictionary for common abbreviations (`"slider"` → `"Number Slider"`)
-  - Fuzzy matching with Levenshtein distance for typos (`"Addtion"` → `"Addition"`)
-  - Pattern-based type prioritization (prefers modern components over legacy)
-  - Exposed via `GhJson.ResolveComponentName()` and `GhJson.ResolveParameterName()`
+  - `ComponentNameResolver`: alias dictionary + fuzzy matching for Grasshopper component names
+  - `ComponentTypeResolver`: pattern dictionary to prioritize/deprioritize certain component types (e.g. legacy script components)
+  - `ParameterNameResolver`: alias dictionary + fuzzy matching for parameter names
+  - `FuzzyMatcher`: core utility with exact, normalized, prefix, contains, and Levenshtein matching
+  - `NameResolver`: unified public facade exposed via `GhJson.ResolveComponentName()` / `GhJson.ResolveParameterName()`
 - **Automatic fallback** in deserialization and connection wiring when exact lookups fail
+  - `ComponentInstantiator` falls back to fuzzy matching when exact name lookup fails during deserialization
+  - `CanvasPlacer.GetParameter` falls back to fuzzy matching when exact parameter name lookup fails during connection wiring
   - Example: `"python"` now correctly resolves to `"Python 3 Script"` on Rhino 8 (previously failed)
+- **Inspired by [Grasshopper MCP](https://github.com/alfredatnycu/grasshopper-mcp)** — an open-source MCP to connect Grasshopper with Claude Desktop (MIT License, compatible with our Apache License 2.0)
 
 #### Canvas Operations
 
-- **Delete operations** with full undo support
-  - `GhJsonGrasshopper.Delete()` — remove specific objects by GUID
-  - `GhJsonGrasshopper.Clear()` — remove all objects
-  - Both operations block until complete and return detailed results
-  - Single Ctrl+Z reverts entire batch
+- **Delete operations** (`GhJSON.Grasshopper.DeleteOperations`) with full undo support
+  - `GhJsonGrasshopper.Delete()`: Delete specific objects from the canvas by GUID with batch undo support
+  - `GhJsonGrasshopper.Clear()`: Clear all objects from the canvas
+  - `DeleteOptions`: Configuration for deletion behavior (redraw)
+  - `DeleteResult`: Structured result with deleted/failed GUIDs and counts
+  - All operations register proper Grasshopper undo events for Ctrl+Z support
 - **Viewport filtering** — `CanvasSelector.WithViewport(RectangleF)` restricts queries to visible canvas area
 
 #### Schema Validation
@@ -48,6 +60,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Validates raw JSON to catch unknown/invalid properties (catches errors that strong-typed deserialization would silently drop)
   - Three levels: `Minimal` (fast), `Standard` (with schema), `Strict` (with semantics)
   - Offline validation using embedded schema bundle (14 schemas including all extensions)
+
+#### Document Building
+
+- **Automatic ID assignment** in `DocumentBuilder.Build()`: Components lacking both `id` and `instanceGuid` now automatically receive sequential IDs before validation, eliminating the need for callers to manually assign IDs to new components
+
+#### Diff and Patch Operations
+
+- **Compare and apply document changes** (`GhJSON.Core.DiffOperations`, `GhJSON.Core.PatchModels`)
+  - `GhJson.Diff(left, right, options?)` / `GhJson.DiffToPatch(...)` compare two `GhJsonDocument` instances and produce a `GhPatchDocument` describing the differences
+  - `GhJson.ApplyPatch(baseDoc, patch, options?)` applies a `GhPatchDocument` to a base document, recording any conflicts in the result
+  - `GhJson.PatchFromJson` / `GhJson.PatchToJson` / `GhJson.PatchFromFile` / `GhJson.PatchToFile` for `.ghpatch` serialization
+  - `GhJson.ValidatePatch(...)` for structural patch validation
+- **Identity precedence for matching**: `instanceGuid` > `id` > structural fingerprint (`componentGuid` + `name` + optional `pivot`)
+- **Connection identity**: canonical `paramName`, with fallback to `paramIndex`
+- **Diff options** (`DiffOptions`) defaults: ignore runtime messages, metadata counters and timestamps; pivots are diffed by default
+- **Apply patch options** (`ApplyPatchOptions`) defaults: `VerifyBase = true` (refuses apply on base checksum mismatch), `ContinueOnConflict = true`, `RenumberCollidingAddedIds = true`
+- **Conflict kinds**: `MatchNotFound`, `MatchAmbiguous`, `InstanceGuidCollision`, `ConnectionAlreadyPresent`, `ConnectionNotFound`, `DanglingMember`, `BaseChecksumMismatch`, `SchemaVersionMismatch`
+- Implements the sibling `.ghpatch` profile defined in [ghjson-spec](https://architects-toolkit.github.io/ghjson-spec/)
 
 ### Noticeable Changes for End Users
 
@@ -82,6 +112,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CanvasDeleter` race condition — now blocks until UI thread completion; result reflects actual deletion outcome
 - `PortAlignment` drift — removed accumulating `+ spacingY / 2` offset on chained connections
 - `CrossingMinimizer` — added iteration cap (24) to prevent theoretical non-convergence
+
+
+
+
 
 ## [1.0.0] - 2026-02-08
 

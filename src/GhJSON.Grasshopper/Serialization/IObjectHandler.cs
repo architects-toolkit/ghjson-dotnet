@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+using System;
 using GhJSON.Core.SchemaModels;
 using Grasshopper.Kernel;
 
@@ -39,6 +40,25 @@ namespace GhJSON.Grasshopper.Serialization
         string? SchemaExtensionUrl { get; }
 
         /// <summary>
+        /// Gets the extension key used by this handler (e.g., "gh.python", "gh.panel").
+        /// Returns null for handlers that do not use extension keys.
+        /// Used by <see cref="ObjectHandlerRegistry"/> to resolve extension keys to component types.
+        /// </summary>
+        string? ExtensionKey => null;
+
+        /// <summary>
+        /// Gets the component GUID that this handler targets.
+        /// Returns <see cref="Guid.Empty"/> for handlers that do not target a specific component type.
+        /// </summary>
+        Guid ComponentGuid => Guid.Empty;
+
+        /// <summary>
+        /// Gets the canonical component name that this handler targets (e.g., "Python", "Panel").
+        /// Returns null for handlers that do not target a specific component name.
+        /// </summary>
+        string? ComponentName => null;
+
+        /// <summary>
         /// Determines if this handler can process the given document object during serialization.
         /// </summary>
         /// <param name="obj">The document object to check.</param>
@@ -47,10 +67,16 @@ namespace GhJSON.Grasshopper.Serialization
 
         /// <summary>
         /// Determines if this handler can process the given serialized component during deserialization.
+        /// The default implementation matches by <see cref="ComponentName"/>, <see cref="ComponentGuid"/>,
+        /// or <see cref="ExtensionKey"/> presence in the component's extensions.
+        /// Override for custom matching logic.
         /// </summary>
         /// <param name="component">The serialized component to check.</param>
         /// <returns>True if this handler can process the component.</returns>
-        bool CanHandle(GhJsonComponent component);
+        bool CanHandle(GhJsonComponent component) =>
+            (ComponentName != null && component.Name == ComponentName) ||
+            (ComponentGuid != Guid.Empty && component.ComponentGuid == ComponentGuid) ||
+            (ExtensionKey != null && component.ComponentState?.Extensions?.ContainsKey(ExtensionKey) == true);
 
         /// <summary>
         /// Serializes properties from the document object to the component.

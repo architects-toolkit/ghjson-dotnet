@@ -27,13 +27,20 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class ToggleHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.toggle";
-
         private static readonly Guid ToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
 
         public int Priority => 100;
 
         public string? SchemaExtensionUrl => null;
+
+        /// <inheritdoc/>
+        public string ExtensionKey => "gh.toggle";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => ToggleGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Boolean Toggle";
 
         public bool CanHandle(IGH_DocumentObject obj)
         {

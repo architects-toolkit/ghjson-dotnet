@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using GhJSON.Grasshopper.Serialization.ObjectHandlers;
@@ -107,6 +108,56 @@ namespace GhJSON.Grasshopper.Serialization
                     .Distinct()
                     .ToList();
             }
+        }
+
+        /// <summary>
+        /// Resolves an extension key to a component GUID by querying registered handlers.
+        /// Returns <c>null</c> if no handler matches or the matching handler has no known GUID.
+        /// </summary>
+        /// <param name="extensionKey">The extension key to resolve (e.g., "gh.python", "gh.panel").</param>
+        /// <returns>The component GUID, or null.</returns>
+        internal static Guid? ResolveExtensionKeyToGuid(string extensionKey)
+        {
+            EnsureInitialized();
+            lock (Handlers)
+            {
+                foreach (var handler in Handlers)
+                {
+                    if (string.Equals(handler.ExtensionKey, extensionKey, StringComparison.Ordinal))
+                    {
+                        var guid = handler.ComponentGuid;
+                        if (guid != Guid.Empty)
+                        {
+                            return guid;
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves an extension key to a canonical component name by querying registered handlers.
+        /// Returns <c>null</c> if no handler matches.
+        /// </summary>
+        /// <param name="extensionKey">The extension key to resolve (e.g., "gh.python", "gh.panel").</param>
+        /// <returns>The component name, or null.</returns>
+        internal static string? ResolveExtensionKeyToComponentName(string extensionKey)
+        {
+            EnsureInitialized();
+            lock (Handlers)
+            {
+                foreach (var handler in Handlers)
+                {
+                    if (string.Equals(handler.ExtensionKey, extensionKey, StringComparison.Ordinal))
+                    {
+                        return handler.ComponentName;
+                    }
+                }
+            }
+
+            return null;
         }
 
         private static void RegisterBuiltInHandlers()

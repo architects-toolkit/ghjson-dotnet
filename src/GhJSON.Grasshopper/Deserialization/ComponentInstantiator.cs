@@ -34,6 +34,15 @@ namespace GhJSON.Grasshopper.Deserialization
     {
         /// <summary>
         /// Creates a document object from a GhJSON component definition.
+        /// <para>Resolution order (first match wins):</para>
+        /// <list type="number">
+        ///   <item>Explicit <c>ComponentGuid</c>.</item>
+        ///   <item>Exact component name match.</item>
+        ///   <item>Alias resolution (<see cref="ComponentNameResolver.ResolveAlias"/> — deterministic).</item>
+        ///   <item>Extension key → GUID (deterministic, via registered handlers).</item>
+        ///   <item>Extension key → handler's canonical name → fuzzy match (first source of truth).</item>
+        ///   <item>Original name → fuzzy match (second source of truth).</item>
+        /// </list>
         /// </summary>
         /// <param name="component">The component definition.</param>
         /// <param name="options">Deserialization options.</param>
@@ -46,7 +55,7 @@ namespace GhJSON.Grasshopper.Deserialization
 
             IGH_DocumentObject? obj = null;
 
-            // Try to create by component GUID first (most reliable)
+            // 1. Try explicit component GUID (most reliable)
             if (component.ComponentGuid.HasValue && component.ComponentGuid != Guid.Empty)
             {
 #if DEBUG
@@ -55,19 +64,38 @@ namespace GhJSON.Grasshopper.Deserialization
                 obj = CreateByGuid(component.ComponentGuid.Value);
             }
 
-            // Fallback to name-based creation
+            // 2. Try exact name match
             if (obj == null && !string.IsNullOrEmpty(component.Name))
             {
 #if DEBUG
-                Debug.WriteLine($"[ComponentInstantiator.Create] Trying to create by name: {component.Name}");
+                Debug.WriteLine($"[ComponentInstantiator.Create] Trying to create by exact name: {component.Name}");
 #endif
                 obj = CreateByName(component.Name, component.Library);
+            }
 
-                // Fallback to fuzzy name resolution (alias + approximate matching)
-                if (obj == null)
+            // 3. Try alias resolution (deterministic, no fuzzy)
+            if (obj == null && !string.IsNullOrEmpty(component.Name))
+            {
+                obj = CreateByAlias(component.Name, component.Library);
+            }
+
+            // 4. Try extension key → GUID (deterministic, via registered handlers)
+            if (obj == null)
+            {
+                obj = CreateByExtensionKey(component);
+            }
+
+            // 5. Fuzzy fallback: extension key first, then original name
+            if (obj == null)
+            {
+                // 5a. Extension key → handler's canonical name → fuzzy match
+                obj = CreateByExtensionKeyFuzzy(component);
+
+                // 5b. Original name → fuzzy match
+                if (obj == null && !string.IsNullOrEmpty(component.Name))
                 {
 #if DEBUG
-                    Debug.WriteLine($"[ComponentInstantiator.Create] Exact name match failed, trying fuzzy resolution: {component.Name}");
+                    Debug.WriteLine($"[ComponentInstantiator.Create] Trying fuzzy name resolution: {component.Name}");
 #endif
                     obj = CreateByFuzzyName(component.Name, component.Library);
                 }
@@ -133,6 +161,90 @@ namespace GhJSON.Grasshopper.Deserialization
 #endif
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Resolves a name through the alias dictionary (deterministic, no fuzzy)
+        /// and creates the component by its canonical name.
+        /// </summary>
+        private static IGH_DocumentObject? CreateByAlias(string name, string? library)
+        {
+            var canonical = ComponentNameResolver.ResolveAlias(name);
+            if (canonical == null)
+            {
+                return null;
+            }
+
+#if DEBUG
+            Debug.WriteLine($"[CreateByAlias] Alias resolved '{name}' → '{canonical}'");
+#endif
+
+            return CreateByName(canonical, library);
+        }
+
+        /// <summary>
+        /// Resolves an extension key to a component GUID via the handler registry
+        /// (deterministic — no fuzzy matching).
+        /// </summary>
+        private static IGH_DocumentObject? CreateByExtensionKey(GhJsonComponent component)
+        {
+            var extensions = component.ComponentState?.Extensions;
+            if (extensions == null || extensions.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (var key in extensions.Keys)
+            {
+                var guid = ObjectHandlerRegistry.ResolveExtensionKeyToGuid(key);
+                if (guid.HasValue)
+                {
+#if DEBUG
+                    Debug.WriteLine($"[CreateByExtensionKey] Extension key '{key}' → GUID {guid.Value}");
+#endif
+                    var obj = CreateByGuid(guid.Value);
+                    if (obj != null)
+                    {
+                        return obj;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Uses the handler's canonical component name (derived from an extension key)
+        /// as a seed for fuzzy resolution.
+        /// </summary>
+        private static IGH_DocumentObject? CreateByExtensionKeyFuzzy(GhJsonComponent component)
+        {
+            var extensions = component.ComponentState?.Extensions;
+            if (extensions == null || extensions.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (var key in extensions.Keys)
+            {
+                var handlerName = ObjectHandlerRegistry.ResolveExtensionKeyToComponentName(key);
+                if (handlerName == null)
+                {
+                    continue;
+                }
+
+#if DEBUG
+                Debug.WriteLine($"[CreateByExtensionKeyFuzzy] Extension key '{key}' → handler name '{handlerName}', trying fuzzy resolution");
+#endif
+
+                var obj = CreateByFuzzyName(handlerName, null);
+                if (obj != null)
+                {
+                    return obj;
+                }
+            }
+
+            return null;
         }
 
         private static IGH_DocumentObject? CreateByName(string name, string? library)
@@ -223,7 +335,9 @@ namespace GhJSON.Grasshopper.Deserialization
         }
 
         /// <summary>
-        /// Checks if a component can be instantiated.
+        /// Checks if a component can be instantiated using the same resolution
+        /// chain as <see cref="Create"/>: GUID → exact name → alias → extension
+        /// key (deterministic) → extension key (fuzzy) → fuzzy name.
         /// </summary>
         /// <param name="component">The component to check.</param>
         /// <returns>True if the component can be created.</returns>
@@ -232,7 +346,8 @@ namespace GhJSON.Grasshopper.Deserialization
 #if DEBUG
             Debug.WriteLine($"[CanInstantiate] Checking if component can be instantiated: {component.Name ?? "unknown"}");
 #endif
-            
+
+            // 1. Explicit GUID
             if (component.ComponentGuid.HasValue && component.ComponentGuid != Guid.Empty)
             {
                 var proxy = Instances.ComponentServer.EmitObjectProxy(component.ComponentGuid.Value);
@@ -245,6 +360,7 @@ namespace GhJSON.Grasshopper.Deserialization
                 }
             }
 
+            // 2. Exact name match
             if (!string.IsNullOrEmpty(component.Name))
             {
                 foreach (var proxy in Instances.ComponentServer.ObjectProxies)
@@ -258,7 +374,64 @@ namespace GhJSON.Grasshopper.Deserialization
                     }
                 }
 
-                // Try fuzzy resolution as fallback
+                // 3. Alias resolution (deterministic)
+                var aliasName = ComponentNameResolver.ResolveAlias(component.Name);
+                if (aliasName != null)
+                {
+                    foreach (var proxy in Instances.ComponentServer.ObjectProxies)
+                    {
+                        if (proxy.Desc.Name.Equals(aliasName, StringComparison.OrdinalIgnoreCase))
+                        {
+#if DEBUG
+                            Debug.WriteLine($"[CanInstantiate] Can instantiate by alias: {component.Name} → {aliasName}");
+#endif
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // 4. Extension key → GUID (deterministic)
+            var extensions = component.ComponentState?.Extensions;
+            if (extensions != null)
+            {
+                foreach (var key in extensions.Keys)
+                {
+                    var guid = ObjectHandlerRegistry.ResolveExtensionKeyToGuid(key);
+                    if (guid.HasValue)
+                    {
+                        var proxy = Instances.ComponentServer.EmitObjectProxy(guid.Value);
+                        if (proxy != null)
+                        {
+#if DEBUG
+                            Debug.WriteLine($"[CanInstantiate] Can instantiate by extension key '{key}' → GUID {guid.Value}");
+#endif
+                            return true;
+                        }
+                    }
+                }
+
+                // 5. Extension key → handler name → fuzzy
+                foreach (var key in extensions.Keys)
+                {
+                    var handlerName = ObjectHandlerRegistry.ResolveExtensionKeyToComponentName(key);
+                    if (handlerName != null)
+                    {
+                        var resolved = ResolveComponentName(handlerName, null);
+                        if (resolved != null)
+                        {
+#if DEBUG
+                            Debug.WriteLine($"[CanInstantiate] Can instantiate by extension key fuzzy: '{key}' → '{handlerName}' → '{resolved}'");
+#endif
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // 6. Fuzzy name resolution
+            if (!string.IsNullOrEmpty(component.Name))
+            {
                 var resolvedName = ResolveComponentName(component.Name, component.Library);
                 if (resolvedName != null)
                 {

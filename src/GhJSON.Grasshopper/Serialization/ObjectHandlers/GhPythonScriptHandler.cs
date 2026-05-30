@@ -55,12 +55,12 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <summary>
         /// Not used — detection is by type name, not GUID.
         /// </summary>
-        protected override Guid ComponentGuid => Guid.Empty;
+        public override Guid ComponentGuid => Guid.Empty;
 
         /// <summary>
         /// Not used — detection is by type name, not component name.
         /// </summary>
-        protected override string ComponentName => "GhPython Script";
+        public override string ComponentName => "GhPython Script";
 
         /// <summary>
         /// Matches any <c>ZuiPythonComponent</c> instance by type name.
@@ -72,13 +72,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             return obj is IGH_Component && obj.GetType().Name == GhPythonTypeName;
         }
 
-        /// <summary>
-        /// Matches components that were serialized with the <c>gh.ghpython</c> extension key.
-        /// </summary>
-        public override bool CanHandle(GhJsonComponent component)
-        {
-            return component.ComponentState?.Extensions?.ContainsKey(ExtensionKey) == true;
-        }
+
 
         /// <summary>
         /// No-op: old GhPython components do not implement <c>IScriptComponent</c>,

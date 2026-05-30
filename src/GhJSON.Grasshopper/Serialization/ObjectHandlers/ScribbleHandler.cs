@@ -34,7 +34,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class ScribbleHandler : IObjectHandler, IPostPlacementHandler
     {
-        private const string ExtensionKey = "gh.scribble";
+        private static readonly Guid ScribbleGuid = new Guid("7f5c6c55-f846-4a08-9c9a-cfdc285cc6fe");
 
         /// <inheritdoc/>
         public int Priority => 100;
@@ -43,17 +43,21 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         public string? SchemaExtensionUrl => null;
 
         /// <inheritdoc/>
+        public string ExtensionKey => "gh.scribble";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => ScribbleGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Scribble";
+
+        /// <inheritdoc/>
         public bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is GH_Scribble;
         }
 
-        /// <inheritdoc/>
-        public bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == "Scribble" ||
-                   component.ComponentGuid == new Guid("7f5c6c55-f846-4a08-9c9a-cfdc285cc6fe");
-        }
+
 
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)

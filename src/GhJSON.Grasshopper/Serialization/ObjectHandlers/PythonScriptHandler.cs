@@ -27,8 +27,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public override string ExtensionKey => "gh.python";
 
-        protected override Guid ComponentGuid => Python3Guid;
+        public override Guid ComponentGuid => Python3Guid;
 
-        protected override string ComponentName => "Python";
+        public override string ComponentName => "Python";
     }
 }

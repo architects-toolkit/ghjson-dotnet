@@ -25,8 +25,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public override string ExtensionKey => "gh.csharp";
 
-        protected override Guid ComponentGuid => CSharpGuid;
+        public override Guid ComponentGuid => CSharpGuid;
 
-        protected override string ComponentName => "C#";
+        public override string ComponentName => "C#";
     }
 }

@@ -31,9 +31,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public override string ExtensionKey => "gh.vbscript";
 
-        protected override Guid ComponentGuid => VBNetGuid;
+        public override Guid ComponentGuid => VBNetGuid;
 
-        protected override string ComponentName => "VB Script";
+        public override string ComponentName => "VB Script";
 
         public override void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {

@@ -27,8 +27,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public override string ExtensionKey => "gh.ironpython";
 
-        protected override Guid ComponentGuid => IronPython2Guid;
+        public override Guid ComponentGuid => IronPython2Guid;
 
-        protected override string ComponentName => "IronPython";
+        public override string ComponentName => "IronPython";
     }
 }

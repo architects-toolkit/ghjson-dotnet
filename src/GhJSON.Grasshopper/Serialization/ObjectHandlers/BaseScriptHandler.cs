@@ -34,20 +34,13 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public abstract string ExtensionKey { get; }
 
-        protected abstract Guid ComponentGuid { get; }
+        public abstract Guid ComponentGuid { get; }
 
-        protected abstract string ComponentName { get; }
+        public abstract string ComponentName { get; }
 
         public virtual bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is IGH_Component comp && comp.ComponentGuid == this.ComponentGuid;
-        }
-
-        public virtual bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == this.ComponentName ||
-                   component.ComponentGuid == this.ComponentGuid ||
-                   component.ComponentState?.Extensions?.ContainsKey(this.ExtensionKey) == true;
         }
 
         public virtual void Serialize(IGH_DocumentObject obj, GhJsonComponent component)

@@ -70,6 +70,7 @@ function Get-SchemaFileList {
 
     $list = [System.Collections.Generic.List[string]]::new()
     $list.Add('ghjson.schema.json')
+    $list.Add('ghpatch.schema.json')
     $list.Add('extensions/extensions.schema.json')
 
     $registryUrl = $Base + 'extensions/extensions.schema.json'

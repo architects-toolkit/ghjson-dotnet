@@ -127,23 +127,28 @@ namespace GhJSON.Core
         }
 
         /// <summary>
-        /// Validate the structure of a <see cref="GhPatchDocument"/>.
+        /// Validate the structure of a <see cref="GhPatchDocument"/> against the
+        /// official GhPatch JSON Schema.
         /// </summary>
         /// <param name="patch">The patch to validate.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
         /// <returns>The validation result.</returns>
-        public static ValidationResult ValidatePatch(GhPatchDocument patch)
+        public static ValidationResult ValidatePatch(GhPatchDocument patch, bool preferOnline = false, string? schemaVersion = null)
         {
-            return PatchValidator.Validate(patch);
+            return PatchValidator.Validate(patch, preferOnline, schemaVersion);
         }
 
         /// <summary>
-        /// Validate a patch supplied as a JSON string.
+        /// Validate a patch supplied as a JSON string against the official GhPatch JSON Schema.
         /// </summary>
         /// <param name="patchJson">The patch JSON string.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
         /// <returns>The validation result.</returns>
-        public static ValidationResult ValidatePatch(string patchJson)
+        public static ValidationResult ValidatePatch(string patchJson, bool preferOnline = false, string? schemaVersion = null)
         {
-            return PatchValidator.Validate(patchJson);
+            return PatchValidator.Validate(patchJson, preferOnline, schemaVersion);
         }
 
         #endregion

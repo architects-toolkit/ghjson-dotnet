@@ -51,12 +51,16 @@ namespace GhJSON.Core.Validation
         public const string DefaultVersion = "1.0";
 
         private const string MainSchemaFileName = "ghjson.schema.json";
+        private const string PatchSchemaFileName = "ghpatch.schema.json";
 
         private static readonly Lazy<Bundle> LazyDefaultBundle =
             new Lazy<Bundle>(() => LoadEmbedded(DefaultVersion), LazyThreadSafetyMode.ExecutionAndPublication);
 
         private static readonly ConcurrentDictionary<string, Bundle> EmbeddedBundleCache =
             new ConcurrentDictionary<string, Bundle>();
+
+        private static readonly ConcurrentDictionary<string, JsonSchema> PatchSchemaCache =
+            new ConcurrentDictionary<string, JsonSchema>();
 
         private static readonly Lazy<HttpClient> LazyHttpClient = new Lazy<HttpClient>(() =>
         {
@@ -152,6 +156,61 @@ namespace GhJSON.Core.Validation
         }
 
         /// <summary>
+        /// Loads the GhPatch JSON Schema for the specified version.
+        /// When <paramref name="preferOnline"/> is <c>true</c>, attempts to download from
+        /// the official online repository first, falling back to embedded resources on failure.
+        /// </summary>
+        /// <param name="version">The schema version (e.g. "1.0"). Defaults to <see cref="DefaultVersion"/>.</param>
+        /// <param name="preferOnline">Prefer online schema over embedded snapshot.</param>
+        /// <returns>The loaded patch schema.</returns>
+        public static JsonSchema LoadPatchSchema(string? version = null, bool preferOnline = false)
+        {
+            var effectiveVersion = string.IsNullOrEmpty(version) ? DefaultVersion : version!;
+
+            if (!preferOnline)
+            {
+                return PatchSchemaCache.GetOrAdd(effectiveVersion, LoadPatchSchemaEmbedded);
+            }
+
+            try
+            {
+                return LoadPatchSchemaOnline(effectiveVersion, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Online patch load failed, falling back to embedded: {ex.Message}");
+                return PatchSchemaCache.GetOrAdd(effectiveVersion, LoadPatchSchemaEmbedded);
+            }
+        }
+
+        /// <summary>
+        /// Async version of <see cref="LoadPatchSchema"/>.
+        /// </summary>
+        /// <param name="version">The schema version (e.g. "1.0"). Defaults to <see cref="DefaultVersion"/>.</param>
+        /// <param name="preferOnline">Prefer online schema over embedded snapshot.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The loaded patch schema.</returns>
+        public static async Task<JsonSchema> LoadPatchSchemaAsync(string? version = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            var effectiveVersion = string.IsNullOrEmpty(version) ? DefaultVersion : version!;
+
+            if (!preferOnline)
+            {
+                return PatchSchemaCache.GetOrAdd(effectiveVersion, LoadPatchSchemaEmbedded);
+            }
+
+            try
+            {
+                return await LoadPatchSchemaOnline(effectiveVersion, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Online patch load failed, falling back to embedded: {ex.Message}");
+                return PatchSchemaCache.GetOrAdd(effectiveVersion, LoadPatchSchemaEmbedded);
+            }
+        }
+
+        /// <summary>
         /// Returns the embedded resource prefix for the given version.
         /// MSBuild transforms path separators to dots, and dots in folder names become
         /// <c>._digit</c> (e.g. v1.0 becomes v1._0).
@@ -215,6 +274,38 @@ namespace GhJSON.Core.Validation
             Debug.WriteLine(
                 $"[SchemaLoader] Registered {ids.Count} GhJSON schema(s) from embedded resources (version {version}).");
             return new Bundle(main, ids);
+        }
+
+        private static JsonSchema LoadPatchSchemaEmbedded(string version)
+        {
+            var prefix = GetEmbeddedResourcePrefix(version);
+            var resourceName = prefix + PatchSchemaFileName;
+            var assembly = typeof(SchemaLoader).Assembly;
+            var text = ReadResource(assembly, resourceName);
+            Debug.WriteLine($"[SchemaLoader] Loaded patch schema from embedded resources (version {version}).");
+            return JsonSchema.FromText(text);
+        }
+
+        private static async Task<JsonSchema> LoadPatchSchemaOnline(string version, CancellationToken cancellationToken)
+        {
+            var baseUrl = "https://architects-toolkit.github.io/ghjson-spec/schema/".TrimEnd('/');
+            var versionUrl = $"{baseUrl}/v{version}/";
+            var httpClient = LazyHttpClient.Value;
+
+            var patchUrl = versionUrl + PatchSchemaFileName;
+            try
+            {
+                using var response = await httpClient.GetAsync(patchUrl, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                var patchText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                Debug.WriteLine($"[SchemaLoader] Loaded patch schema from online (version {version}).");
+                return JsonSchema.FromText(patchText);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Failed to download patch schema from {patchUrl}: {ex.Message}");
+                throw;
+            }
         }
 
         private static async Task<Bundle> LoadOnline(string version, SchemaLoaderOptions options, CancellationToken cancellationToken)

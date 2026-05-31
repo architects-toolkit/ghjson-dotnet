@@ -16,164 +16,148 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Text.Json.Nodes;
 using GhJSON.Core.PatchModels;
 using GhJSON.Core.Validation;
+using Json.Schema;
 
 namespace GhJSON.Core.DiffOperations
 {
     /// <summary>
-    /// Structural validation for <see cref="GhPatchDocument"/> instances.
+    /// Validates <see cref="GhPatchDocument"/> instances against the official
+    /// <c>ghpatch.schema.json</c>. Supports embedded (offline) and online schema loading
+    /// with automatic fallback.
     /// </summary>
     internal static class PatchValidator
     {
-        public static ValidationResult Validate(GhPatchDocument patch)
+        /// <summary>
+        /// Validates a patch document against the GhPatch JSON Schema.
+        /// </summary>
+        /// <param name="patch">The patch to validate.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <returns>The validation result.</returns>
+        public static ValidationResult Validate(GhPatchDocument patch, bool preferOnline = false, string? schemaVersion = null)
+        {
+            var json = PatchSerializer.Serialize(patch);
+            return Validate(json, preferOnline, schemaVersion);
+        }
+
+        /// <summary>
+        /// Validates a patch JSON string against the GhPatch JSON Schema.
+        /// </summary>
+        /// <param name="json">The patch JSON string.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <returns>The validation result.</returns>
+        public static ValidationResult Validate(string json, bool preferOnline = false, string? schemaVersion = null)
         {
             var result = new ValidationResult { IsValid = true };
 
-            if (!string.Equals(patch.Kind, "ghpatch", StringComparison.Ordinal))
+            JsonNode? instance;
+            try
             {
-                result.Errors.Add(new ValidationMessage($"Patch kind must be 'ghpatch', got '{patch.Kind}'.", "kind"));
+                instance = JsonNode.Parse(json);
             }
-
-            if (patch.Patch == null)
+            catch (Exception ex)
             {
-                result.Errors.Add(new ValidationMessage("Patch body is missing.", "patch"));
+                result.Errors.Add(new ValidationMessage($"Invalid patch JSON: {ex.Message}"));
                 result.IsValid = false;
                 return result;
             }
 
-            ValidateComponentsOp(patch.Patch.Components, result);
-            ValidateConnectionsOp(patch.Patch.Connections, result);
-            ValidateGroupsOp(patch.Patch.Groups, result);
+            if (instance == null)
+            {
+                result.Errors.Add(new ValidationMessage("Patch JSON is empty."));
+                result.IsValid = false;
+                return result;
+            }
 
+            JsonSchema schema;
+            try
+            {
+                schema = SchemaLoader.LoadPatchSchema(schemaVersion, preferOnline);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(new ValidationMessage($"Failed to load patch schema: {ex.Message}"));
+                result.IsValid = false;
+                return result;
+            }
+
+            EvaluateSchema(schema, instance, result);
             result.IsValid = !result.HasErrors;
             return result;
         }
 
-        public static ValidationResult Validate(string json)
+        private static void EvaluateSchema(JsonSchema schema, JsonNode? instance, ValidationResult result)
         {
+            var options = new EvaluationOptions
+            {
+                OutputFormat = OutputFormat.List,
+                EvaluateAs = SpecVersion.Draft202012,
+            };
+
+            EvaluationResults evaluation;
             try
             {
-                var patch = PatchSerializer.Deserialize(json);
-                return Validate(patch);
+                evaluation = schema.Evaluate(instance, options);
             }
             catch (Exception ex)
             {
-                return ValidationResult.Failure($"Invalid patch JSON: {ex.Message}");
+                Debug.WriteLine($"[PatchValidator] Schema evaluation threw: {ex}");
+                result.Errors.Add(new ValidationMessage($"Schema evaluation error: {ex.Message}"));
+                return;
             }
-        }
 
-        private static void ValidateComponentsOp(GhPatchComponentsOp? op, ValidationResult result)
-        {
-            if (op == null)
+            if (evaluation.IsValid)
             {
                 return;
             }
 
-            if (op.Modify != null)
+            var emittedAny = false;
+            foreach (var detail in FlattenDetails(evaluation))
             {
-                for (var i = 0; i < op.Modify.Count; i++)
+                if (detail.IsValid || detail.HasErrors == false || detail.Errors == null)
                 {
-                    var modify = op.Modify[i];
-                    if (!HasAnyIdentity(modify.Match))
-                    {
-                        result.Errors.Add(new ValidationMessage(
-                            "Component modify must have at least one identity field in 'match'.",
-                            $"patch.components.modify[{i}].match"));
-                    }
+                    continue;
+                }
+
+                var path = detail.InstanceLocation?.ToString();
+                foreach (var error in detail.Errors)
+                {
+                    var message = string.IsNullOrWhiteSpace(error.Value)
+                        ? $"Schema violation at '{error.Key}'"
+                        : error.Value;
+                    result.Errors.Add(new ValidationMessage(message, path));
+                    emittedAny = true;
                 }
             }
 
-            if (op.Remove != null)
+            if (!emittedAny)
             {
-                for (var i = 0; i < op.Remove.Count; i++)
-                {
-                    if (!HasAnyIdentity(op.Remove[i]))
-                    {
-                        result.Errors.Add(new ValidationMessage(
-                            "Component remove must have at least one identity field.",
-                            $"patch.components.remove[{i}]"));
-                    }
-                }
+                result.Errors.Add(new ValidationMessage(
+                    "Patch does not conform to the GhPatch schema."));
             }
         }
 
-        private static void ValidateConnectionsOp(GhPatchConnectionsOp? op, ValidationResult result)
+        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root)
         {
-            if (op == null)
+            yield return root;
+            if (root.Details == null)
             {
-                return;
+                yield break;
             }
 
-            // Each connection must have both 'from' and 'to' set with at least an id.
-            void Check(System.Collections.Generic.List<SchemaModels.GhJsonConnection>? list, string path)
+            foreach (var child in root.Details)
             {
-                if (list == null)
+                foreach (var node in FlattenDetails(child))
                 {
-                    return;
-                }
-
-                for (var i = 0; i < list.Count; i++)
-                {
-                    var connection = list[i];
-                    if (connection.From == null || connection.To == null)
-                    {
-                        result.Errors.Add(new ValidationMessage($"Connection must have both 'from' and 'to'.", $"{path}[{i}]"));
-                    }
+                    yield return node;
                 }
             }
-
-            Check(op.Add, "patch.connections.add");
-            Check(op.Remove, "patch.connections.remove");
-        }
-
-        private static void ValidateGroupsOp(GhPatchGroupsOp? op, ValidationResult result)
-        {
-            if (op == null)
-            {
-                return;
-            }
-
-            if (op.Modify != null)
-            {
-                for (var i = 0; i < op.Modify.Count; i++)
-                {
-                    var modify = op.Modify[i];
-                    if (!HasAnyIdentity(modify.Match))
-                    {
-                        result.Errors.Add(new ValidationMessage(
-                            "Group modify must have at least one identity field in 'match'.",
-                            $"patch.groups.modify[{i}].match"));
-                    }
-                }
-            }
-
-            if (op.Remove != null)
-            {
-                for (var i = 0; i < op.Remove.Count; i++)
-                {
-                    if (!HasAnyIdentity(op.Remove[i]))
-                    {
-                        result.Errors.Add(new ValidationMessage(
-                            "Group remove must have at least one identity field.",
-                            $"patch.groups.remove[{i}]"));
-                    }
-                }
-            }
-        }
-
-        private static bool HasAnyIdentity(GhPatchComponentMatch match)
-        {
-            return (match.InstanceGuid.HasValue && match.InstanceGuid != Guid.Empty)
-                || match.Id.HasValue
-                || match.ComponentGuid.HasValue
-                || !string.IsNullOrEmpty(match.Name);
-        }
-
-        private static bool HasAnyIdentity(GhPatchGroupMatch match)
-        {
-            return (match.InstanceGuid.HasValue && match.InstanceGuid != Guid.Empty)
-                || match.Id.HasValue;
         }
     }
 }

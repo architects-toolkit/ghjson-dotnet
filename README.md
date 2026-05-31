@@ -61,6 +61,7 @@ var result = GhJsonGrasshopper.Put(document);
 ```csharp
 using GhJSON.Core;
 
+// Standard validation (offline, current schema version)
 var result = GhJson.Validate(json);
 if (!result.IsValid)
 {
@@ -70,8 +71,19 @@ if (!result.IsValid)
     }
 }
 
+// Prefer online schema; falls back to embedded on failure
+var result = GhJson.Validate(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
+
+// Async validation
+var result = await GhJson.ValidateAsync(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
+
 // Or quick check
 bool isValid = GhJson.IsValid(json);
+bool isValid = await GhJson.IsValidAsync(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
+
+// Patch validation
+var patchResult = GhJson.ValidatePatch(patchJson);
+var patchResult = GhJson.ValidatePatch(patchJson, preferOnline: true, schemaVersion: "1.0");
 ```
 
 ### Building Documents Programmatically
@@ -98,7 +110,7 @@ var doc = GhJson.CreateDocumentBuilder()
 
 - **Read/Write** — Parse GhJSON from string, file, or stream; serialize back to JSON or file
 - **Document Builder** — Fluent API for programmatic document construction
-- **Validation** — Schema conformance, structural integrity (unique IDs, connection references, group membership)
+- **Validation** — Schema conformance, structural integrity (unique IDs, connection references, group membership), with online/offline schema loading and version selection
 - **Fix** — Auto-repair metadata, assign missing IDs, regenerate instance GUIDs
 - **Merge** — Combine two GhJSON documents with configurable conflict resolution
 - **Schema Migration** — Migrate documents between schema versions

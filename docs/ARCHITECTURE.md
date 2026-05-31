@@ -127,11 +127,21 @@ namespace GhJSON.Core
         public static string ToJson(GhJsonDocument doc, WriteOptions? options = null);
 
         // Validation
-        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
-        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard);
+        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+
+        // Async Validation
+        public static Task<ValidationResult> ValidateAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<ValidationResult> ValidateAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<bool> IsValidAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<bool> IsValidAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+
+        // Convenience: prefer online schema
+        public static ValidationResult ValidateOnline(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null);
+        public static ValidationResult ValidateOnline(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null);
 
         // Fix
         public static FixResult Fix(GhJsonDocument doc, FixOptions? options = null);
@@ -153,8 +163,8 @@ namespace GhJSON.Core
         public static void PatchToFile(GhPatchDocument patch, string path, WriteOptions? options = null);
         public static ApplyPatchResult ApplyPatch(GhJsonDocument baseDoc, GhPatchDocument patch, ApplyPatchOptions? options = null);
         public static ApplyPatchResult ApplyPatch(string baseJson, string patchJson, ApplyPatchOptions? options = null);
-        public static ValidationResult ValidatePatch(GhPatchDocument patch);
-        public static ValidationResult ValidatePatch(string patchJson);
+        public static ValidationResult ValidatePatch(GhPatchDocument patch, bool preferOnline = false, string? schemaVersion = null);
+        public static ValidationResult ValidatePatch(string patchJson, bool preferOnline = false, string? schemaVersion = null);
 
         // Schema Migration
         public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null);

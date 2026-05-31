@@ -42,8 +42,15 @@ string json = GhJson.ToJson(doc, new WriteOptions { Indented = true });
 using GhJSON.Core;
 using GhJSON.Core.Validation;
 
-// Validate and get detailed result
+// Standard validation (offline, current schema version)
 var result = GhJson.Validate(doc);
+
+// Prefer online schema; falls back to embedded on failure
+var result = GhJson.Validate(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
+
+// Async validation
+var result = await GhJson.ValidateAsync(doc, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
+
 if (!result.IsValid)
 {
     foreach (var error in result.Errors)
@@ -59,6 +66,7 @@ if (!result.IsValid)
 
 // Quick check
 bool isValid = GhJson.IsValid(doc);
+bool isValid = await GhJson.IsValidAsync(doc, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
 
 // Quick check with message
 if (!GhJson.IsValid(json, out string? message))
@@ -78,6 +86,17 @@ GhJson.Validate(doc, ValidationLevel.Standard);
 
 // Strict - all checks plus additional semantic validation
 GhJson.Validate(doc, ValidationLevel.Strict);
+```
+
+### Schema Version and Online Loading
+
+```csharp
+// Prefer online schema with automatic fallback to embedded on failure
+var result = GhJson.Validate(doc, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
+
+// Async with cancellation token
+using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+var result = await GhJson.ValidateAsync(doc, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true, cts.Token);
 ```
 
 ## Working with Grasshopper
@@ -309,7 +328,15 @@ var apply = GhJson.ApplyPatch(baseDoc, patch, options);
 ### Patch Validation
 
 ```csharp
+// Offline (embedded ghpatch.schema.json)
 var result = GhJson.ValidatePatch(patch);
+
+// With online validation and explicit schema version
+var result = GhJson.ValidatePatch(patch, preferOnline: true, schemaVersion: "1.0");
+
+// From raw JSON string
+var result = GhJson.ValidatePatch(patchJson, preferOnline: false, schemaVersion: "1.0");
+
 if (!result.IsValid)
 {
     foreach (var error in result.Errors)

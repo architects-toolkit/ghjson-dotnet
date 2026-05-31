@@ -485,6 +485,56 @@ namespace GhJSON.Core.Tests.DiffOperations
             Assert.False(result.IsValid);
         }
 
+        [Fact]
+        public void ValidatePatch_WithPreferOnline_Succeeds()
+        {
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Add = new List<GhJsonComponent>
+                        {
+                            new GhJsonComponent { Name = "A", Id = 1 },
+                        },
+                    },
+                },
+            };
+
+            var result = GhJson.ValidatePatch(patch, preferOnline: true);
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public void ValidatePatch_WithSchemaVersion_Succeeds()
+        {
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Add = new List<GhJsonComponent>
+                        {
+                            new GhJsonComponent { Name = "A", Id = 1 },
+                        },
+                    },
+                },
+            };
+
+            var result = GhJson.ValidatePatch(patch, schemaVersion: "1.0");
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public void ValidatePatch_StringOverload_WithPreferOnline_Succeeds()
+        {
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{}}";
+            var result = GhJson.ValidatePatch(json, preferOnline: true);
+            Assert.True(result.IsValid);
+        }
+
         // ---- ID-collision renumbering ----
 
         [Fact]

@@ -126,5 +126,69 @@ namespace GhJSON.Core.Tests.Validation
                 SchemaLoader.RegisteredSchemaIds,
                 uri => uri.ToString().EndsWith("/ghjson.schema.json", StringComparison.Ordinal));
         }
+
+        // ---- Patch schema loading ----
+
+        [Fact]
+        public void LoadPatchSchema_DefaultVersion_LoadsEmbedded()
+        {
+            var schema = SchemaLoader.LoadPatchSchema(preferOnline: false);
+
+            Assert.NotNull(schema);
+            Assert.NotNull(schema.GetId());
+        }
+
+        [Fact]
+        public void LoadPatchSchema_ExplicitVersion_LoadsEmbedded()
+        {
+            var schema = SchemaLoader.LoadPatchSchema("1.0", preferOnline: false);
+
+            Assert.NotNull(schema);
+            Assert.NotNull(schema.GetId());
+        }
+
+        [Fact]
+        public void LoadPatchSchema_UnknownVersion_Throws()
+        {
+            Assert.Throws<InvalidOperationException>(
+                () => SchemaLoader.LoadPatchSchema("99.99", preferOnline: false));
+        }
+
+        [Fact]
+        public void LoadPatchSchema_PreferOnline_FallsBackToEmbedded()
+        {
+            var schema = SchemaLoader.LoadPatchSchema("1.0", preferOnline: true);
+
+            Assert.NotNull(schema);
+            Assert.NotNull(schema.GetId());
+        }
+
+        [Fact]
+        public async Task LoadPatchSchemaAsync_PreferOnline_FallsBackToEmbedded()
+        {
+            var schema = await SchemaLoader.LoadPatchSchemaAsync("1.0", preferOnline: true);
+
+            Assert.NotNull(schema);
+            Assert.NotNull(schema.GetId());
+        }
+
+        [Fact]
+        public void LoadPatchSchema_CacheHit_ReturnsSameInstance()
+        {
+            var first = SchemaLoader.LoadPatchSchema("1.0", preferOnline: false);
+            var second = SchemaLoader.LoadPatchSchema("1.0", preferOnline: false);
+
+            Assert.Same(first, second);
+        }
+
+        [Fact]
+        public void LoadPatchSchema_DifferentVersions_AreDifferentInstances()
+        {
+            var v10 = SchemaLoader.LoadPatchSchema("1.0", preferOnline: false);
+
+            // Re-requesting 1.0 should return the same cached instance.
+            var v10Again = SchemaLoader.LoadPatchSchema("1.0", preferOnline: false);
+            Assert.Same(v10, v10Again);
+        }
     }
 }

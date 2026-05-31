@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Threading.Tasks;
 using GhJSON.Core.Validation;
 using Xunit;
 
@@ -86,5 +87,54 @@ namespace GhJSON.Core.Tests.Validation
             Assert.False(result.IsValid);
             Assert.Contains(result.Errors, e => e.Message.Contains("Unable to load GhJSON schema", StringComparison.OrdinalIgnoreCase));
         }
+
+        // ---- Async APIs ----
+
+        [Fact]
+        public async Task ValidateAsync_Document_EndToEnd()
+        {
+            var doc = GhJson.FromJson(ValidJson);
+            var result = await GhJson.ValidateAsync(doc, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: false);
+
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_String_EndToEnd()
+        {
+            var result = await GhJson.ValidateAsync(ValidJson, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: false);
+
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_WithPreferOnline_FallsBack()
+        {
+            var result = await GhJson.ValidateAsync(
+                ValidJson,
+                ValidationLevel.Standard,
+                schemaVersion: "1.0",
+                preferOnline: true);
+
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public async Task IsValidAsync_Document_ReturnsTrue()
+        {
+            var doc = GhJson.FromJson(ValidJson);
+            var valid = await GhJson.IsValidAsync(doc, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: false);
+
+            Assert.True(valid);
+        }
+
+        [Fact]
+        public async Task IsValidAsync_String_ReturnsFalseOnInvalid()
+        {
+            var valid = await GhJson.IsValidAsync("{}", ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: false);
+
+            Assert.False(valid);
+        }
+
     }
 }

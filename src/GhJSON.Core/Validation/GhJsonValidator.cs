@@ -97,6 +97,11 @@ namespace GhJSON.Core.Validation
             {
                 // Schema-validate the raw JSON so unknown properties surface.
                 ValidateRawJsonAgainstSchema(json, result);
+
+                // Explicitly validate each known extension value against its schema.
+                // This ensures additionalProperties constraints in extension schemas are
+                // enforced even when the library's $ref chain doesn't propagate them.
+                ValidateExtensionSchemas(json, result);
             }
 
             ValidateComponents(document, result);
@@ -238,6 +243,111 @@ namespace GhJSON.Core.Validation
                 // flattened (e.g. under Basic output mode). Fall back to a generic error.
                 result.Errors.Add(new ValidationMessage(
                     "Document does not conform to the GhJSON v1.0 schema."));
+            }
+        }
+
+        /// <summary>
+        /// Validates each known extension value directly against its schema. This provides
+        /// deterministic enforcement of extension-level <c>additionalProperties</c> constraints
+        /// that may not propagate reliably through <c>$ref</c> chains in all environments.
+        /// </summary>
+        private static void ValidateExtensionSchemas(string json, ValidationResult result)
+        {
+            const string baseUri = "https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/extensions/";
+
+            JsonNode? root;
+            try
+            {
+                root = JsonNode.Parse(json);
+            }
+            catch
+            {
+                return; // Malformed JSON is handled elsewhere.
+            }
+
+            var components = root?["components"]?.AsArray();
+            if (components == null)
+            {
+                return;
+            }
+
+            var options = new EvaluationOptions
+            {
+                OutputFormat = OutputFormat.List,
+                EvaluateAs = SpecVersion.Draft202012,
+            };
+
+            for (var i = 0; i < components.Count; i++)
+            {
+                var extensions = components[i]?["componentState"]?["extensions"]?.AsObject();
+                if (extensions == null)
+                {
+                    continue;
+                }
+
+                foreach (var kvp in extensions)
+                {
+                    var extensionKey = kvp.Key;
+                    var extensionValue = kvp.Value;
+                    if (extensionValue == null)
+                    {
+                        continue;
+                    }
+
+                    var schemaUri = new Uri($"{baseUri}{extensionKey}.schema.json");
+                    JsonSchema schema;
+                    try
+                    {
+                        var schemaDoc = SchemaRegistry.Global.Get(schemaUri);
+                        if (schemaDoc is not JsonSchema s)
+                        {
+                            continue;
+                        }
+
+                        schema = s;
+                    }
+                    catch
+                    {
+                        continue; // Unknown extension — no schema registered.
+                    }
+
+                    EvaluationResults evaluation;
+                    try
+                    {
+                        evaluation = schema.Evaluate(extensionValue, options);
+                    }
+                    catch
+                    {
+                        continue; // Defensive: don't crash on evaluation errors.
+                    }
+
+                    if (evaluation.IsValid)
+                    {
+                        continue;
+                    }
+
+                    var basePath = $"components[{i}].componentState.extensions.{extensionKey}";
+                    foreach (var detail in FlattenDetails(evaluation))
+                    {
+                        if (detail.IsValid || detail.HasErrors == false || detail.Errors == null)
+                        {
+                            continue;
+                        }
+
+                        var instancePath = detail.InstanceLocation?.ToString();
+                        var fullPath = string.IsNullOrEmpty(instancePath) || instancePath == "/"
+                            ? basePath
+                            : $"{basePath}{instancePath}";
+
+                        foreach (var error in detail.Errors)
+                        {
+                            var message = string.IsNullOrWhiteSpace(error.Value)
+                                ? $"Schema violation at '{error.Key}'"
+                                : error.Value;
+                            result.Errors.Add(new ValidationMessage(message, fullPath));
+                        }
+                    }
+                }
             }
         }
 

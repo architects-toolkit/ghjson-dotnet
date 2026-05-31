@@ -16,6 +16,7 @@
  */
 
 using System;
+using GhJSON.Core.NameResolution;
 
 using Grasshopper.Kernel;
 
@@ -23,11 +24,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class PythonScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid Python3Guid = new Guid("719467e6-7cf5-4848-99b0-c5dd57e5442c");
-
         public override string ExtensionKey => "gh.python";
 
-        public override Guid ComponentGuid => Python3Guid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.Python3;
 
         public override string ComponentName => "Python";
     }

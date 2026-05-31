@@ -275,7 +275,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             if (outParam.DataMapping != GH_DataMapping.None)
             {
-                modifiers["dataMapping"] = outParam.DataMapping.ToString();
+                modifiers["dataMapping"] = outParam.DataMapping.ToString().ToLowerInvariant();
             }
 
             var exprProp = ReflectionCache.GetProperty(outParam.GetType(), "Expression");
@@ -331,7 +331,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
 
             if (modifiers.TryGetValue("dataMapping", out var dmObj) &&
-                Enum.TryParse<GH_DataMapping>(dmObj?.ToString(), out var dm))
+                Enum.TryParse<GH_DataMapping>(dmObj?.ToString(), ignoreCase: true, out var dm))
             {
                 outParam.DataMapping = dm;
             }

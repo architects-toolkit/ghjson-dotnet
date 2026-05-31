@@ -16,6 +16,7 @@
  */
 
 using System;
+using GhJSON.Core.NameResolution;
 
 using Grasshopper.Kernel;
 
@@ -23,11 +24,9 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class IronPythonScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid IronPython2Guid = new Guid("97aa26ef-88ae-4ba6-98a6-ed6ddeca11d1");
-
         public override string ExtensionKey => "gh.ironpython";
 
-        public override Guid ComponentGuid => IronPython2Guid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.IronPython2;
 
         public override string ComponentName => "IronPython";
     }

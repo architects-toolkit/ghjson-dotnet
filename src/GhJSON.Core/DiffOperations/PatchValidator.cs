@@ -143,21 +143,29 @@ namespace GhJSON.Core.DiffOperations
             }
         }
 
-        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root)
+        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root, bool skipDescendants = false)
         {
             yield return root;
-            if (root.Details == null)
+
+            if (skipDescendants || root.Details == null)
             {
                 yield break;
             }
 
+            bool shouldSkipDescendants = root.IsValid && IsAnyOfOrOneOfKeyword(root);
             foreach (var child in root.Details)
             {
-                foreach (var node in FlattenDetails(child))
+                foreach (var node in FlattenDetails(child, shouldSkipDescendants))
                 {
                     yield return node;
                 }
             }
+        }
+
+        private static bool IsAnyOfOrOneOfKeyword(EvaluationResults result)
+        {
+            var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
+            return schemaPath.EndsWith("/anyOf") || schemaPath.EndsWith("/oneOf");
         }
     }
 }

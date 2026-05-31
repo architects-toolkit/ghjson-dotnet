@@ -51,4 +51,8 @@
     <AssemblyMetadata Include="GhJsonOfficialSchemaUrl" Value="$(GhJsonOfficialSchemaUrl)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="GhJSON.Core.Tests" />
+  </ItemGroup>
+
 </Project>

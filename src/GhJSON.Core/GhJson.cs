@@ -20,6 +20,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GhJSON.Core.FixOperations;
 using GhJSON.Core.MergeOperations;
 using GhJSON.Core.NameResolution;
@@ -208,10 +210,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="doc">The document to validate.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>A validation result containing errors, warnings, and info messages.</returns>
-        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard)
+        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return GhJsonValidator.Validate(doc, level);
+            return GhJsonValidator.Validate(doc, level, schemaVersion, preferOnline);
         }
 
         /// <summary>
@@ -219,10 +223,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="json">The JSON string to validate.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>A validation result containing errors, warnings, and info messages.</returns>
-        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard)
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return GhJsonValidator.Validate(json, level);
+            return GhJsonValidator.Validate(json, level, schemaVersion, preferOnline);
         }
 
         /// <summary>
@@ -230,10 +236,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="doc">The document to check.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard)
+        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return Validate(doc, level).IsValid;
+            return Validate(doc, level, schemaVersion, preferOnline).IsValid;
         }
 
         /// <summary>
@@ -241,10 +249,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="json">The JSON string to check.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard)
+        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return Validate(json, level).IsValid;
+            return Validate(json, level, schemaVersion, preferOnline).IsValid;
         }
 
         /// <summary>
@@ -253,14 +263,16 @@ namespace GhJSON.Core
         /// <param name="json">The JSON string to check.</param>
         /// <param name="message">A human-readable message describing validation errors, if any.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard)
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
             message = null;
 
             try
             {
-                var result = Validate(json, level);
+                var result = Validate(json, level, schemaVersion, preferOnline);
                 if (result.IsValid)
                 {
                     return true;
@@ -274,6 +286,56 @@ namespace GhJSON.Core
                 message = ex.Message;
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Validates a GhJSON document, preferring the online schema repository.
+        /// </summary>
+        public static ValidationResult ValidateOnline(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null)
+        {
+            return Validate(doc, level, schemaVersion, preferOnline: true);
+        }
+
+        /// <summary>
+        /// Validates a JSON string as a GhJSON document, preferring the online schema repository.
+        /// </summary>
+        public static ValidationResult ValidateOnline(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null)
+        {
+            return Validate(json, level, schemaVersion, preferOnline: true);
+        }
+
+        /// <summary>
+        /// Validates a GhJSON document asynchronously.
+        /// </summary>
+        public static Task<ValidationResult> ValidateAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            return GhJsonValidator.ValidateAsync(doc, level, schemaVersion, preferOnline, cancellationToken);
+        }
+
+        /// <summary>
+        /// Validates a JSON string as a GhJSON document asynchronously.
+        /// </summary>
+        public static Task<ValidationResult> ValidateAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            return GhJsonValidator.ValidateAsync(json, level, schemaVersion, preferOnline, cancellationToken);
+        }
+
+        /// <summary>
+        /// Checks if a GhJSON document is valid asynchronously.
+        /// </summary>
+        public static async Task<bool> IsValidAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            var result = await ValidateAsync(doc, level, schemaVersion, preferOnline, cancellationToken).ConfigureAwait(false);
+            return result.IsValid;
+        }
+
+        /// <summary>
+        /// Checks if a JSON string is a valid GhJSON document asynchronously.
+        /// </summary>
+        public static async Task<bool> IsValidAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            var result = await ValidateAsync(json, level, schemaVersion, preferOnline, cancellationToken).ConfigureAwait(false);
+            return result.IsValid;
         }
 
         #endregion

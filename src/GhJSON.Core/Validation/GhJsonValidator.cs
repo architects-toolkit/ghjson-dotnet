@@ -20,10 +20,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Core.Serialization;
 using Json.Schema;
-using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Core.Validation
 {
@@ -40,19 +41,32 @@ namespace GhJSON.Core.Validation
         /// </summary>
         /// <param name="document">The document to validate.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>The validation result.</returns>
-        public static ValidationResult Validate(GhJsonDocument document, ValidationLevel level = ValidationLevel.Standard)
+        public static ValidationResult Validate(GhJsonDocument document, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
+            if (document == null)
+            {
+                return ValidationResult.Failure("Document is null.");
+            }
+
             var result = new ValidationResult { IsValid = true };
+
+            if (level >= ValidationLevel.Standard)
+            {
+                var bundle = LoadBundle(schemaVersion, preferOnline, result);
+                if (bundle != null)
+                {
+                    ValidateAgainstSchema(document, result, bundle);
+                }
+            }
 
             // Basic structure validation
             ValidateComponents(document, result);
 
             if (level >= ValidationLevel.Standard)
             {
-                // JSON Schema conformance (ghjson.schema.json v1.0)
-                ValidateAgainstSchema(document, result);
-
                 // Connection reference integrity
                 ValidateConnections(document, result);
 
@@ -75,11 +89,19 @@ namespace GhJSON.Core.Validation
         /// and <see cref="ValidationLevel.Strict"/>, schema conformance runs against the
         /// <em>raw</em> JSON input so that unknown properties (which are dropped by the
         /// strongly-typed deserializer) are still reported.
+        /// <para>
+        /// This method parses the JSON twice: once with <see cref="GhJsonSerializer"/> to
+        /// produce the typed <see cref="GhJsonDocument"/>, and once with
+        /// <see cref="JsonNode"/> for raw schema validation. This trade-off ensures
+        /// unknown properties are reported while still supporting strongly-typed checks.
+        /// </para>
         /// </summary>
         /// <param name="json">The JSON string to validate.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>The validation result.</returns>
-        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard)
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
             GhJsonDocument document;
             try
@@ -95,13 +117,17 @@ namespace GhJSON.Core.Validation
 
             if (level >= ValidationLevel.Standard)
             {
-                // Schema-validate the raw JSON so unknown properties surface.
-                ValidateRawJsonAgainstSchema(json, result);
+                var bundle = LoadBundle(schemaVersion, preferOnline, result);
+                if (bundle != null)
+                {
+                    // Schema-validate the raw JSON so unknown properties surface.
+                    ValidateRawJsonAgainstSchema(json, result, bundle);
 
-                // Explicitly validate each known extension value against its schema.
-                // This ensures additionalProperties constraints in extension schemas are
-                // enforced even when the library's $ref chain doesn't propagate them.
-                ValidateExtensionSchemas(json, result);
+                    // Explicitly validate each known extension value against its schema.
+                    // This ensures additionalProperties constraints in extension schemas are
+                    // enforced even when the library's $ref chain doesn't propagate them.
+                    ValidateExtensionSchemas(json, result, schemaVersion ?? SchemaLoader.DefaultVersion);
+                }
             }
 
             ValidateComponents(document, result);
@@ -122,24 +148,142 @@ namespace GhJSON.Core.Validation
         }
 
         /// <summary>
-        /// Evaluates the raw JSON text against the official GhJSON schema. Used by the
-        /// string-based <see cref="Validate(string, ValidationLevel)"/> overload so that
-        /// properties dropped by the strongly-typed deserializer still produce errors.
+        /// Validates a GhJSON document asynchronously.
         /// </summary>
-        private static void ValidateRawJsonAgainstSchema(string json, ValidationResult result)
+        /// <param name="document">The document to validate.</param>
+        /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The validation result.</returns>
+        public static async Task<ValidationResult> ValidateAsync(GhJsonDocument document, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
         {
-            JsonSchema schema;
+            if (document == null)
+            {
+                return ValidationResult.Failure("Document is null.");
+            }
+
+            var result = new ValidationResult { IsValid = true };
+
+            if (level >= ValidationLevel.Standard)
+            {
+                var bundle = await LoadBundleAsync(schemaVersion, preferOnline, result, cancellationToken).ConfigureAwait(false);
+                if (bundle != null)
+                {
+                    ValidateAgainstSchema(document, result, bundle);
+                }
+            }
+
+            ValidateComponents(document, result);
+
+            if (level >= ValidationLevel.Standard)
+            {
+                ValidateConnections(document, result);
+                ValidateGroups(document, result);
+            }
+
+            if (level >= ValidationLevel.Strict)
+            {
+                ValidateSemantics(document, result);
+            }
+
+            result.IsValid = !result.HasErrors;
+            return result;
+        }
+
+        /// <summary>
+        /// Validates a JSON string as a GhJSON document asynchronously.
+        /// </summary>
+        /// <param name="json">The JSON string to validate.</param>
+        /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The validation result.</returns>
+        public static async Task<ValidationResult> ValidateAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            GhJsonDocument document;
             try
             {
-                schema = SchemaLoader.MainSchema;
+                document = Serialization.GhJsonSerializer.Deserialize(json);
+            }
+            catch (Exception ex)
+            {
+                return ValidationResult.Failure($"Invalid JSON: {ex.Message}");
+            }
+
+            var result = new ValidationResult { IsValid = true };
+
+            if (level >= ValidationLevel.Standard)
+            {
+                var bundle = await LoadBundleAsync(schemaVersion, preferOnline, result, cancellationToken).ConfigureAwait(false);
+                if (bundle != null)
+                {
+                    ValidateRawJsonAgainstSchema(json, result, bundle);
+                    ValidateExtensionSchemas(json, result, schemaVersion ?? SchemaLoader.DefaultVersion);
+                }
+            }
+
+            ValidateComponents(document, result);
+
+            if (level >= ValidationLevel.Standard)
+            {
+                ValidateConnections(document, result);
+                ValidateGroups(document, result);
+            }
+
+            if (level >= ValidationLevel.Strict)
+            {
+                ValidateSemantics(document, result);
+            }
+
+            result.IsValid = !result.HasErrors;
+            return result;
+        }
+
+        private static SchemaLoader.Bundle? LoadBundle(string? schemaVersion, bool preferOnline, ValidationResult result)
+        {
+            try
+            {
+                return SchemaLoader.Load(new SchemaLoaderOptions
+                {
+                    Version = schemaVersion,
+                    PreferOnline = preferOnline,
+                });
             }
             catch (Exception ex)
             {
                 result.Errors.Add(new ValidationMessage(
                     $"Unable to load GhJSON schema for validation: {ex.Message}"));
-                return;
+                return null;
             }
+        }
 
+        private static async Task<SchemaLoader.Bundle?> LoadBundleAsync(string? schemaVersion, bool preferOnline, ValidationResult result, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await SchemaLoader.LoadAsync(new SchemaLoaderOptions
+                {
+                    Version = schemaVersion,
+                    PreferOnline = preferOnline,
+                }, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(new ValidationMessage(
+                    $"Unable to load GhJSON schema for validation: {ex.Message}"));
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Evaluates the raw JSON text against the official GhJSON schema. Used by the
+        /// string-based <see cref="Validate(string, ValidationLevel)"/> overload so that
+        /// properties dropped by the strongly-typed deserializer still produce errors.
+        /// </summary>
+        private static void ValidateRawJsonAgainstSchema(string json, ValidationResult result, SchemaLoader.Bundle bundle)
+        {
             JsonNode? instance;
             try
             {
@@ -151,29 +295,17 @@ namespace GhJSON.Core.Validation
                 return;
             }
 
-            EvaluateSchema(schema, instance, result);
+            EvaluateSchema(bundle.Main, instance, result);
         }
 
         /// <summary>
-        /// Evaluates the document against the official GhJSON JSON Schema (v1.0, draft 2020-12).
+        /// Evaluates the document against the official GhJSON JSON Schema.
         /// Each non-conforming sub-evaluation is surfaced as a validation error. Failures
         /// of the loader itself (e.g. missing embedded resources) are reported as a single
         /// error so that the caller always gets an actionable result.
         /// </summary>
-        private static void ValidateAgainstSchema(GhJsonDocument document, ValidationResult result)
+        private static void ValidateAgainstSchema(GhJsonDocument document, ValidationResult result, SchemaLoader.Bundle bundle)
         {
-            JsonSchema schema;
-            try
-            {
-                schema = SchemaLoader.MainSchema;
-            }
-            catch (Exception ex)
-            {
-                result.Errors.Add(new ValidationMessage(
-                    $"Unable to load GhJSON schema for validation: {ex.Message}"));
-                return;
-            }
-
             JsonNode? instance;
             try
             {
@@ -187,7 +319,7 @@ namespace GhJSON.Core.Validation
                 return;
             }
 
-            EvaluateSchema(schema, instance, result);
+            EvaluateSchema(bundle.Main, instance, result);
         }
 
         private static void EvaluateSchema(JsonSchema schema, JsonNode? instance, ValidationResult result)
@@ -242,7 +374,7 @@ namespace GhJSON.Core.Validation
                 // The root evaluation reported failure but no per-keyword message was
                 // flattened (e.g. under Basic output mode). Fall back to a generic error.
                 result.Errors.Add(new ValidationMessage(
-                    "Document does not conform to the GhJSON v1.0 schema."));
+                    "Document does not conform to the GhJSON schema."));
             }
         }
 
@@ -251,10 +383,8 @@ namespace GhJSON.Core.Validation
         /// deterministic enforcement of extension-level <c>additionalProperties</c> constraints
         /// that may not propagate reliably through <c>$ref</c> chains in all environments.
         /// </summary>
-        private static void ValidateExtensionSchemas(string json, ValidationResult result)
+        private static void ValidateExtensionSchemas(string json, ValidationResult result, string schemaVersion)
         {
-            const string baseUri = "https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/extensions/";
-
             JsonNode? root;
             try
             {
@@ -277,6 +407,8 @@ namespace GhJSON.Core.Validation
                 EvaluateAs = SpecVersion.Draft202012,
             };
 
+            var baseUri = $"https://architects-toolkit.github.io/ghjson-spec/schema/v{schemaVersion}/extensions/";
+
             for (var i = 0; i < components.Count; i++)
             {
                 var extensions = components[i]?["componentState"]?["extensions"]?.AsObject();
@@ -295,20 +427,24 @@ namespace GhJSON.Core.Validation
                     }
 
                     var schemaUri = new Uri($"{baseUri}{extensionKey}.schema.json");
-                    JsonSchema schema;
+                    JsonSchema? schema = null;
                     try
                     {
                         var schemaDoc = SchemaRegistry.Global.Get(schemaUri);
-                        if (schemaDoc is not JsonSchema s)
+                        if (schemaDoc is JsonSchema s)
                         {
-                            continue;
+                            schema = s;
                         }
-
-                        schema = s;
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        continue; // Unknown extension — no schema registered.
+                        Debug.WriteLine(
+                            $"[GhJsonValidator] No schema registered for extension '{extensionKey}': {ex.Message}");
+                    }
+
+                    if (schema == null)
+                    {
+                        continue;
                     }
 
                     EvaluationResults evaluation;
@@ -316,9 +452,11 @@ namespace GhJSON.Core.Validation
                     {
                         evaluation = schema.Evaluate(extensionValue, options);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        continue; // Defensive: don't crash on evaluation errors.
+                        Debug.WriteLine(
+                            $"[GhJsonValidator] Schema evaluation failed for extension '{extensionKey}': {ex.Message}");
+                        continue;
                     }
 
                     if (evaluation.IsValid)

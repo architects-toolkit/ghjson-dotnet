@@ -16,66 +16,168 @@
  */
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using Json.Schema;
 
 namespace GhJSON.Core.Validation
 {
     /// <summary>
-    /// Loads the GhJSON v1.0 JSON Schema bundle (main schema + extension registry +
-    /// per-extension schemas) from embedded resources and registers every schema in the
-    /// global <see cref="SchemaRegistry"/> by its <c>$id</c> so that cross-file
-    /// <c>$ref</c>s resolve offline.
+    /// Loads the GhJSON JSON Schema bundle (main schema + extension registry +
+    /// per-extension schemas) from embedded resources or from the official online
+    /// repository. Loaded schemas are registered in the global <see cref="SchemaRegistry"/>.
     /// <para>
-    /// The embedded snapshot under <c>Validation/Schemas/v1.0/</c> is kept in sync with the
-    /// published spec by <c>tools/Sync-Schemas.ps1</c> (see the <c>sync-schema</c>
-    /// workflow). At build time the committed snapshot is authoritative — no network
-    /// access is required at runtime.
+    /// The embedded snapshot under <c>Validation/Schemas/v{version}/</c> is kept in
+    /// sync with the published spec by <c>tools/Sync-Schemas.ps1</c>. By default the
+    /// loader uses embedded resources so that no network access is required at runtime.
+    /// When <see cref="SchemaLoaderOptions.PreferOnline"/> is set, the loader attempts to
+    /// fetch the latest schema from the web and falls back to the embedded snapshot on
+    /// failure.
     /// </para>
     /// </summary>
     public static class SchemaLoader
     {
         /// <summary>
-        /// Logical namespace prefix under which schema resources are embedded. MSBuild
-        /// transforms <c>Validation\Schemas\v1.0\…\*.json</c> into manifest names that
-        /// start with this prefix (dots replace path separators, and the <c>1.0</c>
-        /// segment becomes <c>1._0</c> because the dot is treated as a separator).
+        /// The default schema version used when none is specified.
         /// </summary>
-        internal const string EmbeddedResourcePrefix = "GhJSON.Core.Validation.Schemas.v1._0.";
+        public const string DefaultVersion = "1.0";
 
         private const string MainSchemaFileName = "ghjson.schema.json";
 
-        private static readonly Lazy<Bundle> LazyBundle =
-            new Lazy<Bundle>(Load, LazyThreadSafetyMode.ExecutionAndPublication);
+        private static readonly Lazy<Bundle> LazyDefaultBundle =
+            new Lazy<Bundle>(() => LoadEmbedded(DefaultVersion), LazyThreadSafetyMode.ExecutionAndPublication);
 
-        /// <summary>
-        /// Gets the compiled main GhJSON schema. First access triggers the one-time load.
-        /// </summary>
-        public static JsonSchema MainSchema => LazyBundle.Value.Main;
+        private static readonly ConcurrentDictionary<string, Bundle> EmbeddedBundleCache =
+            new ConcurrentDictionary<string, Bundle>();
 
-        /// <summary>
-        /// Gets the <c>$id</c> URIs of every schema registered by the loader (main +
-        /// extension registry + per-extension schemas).
-        /// </summary>
-        public static IReadOnlyList<Uri> RegisteredSchemaIds => LazyBundle.Value.Ids;
-
-        private static Bundle Load()
+        private static readonly Lazy<HttpClient> LazyHttpClient = new Lazy<HttpClient>(() =>
         {
+            var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var uaVersion = typeof(SchemaLoader).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? DefaultVersion;
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("GhJSON", uaVersion));
+            return client;
+        });
+
+        /// <summary>
+        /// Gets the compiled main GhJSON schema for the default version.
+        /// First access triggers the one-time load from embedded resources.
+        /// </summary>
+        public static JsonSchema MainSchema => LazyDefaultBundle.Value.Main;
+
+        /// <summary>
+        /// Gets the <c>$id</c> URIs of every schema registered for the default version
+        /// (main + extension registry + per-extension schemas).
+        /// </summary>
+        public static IReadOnlyList<Uri> RegisteredSchemaIds => LazyDefaultBundle.Value.Ids;
+
+        /// <summary>
+        /// Loads the schema bundle using the provided options.
+        /// </summary>
+        /// <param name="options">Options controlling version selection and online behavior.</param>
+        /// <returns>The loaded schema bundle.</returns>
+        public static Bundle Load(SchemaLoaderOptions options)
+        {
+            var effectiveVersion = string.IsNullOrEmpty(options.Version) ? DefaultVersion : options.Version!;
+
+            if (!options.PreferOnline)
+            {
+                if (effectiveVersion == DefaultVersion)
+                {
+                    return LazyDefaultBundle.Value;
+                }
+
+                return EmbeddedBundleCache.GetOrAdd(effectiveVersion, LoadEmbedded);
+            }
+
+            try
+            {
+                return LoadOnline(effectiveVersion, options, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Online load failed, falling back to embedded: {ex.Message}");
+                if (effectiveVersion == DefaultVersion)
+                {
+                    return LazyDefaultBundle.Value;
+                }
+
+                return EmbeddedBundleCache.GetOrAdd(effectiveVersion, LoadEmbedded);
+            }
+        }
+
+        /// <summary>
+        /// Async version of <see cref="Load(SchemaLoaderOptions)"/>.
+        /// </summary>
+        /// <param name="options">Options controlling version selection and online behavior.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>The loaded schema bundle.</returns>
+        public static async Task<Bundle> LoadAsync(SchemaLoaderOptions options, CancellationToken cancellationToken = default)
+        {
+            var effectiveVersion = string.IsNullOrEmpty(options.Version) ? DefaultVersion : options.Version!;
+
+            if (!options.PreferOnline)
+            {
+                if (effectiveVersion == DefaultVersion)
+                {
+                    return LazyDefaultBundle.Value;
+                }
+
+                return EmbeddedBundleCache.GetOrAdd(effectiveVersion, LoadEmbedded);
+            }
+
+            try
+            {
+                return await LoadOnline(effectiveVersion, options, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Online load failed, falling back to embedded: {ex.Message}");
+                if (effectiveVersion == DefaultVersion)
+                {
+                    return LazyDefaultBundle.Value;
+                }
+
+                return EmbeddedBundleCache.GetOrAdd(effectiveVersion, LoadEmbedded);
+            }
+        }
+
+        /// <summary>
+        /// Returns the embedded resource prefix for the given version.
+        /// MSBuild transforms path separators to dots, and dots in folder names become
+        /// <c>._digit</c> (e.g. v1.0 becomes v1._0).
+        /// </summary>
+        internal static string GetEmbeddedResourcePrefix(string version)
+        {
+            var safeVersion = version.Replace(".", "._");
+            return $"GhJSON.Core.Validation.Schemas.v{safeVersion}.";
+        }
+
+        /// <summary>
+        /// Loads the schema bundle from embedded resources.
+        /// </summary>
+        private static Bundle LoadEmbedded(string version)
+        {
+            var prefix = GetEmbeddedResourcePrefix(version);
             var assembly = typeof(SchemaLoader).Assembly;
             var resourceNames = assembly.GetManifestResourceNames()
-                .Where(n => n.StartsWith(EmbeddedResourcePrefix, StringComparison.Ordinal)
+                .Where(n => n.StartsWith(prefix, StringComparison.Ordinal)
                             && n.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (resourceNames.Count == 0)
             {
                 throw new InvalidOperationException(
-                    $"No embedded GhJSON schema resources found under '{EmbeddedResourcePrefix}*.json'. " +
+                    $"No embedded GhJSON schema resources found for version '{version}' under '{prefix}*.json'. " +
                     "Run tools/Sync-Schemas.ps1 and rebuild.");
             }
 
@@ -95,8 +197,6 @@ namespace GhJSON.Core.Validation
                     continue;
                 }
 
-                // Register globally so $ref resolution works during evaluation, regardless
-                // of which EvaluationOptions instance the caller uses.
                 SchemaRegistry.Global.Register(id, schema);
                 ids.Add(id);
 
@@ -109,12 +209,146 @@ namespace GhJSON.Core.Validation
             if (main == null)
             {
                 throw new InvalidOperationException(
-                    $"Main schema resource '{MainSchemaFileName}' not found among embedded resources.");
+                    $"Main schema resource '{MainSchemaFileName}' not found for version '{version}'.");
             }
 
             Debug.WriteLine(
-                $"[SchemaLoader] Registered {ids.Count} GhJSON schema(s) from embedded resources.");
+                $"[SchemaLoader] Registered {ids.Count} GhJSON schema(s) from embedded resources (version {version}).");
             return new Bundle(main, ids);
+        }
+
+        private static async Task<Bundle> LoadOnline(string version, SchemaLoaderOptions options, CancellationToken cancellationToken)
+        {
+            var baseUrl = options.BaseUrl.TrimEnd('/');
+            var versionUrl = $"{baseUrl}/v{version}/";
+
+            using var timeoutCts = new CancellationTokenSource(options.OnlineTimeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            var linkedToken = linkedCts.Token;
+            var httpClient = LazyHttpClient.Value;
+
+            var mainUrl = versionUrl + MainSchemaFileName;
+            string mainText;
+
+            try
+            {
+                using var response = await httpClient.GetAsync(mainUrl, linkedToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                mainText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Failed to download main schema from {mainUrl}: {ex.Message}");
+                throw;
+            }
+
+            var main = JsonSchema.FromText(mainText);
+            var ids = new List<Uri>();
+
+            var id = main.GetId();
+            if (id != null)
+            {
+                SchemaRegistry.Global.Register(id, main);
+                ids.Add(id);
+            }
+
+            // Discover and download extension schemas referenced by the main schema
+            var extensionIds = await DiscoverAndDownloadExtensionsAsync(versionUrl, linkedToken).ConfigureAwait(false);
+            ids.AddRange(extensionIds);
+
+            Debug.WriteLine(
+                $"[SchemaLoader] Registered {ids.Count} GhJSON schema(s) from online (version {version}).");
+            return new Bundle(main, ids);
+        }
+
+        private static async Task<List<Uri>> DiscoverAndDownloadExtensionsAsync(
+            string baseUrl, CancellationToken cancellationToken)
+        {
+            var ids = new List<Uri>();
+            var httpClient = LazyHttpClient.Value;
+
+            // Discover extension schemas from the extensions registry
+            var registryUrl = baseUrl + "extensions/extensions.schema.json";
+            string registryText;
+            try
+            {
+                using var response = await httpClient.GetAsync(registryUrl, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                registryText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                return ids;
+            }
+
+            var registrySchema = JsonSchema.FromText(registryText);
+            var registryId = registrySchema.GetId();
+            if (registryId != null)
+            {
+                SchemaRegistry.Global.Register(registryId, registrySchema);
+                ids.Add(registryId);
+            }
+
+            // Parse registry to find $refs
+            var refs = ExtractRefsFromRegistry(registryText);
+            foreach (var refPath in refs)
+            {
+                var clean = refPath.StartsWith("./", StringComparison.Ordinal) ? refPath.Substring(2) : refPath;
+                if (clean.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var extUrl = baseUrl + "extensions/" + clean;
+                try
+                {
+                    using var response = await httpClient.GetAsync(extUrl, cancellationToken).ConfigureAwait(false);
+                    response.EnsureSuccessStatusCode();
+                    var extText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var extSchema = JsonSchema.FromText(extText);
+                    var extId = extSchema.GetId();
+                    if (extId != null)
+                    {
+                        SchemaRegistry.Global.Register(extId, extSchema);
+                        ids.Add(extId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[SchemaLoader] Failed to download extension {extUrl}: {ex.Message}");
+                }
+            }
+
+            return ids;
+        }
+
+        private static List<string> ExtractRefsFromRegistry(string registryText)
+        {
+            var refs = new List<string>();
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(registryText);
+                if (doc.RootElement.TryGetProperty("properties", out var properties))
+                {
+                    foreach (var prop in properties.EnumerateObject())
+                    {
+                        if (prop.Value.TryGetProperty("$ref", out var refProp))
+                        {
+                            var refValue = refProp.GetString();
+                            if (!string.IsNullOrEmpty(refValue))
+                            {
+                                refs.Add(refValue);
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Defensive: malformed registry shouldn't stop validation.
+            }
+
+            return refs;
         }
 
         private static string ReadResource(Assembly assembly, string resourceName)
@@ -126,16 +360,30 @@ namespace GhJSON.Core.Validation
             return reader.ReadToEnd();
         }
 
-        private sealed class Bundle
+        /// <summary>
+        /// Represents a loaded schema bundle.
+        /// </summary>
+        public sealed class Bundle
         {
+            /// <summary>
+            /// Initializes a new instance of the <see cref="Bundle"/> class.
+            /// </summary>
+            /// <param name="main">The main GhJSON schema.</param>
+            /// <param name="ids">The registered schema IDs.</param>
             public Bundle(JsonSchema main, IReadOnlyList<Uri> ids)
             {
                 this.Main = main;
                 this.Ids = ids;
             }
 
+            /// <summary>
+            /// The main GhJSON schema.
+            /// </summary>
             public JsonSchema Main { get; }
 
+            /// <summary>
+            /// The <c>$id</c> URIs of every registered schema.
+            /// </summary>
             public IReadOnlyList<Uri> Ids { get; }
         }
     }

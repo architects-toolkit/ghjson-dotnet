@@ -50,7 +50,7 @@ namespace GhJSON.Core.Tests.Validation
         {
             const string json = "{\"components\":[{\"name\":\"Addition\",\"id\":1}],\"unknownProp\":true}";
 
-            var result = GhJson.Validate(json);
+            var result = GhJson.Validate(json, preferOnline: false);
 
             Assert.False(result.IsValid);
             Assert.NotEmpty(result.Errors);
@@ -62,7 +62,7 @@ namespace GhJSON.Core.Tests.Validation
             // Schema declares "components" as required.
             const string json = "{\"metadata\":{\"title\":\"no components\"}}";
 
-            var result = GhJson.Validate(json);
+            var result = GhJson.Validate(json, preferOnline: false);
 
             Assert.False(result.IsValid);
             Assert.NotEmpty(result.Errors);
@@ -74,7 +74,7 @@ namespace GhJSON.Core.Tests.Validation
             // Schema version must match pattern ^\d+\.\d+(\.\d+)?$
             const string json = "{\"schema\":\"not-a-version\",\"components\":[{\"name\":\"Addition\",\"id\":1}]}";
 
-            var result = GhJson.Validate(json);
+            var result = GhJson.Validate(json, preferOnline: false);
 
             Assert.False(result.IsValid);
         }
@@ -85,7 +85,7 @@ namespace GhJSON.Core.Tests.Validation
             // With Minimal level, schema conformance is not enforced; only basic structural checks run.
             const string json = "{\"components\":[{\"name\":\"Addition\",\"id\":1}],\"unknownProp\":true}";
 
-            var result = GhJson.Validate(json, ValidationLevel.Minimal);
+            var result = GhJson.Validate(json, ValidationLevel.Minimal, preferOnline: false);
 
             // Unknown property does not trigger schema error at Minimal level.
             Assert.True(result.IsValid);

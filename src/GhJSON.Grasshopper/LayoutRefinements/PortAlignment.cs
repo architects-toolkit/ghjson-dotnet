@@ -33,6 +33,106 @@ namespace GhJSON.Grasshopper.LayoutRefinements
     /// </summary>
     internal static class PortAlignment
     {
+        /// <summary>
+        /// Single, coherent port-alignment pass that replaces the three previously competing
+        /// passes (param-to-port, one-to-one, and connection-length minimization). For every
+        /// connection it computes the Y the source <em>would need</em> so its wire enters the
+        /// target's specific input port horizontally, then moves each source to the median of
+        /// all such desired positions. Using the median keeps fan-out sources balanced and
+        /// avoids the cumulative drift the old multi-pass approach produced.
+        /// </summary>
+        public static Dictionary<Guid, PointF> AlignToPorts(
+            Dictionary<Guid, PointF> positions,
+            GhJsonDocument document)
+        {
+            var result = new Dictionary<Guid, PointF>(positions);
+
+            var ghDocument = Instances.ActiveCanvas?.Document;
+            if (ghDocument == null)
+            {
+                Debug.WriteLine("[PortAlignment.AlignToPorts] No active Grasshopper document; skipping.");
+                return result;
+            }
+
+            if (document.Connections == null)
+            {
+                return result;
+            }
+
+            var idToGuidMap = document.GetIdToGuidMapping();
+            var desired = new Dictionary<Guid, List<float>>();
+
+            foreach (var conn in document.Connections)
+            {
+                if (!idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) ||
+                    !idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
+                {
+                    continue;
+                }
+
+                if (!result.TryGetValue(toGuid, out var targetPos))
+                {
+                    continue;
+                }
+
+                var childObj = ghDocument.FindObject(toGuid, false);
+                if (!(childObj is IGH_Component childComp))
+                {
+                    continue;
+                }
+
+                var inputIdx = conn.To.ParamIndex ?? -1;
+                if (inputIdx < 0 || inputIdx >= childComp.Params.Input.Count)
+                {
+                    continue;
+                }
+
+                var inputParam = childComp.Params.Input[inputIdx];
+                if (inputParam?.Attributes == null || childObj.Attributes == null)
+                {
+                    continue;
+                }
+
+                var rect = inputParam.Attributes.Bounds;
+                var childBounds = childObj.Attributes.Bounds;
+
+                // Port offset relative to the component center is stable regardless of where
+                // the component ends up, so apply it to the target's (already laid out) Y.
+                var relativeDelta = (rect.Y + (rect.Height / 2f)) - (childBounds.Y + (childBounds.Height / 2f));
+                var desiredSourceY = targetPos.Y + relativeDelta;
+
+                if (!desired.TryGetValue(fromGuid, out var list))
+                {
+                    list = new List<float>();
+                    desired[fromGuid] = list;
+                }
+
+                list.Add(desiredSourceY);
+            }
+
+            foreach (var kvp in desired)
+            {
+                if (result.TryGetValue(kvp.Key, out var pos))
+                {
+                    result[kvp.Key] = new PointF(pos.X, Median(kvp.Value));
+                }
+            }
+
+            return result;
+        }
+
+        private static float Median(List<float> values)
+        {
+            values.Sort();
+            var mid = values.Count / 2;
+            if (values.Count % 2 == 1)
+            {
+                return values[mid];
+            }
+
+            return (values[mid - 1] + values[mid]) / 2f;
+        }
+
         public static Dictionary<Guid, PointF> AlignParamsToInputPorts(
             Dictionary<Guid, PointF> positions,
             GhJsonDocument document,

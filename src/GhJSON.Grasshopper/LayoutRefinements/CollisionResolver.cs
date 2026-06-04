@@ -39,6 +39,12 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// </summary>
         private const int ColumnRoundDigits = 3;
 
+        /// <summary>
+        /// Minimum vertical gap left between stacked components in the same column so they do
+        /// not sit flush against each other.
+        /// </summary>
+        private const float VerticalPadding = 20f;
+
         public static Dictionary<Guid, PointF> AvoidCollisions(Dictionary<Guid, PointF> positions)
         {
             var result = new Dictionary<Guid, PointF>(positions);
@@ -73,11 +79,11 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     if (currentY < lastBottom)
                     {
                         result[kvp.Key] = new PointF(kvp.Value.X, lastBottom);
-                        lastBottom = lastBottom + bounds.Height;
+                        lastBottom = lastBottom + bounds.Height + VerticalPadding;
                     }
                     else
                     {
-                        lastBottom = currentY + bounds.Height;
+                        lastBottom = currentY + bounds.Height + VerticalPadding;
                     }
                 }
             }

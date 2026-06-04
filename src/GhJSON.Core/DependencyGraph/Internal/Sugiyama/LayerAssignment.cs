@@ -17,49 +17,96 @@
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 
 namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
 {
     /// <summary>
-    /// Assigns each node to a layer (column) based on its longest path to a leaf. Implemented
-    /// as an iterative post-order DFS so arbitrarily deep dependency chains do not risk a
-    /// <see cref="StackOverflowException"/>, and cyclic connections are detected and broken
-    /// rather than causing infinite recursion.
+    /// Assigns each node to a layer (column) using the <em>longest path from a source</em>.
+    /// Nodes with no incoming edges (true inputs) are pinned to layer 0, so the layout reads
+    /// left-to-right in workflow order. Implemented with an iterative back-edge scan plus a
+    /// Kahn-style topological longest-path pass, so arbitrarily deep chains never risk a
+    /// <see cref="StackOverflowException"/> and cycles are detected and broken (the back edge
+    /// is ignored for ranking) rather than causing infinite recursion.
     /// </summary>
     internal static class LayerAssignment
     {
         /// <summary>
-        /// Assigns layers in-place to <paramref name="nodes"/>. Any GUIDs participating in a
-        /// cycle (via <see cref="LayoutNode.Children"/>) are returned via
-        /// <paramref name="cycleNodes"/>; their cycle edges are treated as same-layer to avoid
-        /// a deadlock.
+        /// Assigns layers in-place to <paramref name="nodes"/> (writing <see cref="LayoutNode.Layer"/>).
+        /// Any GUIDs participating in a cycle are returned via <paramref name="cycleNodes"/>;
+        /// the offending back edge is excluded from ranking to avoid a deadlock.
         /// </summary>
         public static void AssignLayers(List<LayoutNode> nodes, out IReadOnlyList<Guid> cycleNodes)
         {
-            var graph = nodes.ToDictionary(n => n.ComponentId, n => n.Children);
-            var layers = new Dictionary<Guid, int>(graph.Count);
-            var state = new Dictionary<Guid, NodeState>(graph.Count);
+            var present = new HashSet<Guid>(nodes.Select(n => n.ComponentId));
             var cycles = new HashSet<Guid>();
+            var backEdges = FindBackEdges(nodes, present, cycles);
 
-            foreach (var rootId in graph.Keys)
-            {
-                if (state.TryGetValue(rootId, out var existing) && existing == NodeState.Done)
-                {
-                    continue;
-                }
-
-                VisitIterative(rootId, graph, layers, state, cycles);
-            }
-
-            var maxLayer = layers.Values.DefaultIfEmpty(0).Max();
+            // Build forward (acyclic) adjacency and in-degrees, ignoring back edges.
+            var forward = new Dictionary<Guid, List<Guid>>(nodes.Count);
+            var inDegree = new Dictionary<Guid, int>(nodes.Count);
             foreach (var node in nodes)
             {
-                if (layers.TryGetValue(node.ComponentId, out var layer))
+                forward[node.ComponentId] = new List<Guid>();
+                if (!inDegree.ContainsKey(node.ComponentId))
                 {
-                    node.Pivot = new PointF(maxLayer - layer, node.Pivot.Y);
+                    inDegree[node.ComponentId] = 0;
                 }
+            }
+
+            foreach (var node in nodes)
+            {
+                foreach (var childId in node.Children.Keys)
+                {
+                    if (!present.Contains(childId))
+                    {
+                        continue; // Dangling edge — validation reports this separately.
+                    }
+
+                    if (backEdges.Contains((node.ComponentId, childId)))
+                    {
+                        continue;
+                    }
+
+                    forward[node.ComponentId].Add(childId);
+                    inDegree[childId] = inDegree.TryGetValue(childId, out var d) ? d + 1 : 1;
+                }
+            }
+
+            // Kahn topological pass computing the longest path from any source.
+            var layer = new Dictionary<Guid, int>(nodes.Count);
+            var queue = new Queue<Guid>();
+            foreach (var node in nodes)
+            {
+                if (inDegree[node.ComponentId] == 0)
+                {
+                    layer[node.ComponentId] = 0;
+                    queue.Enqueue(node.ComponentId);
+                }
+            }
+
+            while (queue.Count > 0)
+            {
+                var id = queue.Dequeue();
+                var currentLayer = layer[id];
+                foreach (var childId in forward[id])
+                {
+                    var candidate = currentLayer + 1;
+                    if (!layer.TryGetValue(childId, out var existing) || candidate > existing)
+                    {
+                        layer[childId] = candidate;
+                    }
+
+                    if (--inDegree[childId] == 0)
+                    {
+                        queue.Enqueue(childId);
+                    }
+                }
+            }
+
+            foreach (var node in nodes)
+            {
+                node.Layer = layer.TryGetValue(node.ComponentId, out var l) ? l : 0;
             }
 
             cycleNodes = cycles.Count == 0 ? Array.Empty<Guid>() : cycles.ToList();
@@ -73,108 +120,65 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             AssignLayers(nodes, out _);
         }
 
-        private static void VisitIterative(
-            Guid rootId,
-            Dictionary<Guid, Dictionary<Guid, int>> graph,
-            Dictionary<Guid, int> layers,
-            Dictionary<Guid, NodeState> state,
+        /// <summary>
+        /// Iterative (stack-based) DFS that identifies back edges in the children graph.
+        /// A back edge is one that points to a node currently on the DFS stack (gray),
+        /// indicating a cycle. Both endpoints are recorded in <paramref name="cycles"/>.
+        /// </summary>
+        private static HashSet<(Guid From, Guid To)> FindBackEdges(
+            List<LayoutNode> nodes,
+            HashSet<Guid> present,
             HashSet<Guid> cycles)
         {
-            // Each stack frame remembers its remaining children to process and the current
-            // best (max) child layer. When the enumerator is exhausted, we pop and assign.
-            var stack = new Stack<Frame>();
-            stack.Push(CreateFrame(rootId, graph));
-            state[rootId] = NodeState.InProgress;
+            var backEdges = new HashSet<(Guid, Guid)>();
+            var color = new Dictionary<Guid, byte>(nodes.Count); // 0=white,1=gray,2=black
+            var childrenById = nodes.ToDictionary(n => n.ComponentId, n => n.Children);
 
-            while (stack.Count > 0)
+            foreach (var root in nodes)
             {
-                var frame = stack.Peek();
-
-                if (!frame.Children.MoveNext())
+                if (color.TryGetValue(root.ComponentId, out var c) && c != 0)
                 {
-                    // Post-order: all children processed. Leaves → layer 0.
-                    var assigned = frame.MaxChildLayer < 0 ? 0 : frame.MaxChildLayer + 1;
-                    layers[frame.NodeId] = assigned;
-                    state[frame.NodeId] = NodeState.Done;
-                    stack.Pop();
-
-                    if (stack.Count > 0)
-                    {
-                        var parent = stack.Peek();
-                        if (assigned > parent.MaxChildLayer)
-                        {
-                            // Frame is a reference type, so this mutates the frame instance
-                            // still held on the stack — exactly what post-order accumulation needs.
-                            parent.MaxChildLayer = assigned;
-                        }
-                    }
-
                     continue;
                 }
 
-                var childId = frame.Children.Current.Key;
+                var stack = new Stack<(Guid Node, IEnumerator<KeyValuePair<Guid, int>> Children)>();
+                stack.Push((root.ComponentId, childrenById[root.ComponentId].GetEnumerator()));
+                color[root.ComponentId] = 1;
 
-                if (!state.TryGetValue(childId, out var childState))
+                while (stack.Count > 0)
                 {
-                    if (!graph.ContainsKey(childId))
+                    var frame = stack.Peek();
+                    if (frame.Children.MoveNext())
                     {
-                        // Dangling edge — ignore silently (validation catches this separately).
-                        continue;
-                    }
-
-                    state[childId] = NodeState.InProgress;
-                    stack.Push(CreateFrame(childId, graph));
-                    continue;
-                }
-
-                switch (childState)
-                {
-                    case NodeState.Done:
-                        if (layers.TryGetValue(childId, out var childLayer)
-                            && childLayer > frame.MaxChildLayer)
+                        var childId = frame.Children.Current.Key;
+                        if (!present.Contains(childId))
                         {
-                            frame.MaxChildLayer = childLayer;
+                            continue;
                         }
 
-                        break;
-
-                    case NodeState.InProgress:
-                        // Cycle edge: record both ends and treat as same-layer.
-                        cycles.Add(frame.NodeId);
-                        cycles.Add(childId);
-                        break;
+                        color.TryGetValue(childId, out var childColor);
+                        if (childColor == 1)
+                        {
+                            // Edge into a node on the active stack → back edge / cycle.
+                            backEdges.Add((frame.Node, childId));
+                            cycles.Add(frame.Node);
+                            cycles.Add(childId);
+                        }
+                        else if (childColor == 0)
+                        {
+                            color[childId] = 1;
+                            stack.Push((childId, childrenById[childId].GetEnumerator()));
+                        }
+                    }
+                    else
+                    {
+                        color[frame.Node] = 2;
+                        stack.Pop();
+                    }
                 }
             }
-        }
 
-        private static Frame CreateFrame(Guid nodeId, Dictionary<Guid, Dictionary<Guid, int>> graph)
-        {
-            var children = graph.TryGetValue(nodeId, out var map)
-                ? map.GetEnumerator()
-                : new Dictionary<Guid, int>().GetEnumerator();
-            return new Frame(nodeId, children);
-        }
-
-        private enum NodeState
-        {
-            InProgress,
-            Done,
-        }
-
-        private sealed class Frame
-        {
-            public Frame(Guid nodeId, IEnumerator<KeyValuePair<Guid, int>> children)
-            {
-                this.NodeId = nodeId;
-                this.Children = children;
-                this.MaxChildLayer = -1;
-            }
-
-            public Guid NodeId { get; }
-
-            public IEnumerator<KeyValuePair<Guid, int>> Children { get; }
-
-            public int MaxChildLayer { get; set; }
+            return backEdges;
         }
     }
 }

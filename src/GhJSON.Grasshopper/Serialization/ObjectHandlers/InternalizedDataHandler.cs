@@ -59,6 +59,14 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             Debug.WriteLine($"[InternalizedDataHandler.Serialize] Serializing internalized data for: {obj?.Name}, ObjType: {obj?.GetType().Name}");
 #endif
 
+            if (ObjectHandlerOrchestrator.CurrentOptions?.IncludeInternalizedData == false)
+            {
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.Serialize] SKIPPED {obj?.Name}: IncludeInternalizedData is false");
+#endif
+                return;
+            }
+
             if (obj is IGH_Component comp)
             {
 #if DEBUG

@@ -48,6 +48,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {
+            if (ObjectHandlerOrchestrator.CurrentOptions?.IncludeRuntimeMessages != true)
+            {
+                return;
+            }
+
             if (obj is IGH_ActiveObject activeObj)
             {
                 var errors = activeObj.RuntimeMessages(GH_RuntimeMessageLevel.Error);

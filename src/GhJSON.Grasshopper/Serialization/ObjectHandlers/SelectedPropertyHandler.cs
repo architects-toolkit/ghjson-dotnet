@@ -46,6 +46,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {
+            if (ObjectHandlerOrchestrator.CurrentOptions?.IncludeSelectedState != true)
+            {
+                return;
+            }
+
             if (obj.Attributes?.Selected == true)
             {
                 component.ComponentState ??= new GhJsonComponentState();

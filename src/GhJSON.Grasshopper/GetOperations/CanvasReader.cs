@@ -113,7 +113,7 @@ namespace GhJSON.Grasshopper.GetOperations
             // Serialize components
             foreach (var obj in components)
             {
-                var component = ObjectHandlerOrchestrator.Serialize(obj);
+                var component = ObjectHandlerOrchestrator.Serialize(obj, options);
                 component.Id = nextId;
                 guidToId[obj.InstanceGuid] = nextId;
                 nextId++;

@@ -55,6 +55,11 @@ namespace GhJSON.Grasshopper.GetOperations
         public bool IncludeRuntimeMessages { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets a value indicating whether to include the selected state of components.
+        /// </summary>
+        public bool IncludeSelectedState { get; set; } = false;
+
+        /// <summary>
         /// Gets or sets a value indicating whether to include document metadata
         /// (Rhino/Grasshopper versions, timestamps, plugin dependencies, counts).
         /// </summary>

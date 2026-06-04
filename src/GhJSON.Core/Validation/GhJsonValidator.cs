@@ -444,6 +444,12 @@ namespace GhJSON.Core.Validation
 
                     if (schema == null)
                     {
+                        // No registered schema for this extension key. This is expected for
+                        // custom/unknown extensions, but surfaced as info so callers can tell
+                        // the extension was not schema-validated (rather than silently passing).
+                        result.Info.Add(new ValidationMessage(
+                            $"No schema registered for extension '{extensionKey}'; value was not schema-validated.",
+                            $"components[{i}].componentState.extensions.{extensionKey}"));
                         continue;
                     }
 

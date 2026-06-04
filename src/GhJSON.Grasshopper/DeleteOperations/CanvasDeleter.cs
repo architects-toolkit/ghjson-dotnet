@@ -84,7 +84,6 @@ namespace GhJSON.Grasshopper.DeleteOperations
                 }
 
                 objectsToDelete.Add(obj);
-                result.Deleted.Add(guid);
             }
 
             if (objectsToDelete.Count == 0)
@@ -119,11 +118,6 @@ namespace GhJSON.Grasshopper.DeleteOperations
 
             var objectsToDelete = doc.Objects.OfType<IGH_DocumentObject>().ToList();
 
-            foreach (var obj in objectsToDelete)
-            {
-                result.Deleted.Add(obj.InstanceGuid);
-            }
-
             if (objectsToDelete.Count == 0)
             {
                 return result;
@@ -150,6 +144,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
                     var obj = objectsToDelete[0];
                     obj.RecordUndoEvent(singleLabel);
                     doc.RemoveObject(obj, false);
+                    result.Deleted.Add(obj.InstanceGuid);
                 }
                 else
                 {
@@ -165,6 +160,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
                     foreach (var obj in objectsToDelete)
                     {
                         doc.RemoveObject(obj, false);
+                        result.Deleted.Add(obj.InstanceGuid);
                     }
 
                     doc.UndoUtil.RecordEvent(undo);
@@ -179,9 +175,12 @@ namespace GhJSON.Grasshopper.DeleteOperations
             {
                 result.Success = false;
                 result.ErrorMessage = $"Deletion failed: {ex.Message}";
-                foreach (var guid in result.Deleted.ToList())
+
+                // Surface every object that was scheduled for deletion as failed, since the
+                // batch is aborted as a unit on error.
+                foreach (var obj in objectsToDelete)
                 {
-                    result.Failed.Add((guid, ex.Message));
+                    result.Failed.Add((obj.InstanceGuid, ex.Message));
                 }
 
                 result.Deleted.Clear();

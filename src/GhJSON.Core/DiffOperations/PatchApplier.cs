@@ -104,10 +104,12 @@ namespace GhJSON.Core.DiffOperations
             // ---- Components.modify ----
             if (patch.Patch.Components?.Modify != null)
             {
+                // Modify operations do not change the component list membership, so the
+                // identity index can be built once and reused across all modifies.
+                var modifyIndex = ComponentIdentityIndex.Build(componentsList);
                 foreach (var modify in patch.Patch.Components.Modify)
                 {
-                    var index = ComponentIdentityIndex.Build(componentsList);
-                    if (!index.TryMatch(modify.Match, out var target, out var count))
+                    if (!modifyIndex.TryMatch(modify.Match, out var target, out var count))
                     {
                         var kind = count > 1 ? PatchConflictKind.MatchAmbiguous : PatchConflictKind.MatchNotFound;
                         result.Conflicts.Add(new PatchConflict(
@@ -335,7 +337,8 @@ namespace GhJSON.Core.DiffOperations
             var rebuilt = obj.ToObject<GhJsonComponent>(JsonSerializer.Create(BaseSettings));
             if (rebuilt == null)
             {
-                return;
+                throw new InvalidOperationException(
+                    "Failed to rebuild component after applying modify operation; the resulting JSON was not a valid component.");
             }
 
             CopyComponentInto(rebuilt, target);
@@ -547,13 +550,16 @@ namespace GhJSON.Core.DiffOperations
             }
 
             var rebuilt = obj.ToObject<GhJsonGroup>(JsonSerializer.Create(BaseSettings));
-            if (rebuilt != null)
+            if (rebuilt == null)
             {
-                target.Color = rebuilt.Color;
-                target.Name = rebuilt.Name;
-                target.Id = rebuilt.Id;
-                target.InstanceGuid = rebuilt.InstanceGuid;
+                throw new InvalidOperationException(
+                    "Failed to rebuild group after applying modify operation; the resulting JSON was not a valid group.");
             }
+
+            target.Color = rebuilt.Color;
+            target.Name = rebuilt.Name;
+            target.Id = rebuilt.Id;
+            target.InstanceGuid = rebuilt.InstanceGuid;
 
             if (modify.Members != null)
             {

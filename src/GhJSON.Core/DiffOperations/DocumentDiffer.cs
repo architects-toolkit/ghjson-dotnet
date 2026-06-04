@@ -445,7 +445,7 @@ namespace GhJSON.Core.DiffOperations
                 remove.Add(new GhPatchGroupMatch
                 {
                     InstanceGuid = leftGroup.InstanceGuid,
-                    Id = leftGroup.InstanceGuid.HasValue ? null : leftGroup.Id,
+                    Id = leftGroup.Id,
                 });
             }
 
@@ -505,7 +505,7 @@ namespace GhJSON.Core.DiffOperations
                 Match = new GhPatchGroupMatch
                 {
                     InstanceGuid = right.InstanceGuid,
-                    Id = right.InstanceGuid.HasValue ? null : right.Id,
+                    Id = right.Id,
                 },
                 Set = shallow?.Set,
                 Remove = shallow?.Remove,

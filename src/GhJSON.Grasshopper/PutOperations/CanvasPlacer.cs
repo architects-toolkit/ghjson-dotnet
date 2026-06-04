@@ -124,10 +124,13 @@ namespace GhJSON.Grasshopper.PutOperations
                             (float)(component.Pivot.X + effectiveOffset.X),
                             (float)(component.Pivot.Y + effectiveOffset.Y));
                     }
-                    else if (component.InstanceGuid.HasValue && 
-                             layoutPositions.TryGetValue(component.InstanceGuid.Value, out var calculatedPosition))
+                    else if (Core.GhJson.GetLayoutKey(component) is var layoutKey &&
+                             layoutKey != Guid.Empty &&
+                             layoutPositions.TryGetValue(layoutKey, out var calculatedPosition))
                     {
-                        // Use dependency graph calculated position for components without pivots
+                        // Use dependency graph calculated position for components without pivots.
+                        // Use the same stable key as the layout engine so id-only components
+                        // (no InstanceGuid) also receive their calculated position.
                         obj.Attributes.Pivot = calculatedPosition;
 #if DEBUG
                         Debug.WriteLine($"[CanvasPlacer.Put] Applied layout position for '{component.Name}': ({calculatedPosition.X:F2}, {calculatedPosition.Y:F2})");

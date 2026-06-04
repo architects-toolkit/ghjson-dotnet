@@ -103,9 +103,9 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
                         var parent = stack.Peek();
                         if (assigned > parent.MaxChildLayer)
                         {
+                            // Frame is a reference type, so this mutates the frame instance
+                            // still held on the stack — exactly what post-order accumulation needs.
                             parent.MaxChildLayer = assigned;
-                            // Struct semantics: reassign (Stack<T>.Peek returns a copy for
-                            // value types, but Frame is a class so this is a no-op update).
                         }
                     }
 

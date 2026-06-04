@@ -37,7 +37,10 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             var iterations = 0;
             do
             {
-                var oldY = nodes.ToDictionary(n => n.ComponentId, n => n.Pivot.Y);
+                // Group then take first to tolerate duplicate ComponentIds without throwing.
+                var oldY = nodes
+                    .GroupBy(n => n.ComponentId)
+                    .ToDictionary(g => g.Key, g => g.First().Pivot.Y);
                 ApplySinglePass(nodes);
                 changed = nodes.Any(n => Math.Abs(n.Pivot.Y - oldY[n.ComponentId]) > 0.001f);
                 iterations++;

@@ -45,15 +45,24 @@ namespace GhJSON.Core.DependencyGraph.Internal
                 return nodes;
             }
 
+            // Index nodes by their stable key for O(1) endpoint resolution. When several
+            // components collapse to the same key (e.g. duplicate ids), the first wins.
+            var nodeByKey = new Dictionary<Guid, LayoutNode>(nodes.Count);
+            foreach (var node in nodes)
+            {
+                if (!nodeByKey.ContainsKey(node.ComponentId))
+                {
+                    nodeByKey[node.ComponentId] = node;
+                }
+            }
+
             foreach (var conn in document.Connections)
             {
                 if (idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) &&
                     idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
                 {
-                    var toNode = nodes.FirstOrDefault(n => n.ComponentId == toGuid);
-                    var fromNode = nodes.FirstOrDefault(n => n.ComponentId == fromGuid);
-
-                    if (toNode != null && fromNode != null)
+                    if (nodeByKey.TryGetValue(toGuid, out var toNode) &&
+                        nodeByKey.TryGetValue(fromGuid, out var fromNode))
                     {
                         int inputIndex = conn.To.ParamIndex ?? -1;
                         toNode.Parents[fromGuid] = inputIndex;
@@ -101,6 +110,8 @@ namespace GhJSON.Core.DependencyGraph.Internal
             {
                 if (c.Id.HasValue)
                 {
+                    // First component wins on duplicate ids (invalid input); validation
+                    // reports the duplicate separately. Avoids an ArgumentException here.
                     map[c.Id.Value] = GetStableKey(c);
                 }
             }

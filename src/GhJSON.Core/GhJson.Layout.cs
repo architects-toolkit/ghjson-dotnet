@@ -125,6 +125,25 @@ namespace GhJSON.Core
         }
 
         /// <summary>
+        /// Returns the stable layout key used to identify <paramref name="component"/> in a
+        /// <see cref="LayoutResult"/>. This is the component's <c>InstanceGuid</c> when present,
+        /// otherwise a deterministic GUID synthesized from its integer <c>Id</c>. Callers that
+        /// need to look up calculated positions for components that may only expose an <c>Id</c>
+        /// (no <c>InstanceGuid</c>) must use this key rather than <c>InstanceGuid</c> directly.
+        /// </summary>
+        /// <param name="component">The component to compute the key for.</param>
+        /// <returns>The stable layout key, or <see cref="Guid.Empty"/> when the component has neither identifier.</returns>
+        public static Guid GetLayoutKey(GhJsonComponent component)
+        {
+            if (component == null)
+            {
+                throw new ArgumentNullException(nameof(component));
+            }
+
+            return GraphBuilder.GetStableKey(component);
+        }
+
+        /// <summary>
         /// Reorganizes component pivots in a GhJSON document by calculating and applying a new layout.
         /// </summary>
         /// <param name="document">The GhJSON document to reorganize.</param>

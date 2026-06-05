@@ -164,6 +164,15 @@ namespace GhJSON.Grasshopper.PutOperations
             Debug.WriteLine($"[CanvasPlacer.Put] Placed {result.ComponentsPlaced} components, {result.FailedComponents.Count} failed");
 #endif
 
+            // Late post-placement: resolve SmartHopper selectedObjects IDs to objects
+            foreach (var component in document.Components)
+            {
+                if (component.Id.HasValue && idToObject.TryGetValue(component.Id.Value, out var placedObj))
+                {
+                    ObjectHandlers.SmartHopperStateHandler.ApplySelectedObjects(component, placedObj, idToObject);
+                }
+            }
+
             // Create connections
             if (options.CreateConnections && document.Connections != null)
             {

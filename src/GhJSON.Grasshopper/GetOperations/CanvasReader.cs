@@ -137,6 +137,11 @@ namespace GhJSON.Grasshopper.GetOperations
             Debug.WriteLine($"[CanvasReader.CreateDocument] Serialized {components.Count} components");
 #endif
 
+            // Post-process SmartHopper selectedObjects from GUIDs to numeric IDs
+            ObjectHandlers.SmartHopperStateHandler.PostProcessSelectedObjectsToIds(
+                builder.Components?.ToList() ?? new List<GhJsonComponent>(),
+                guidToId);
+
             // Extract connections
             List<GhJsonConnection>? extractedConnections = null;
             if (options.IncludeConnections)

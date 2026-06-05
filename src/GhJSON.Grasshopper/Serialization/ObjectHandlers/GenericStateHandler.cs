@@ -151,8 +151,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             component.ComponentState.Extensions ??= new Dictionary<string, object>();
             component.ComponentState.Extensions[this.ExtensionKey] = new JObject
             {
-                ["fullTypeName"] = type.FullName,
-                ["assemblyName"] = type.Assembly.GetName().Name,
                 ["properties"] = JObject.FromObject(capturedProperties),
             };
 
@@ -241,6 +239,10 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             // Complex geometry containers (runtime-only, not state)
             "ClippingBox",
+
+            // SmartHopper-specific properties (handled by smarthopper.state or are defaults)
+            "SelectedProviderName",
+            "SelectedObjects",
         };
 
         /// <summary>

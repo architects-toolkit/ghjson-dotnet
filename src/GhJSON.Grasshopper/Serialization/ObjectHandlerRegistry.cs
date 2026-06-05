@@ -172,6 +172,7 @@ namespace GhJSON.Grasshopper.Serialization
             Register(new IOIdentificationHandler());
             Register(new IOModifiersHandler());
             Register(new InternalizedDataHandler());
+            Register(new GenericStateHandler());
 
             // Extension handlers (priority 100) - component-specific
             Register(new NumberSliderHandler());

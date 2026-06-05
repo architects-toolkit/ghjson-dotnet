@@ -118,6 +118,18 @@ namespace GhJSON.Grasshopper.GetOperations
                 guidToId[obj.InstanceGuid] = nextId;
                 nextId++;
 
+                // Audit: flag components serialized without a specialized handler
+                var objType = obj.GetType();
+                bool isFromExternalPlugin = objType.Assembly != typeof(IGH_DocumentObject).Assembly;
+                bool hasSpecializedHandler = component.ComponentState?.Extensions?.Count > 0;
+                if (isFromExternalPlugin && !hasSpecializedHandler && !(obj is GH_Group))
+                {
+                    component.Warnings ??= new List<string>();
+                    component.Warnings.Add(
+                        $"Component '{obj.Name}' from '{objType.Assembly.GetName().Name}' " +
+                        "was serialized without a specialized handler. Custom state may be missing.");
+                }
+
                 builder = builder.AddComponent(component);
             }
 

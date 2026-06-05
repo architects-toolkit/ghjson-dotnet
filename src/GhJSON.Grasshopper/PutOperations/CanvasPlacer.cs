@@ -169,13 +169,9 @@ namespace GhJSON.Grasshopper.PutOperations
             {
                 foreach (var connection in document.Connections)
                 {
-                    if (CreateConnection(connection, idToObject))
+                    if (CreateConnection(connection, idToObject, document, result))
                     {
                         result.ConnectionsCreated++;
-                    }
-                    else
-                    {
-                        result.Warnings.Add($"Failed to create connection from {connection.From.Id} to {connection.To.Id}");
                     }
                 }
 
@@ -210,11 +206,16 @@ namespace GhJSON.Grasshopper.PutOperations
             return result;
         }
 
-        private static bool CreateConnection(GhJsonConnection connection, Dictionary<int, IGH_DocumentObject> idToObject)
+        private static bool CreateConnection(GhJsonConnection connection, Dictionary<int, IGH_DocumentObject> idToObject, GhJsonDocument document, PutResult result)
         {
             if (!idToObject.TryGetValue(connection.From.Id, out var fromObj) ||
                 !idToObject.TryGetValue(connection.To.Id, out var toObj))
             {
+                var missingFrom = document.Components.FirstOrDefault(c => c.Id == connection.From.Id);
+                var missingTo = document.Components.FirstOrDefault(c => c.Id == connection.To.Id);
+                var fromName = missingFrom?.Name ?? $"id:{connection.From.Id}";
+                var toName = missingTo?.Name ?? $"id:{connection.To.Id}";
+                result.Warnings.Add($"Connection from '{fromName}' to '{toName}' lost: component not installed.");
                 return false;
             }
 
@@ -223,6 +224,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
             if (sourceParam == null || targetParam == null)
             {
+                result.Warnings.Add($"Connection from '{fromObj.Name}' ({connection.From.ParamName}) to '{toObj.Name}' ({connection.To.ParamName}) lost: parameter not found.");
                 return false;
             }
 

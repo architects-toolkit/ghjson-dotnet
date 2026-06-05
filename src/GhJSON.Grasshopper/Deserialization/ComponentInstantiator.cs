@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -24,6 +24,7 @@ using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
 
 namespace GhJSON.Grasshopper.Deserialization
 {
@@ -55,6 +56,8 @@ namespace GhJSON.Grasshopper.Deserialization
 
             var proxy = Resolve(component);
 
+            IGH_DocumentObject? obj;
+
             if (proxy == null)
             {
 #if DEBUG
@@ -63,7 +66,7 @@ namespace GhJSON.Grasshopper.Deserialization
                 return null;
             }
 
-            var obj = proxy.CreateInstance();
+            obj = proxy.CreateInstance();
             if (obj == null)
             {
 #if DEBUG

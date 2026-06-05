@@ -28,8 +28,7 @@ namespace GhJSON.Grasshopper.Serialization
     public interface IObjectHandler
     {
         /// <summary>
-        /// Gets the priority of this handler. Lower values are processed first.
-        /// Built-in handlers use priority 0, extension handlers should use priority >= 100.
+        /// Gets the priority of this handler. Higher values are processed first.
         /// </summary>
         int Priority { get; }
 

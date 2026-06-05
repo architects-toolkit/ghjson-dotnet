@@ -63,8 +63,9 @@ namespace GhJSON.Grasshopper.Serialization
             lock (Handlers)
             {
                 Handlers.Add(handler);
-                // Sort by priority (lower values first)
-                Handlers.Sort((a, b) => a.Priority.CompareTo(b.Priority));
+
+                // Sort by priority (higher values first)
+                Handlers.Sort((a, b) => b.Priority.CompareTo(a.Priority));
             }
         }
 
@@ -162,7 +163,7 @@ namespace GhJSON.Grasshopper.Serialization
 
         private static void RegisterBuiltInHandlers()
         {
-            // Core handlers (priority 0) - process in order
+            // Core handlers (priority 1000) - process first, establish base component structure
             Register(new IdentificationHandler());
             Register(new PivotHandler());
             Register(new SelectedPropertyHandler());
@@ -172,9 +173,8 @@ namespace GhJSON.Grasshopper.Serialization
             Register(new IOIdentificationHandler());
             Register(new IOModifiersHandler());
             Register(new InternalizedDataHandler());
-            Register(new GenericStateHandler());
 
-            // Extension handlers (priority 100) - component-specific
+            // Extension handlers (priority 100) - component-specific, run after core
             Register(new NumberSliderHandler());
             Register(new PanelHandler());
             Register(new ScribbleHandler());
@@ -188,6 +188,10 @@ namespace GhJSON.Grasshopper.Serialization
             Register(new IronPythonScriptHandler());
             Register(new VBScriptHandler());
             Register(new GhPythonScriptHandler());
+            Register(new SmartHopperStateHandler());
+
+            // Generic state handler (priority 0) - fallback for any unhandled extensions
+            Register(new GenericStateHandler());
         }
     }
 }

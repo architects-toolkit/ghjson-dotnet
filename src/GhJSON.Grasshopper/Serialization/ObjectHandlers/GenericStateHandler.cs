@@ -35,7 +35,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     internal sealed class GenericStateHandler : IObjectHandler
     {
         /// <inheritdoc/>
-        public int Priority => 50;
+        /// <remarks>
+        /// Runs last (lowest priority) so the skip-when-specialized check can see
+        /// extensions already written by higher-priority handlers.
+        /// </remarks>
+        public int Priority => 0;
 
         /// <inheritdoc/>
         public string? SchemaExtensionUrl => null;
@@ -165,30 +169,88 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 #endif
         }
 
+        // ReSharper disable once CollectionNeverUpdated.Local
+        private static readonly HashSet<string> BasePropertyNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            // Identification & structural (already handled by other handlers)
+            "Name",
+            "NickName",
+            "ComponentGuid",
+            "InstanceGuid",
+            "Category",
+            "SubCategory",
+            "Description",
+            "Locked",
+            "Hidden",
+            "Attributes",
+            "Params",
+            "DataType",
+            "Access",
+            "Optional",
+            "SourceCount",
+            "Recipients",
+            "VolatileData",
+            "PersistentData",
+
+            // Runtime / execution state (irrelevant for persistence)
+            "ProcessorTime",
+            "CurrentState",
+            "Phase",
+            "RuntimeMessageLevel",
+            "InstanceDescription",
+            "Message",
+            "RunCount",
+            "InConstructor",
+            "InPreSolve",
+            "VolatileDataCount",
+            "Run",
+            "RunOnlyOnInputChanges",
+            "IsDataProvider",
+            "DataComparison",
+            "PrincipalParameterIndex",
+            "IsValidPrincipalParameterIndex",
+
+            // UI / icon metadata (reconstructible, not stateful)
+            "Icon_24x24",
+            "Icon_24x24_Locked",
+            "IconDisplayMode",
+            "IconCapableUI",
+
+            // Structural / metadata (reconstructible from component type)
+            "HasCategory",
+            "HasSubCategory",
+            "MutableNickName",
+            "Obsolete",
+            "IsPreviewCapable",
+            "IsBakeCapable",
+            "IsPrincipal",
+            "TypeName",
+            "Type",
+            "Exposure",
+            "Keywords",
+
+            // Internal wiring / param metadata (reconstructible)
+            "Sources",
+            "HasProxySources",
+            "ProxySourceCount",
+            "StateTags",
+            "WireDisplay",
+            "DataMapping",
+            "Reverse",
+            "Simplify",
+
+            // Complex geometry containers (runtime-only, not state)
+            "ClippingBox",
+        };
+
         /// <summary>
         /// Checks whether a property name is a base Grasshopper property already
-        /// handled by other handlers (Identification, Pivot, Locked, Hidden, etc.).
+        /// handled by other handlers, or is runtime/computed/internal noise that
+        /// should never be persisted.
         /// </summary>
         private static bool IsBaseProperty(string name)
         {
-            return name.Equals("Name", StringComparison.Ordinal) ||
-                   name.Equals("NickName", StringComparison.Ordinal) ||
-                   name.Equals("ComponentGuid", StringComparison.Ordinal) ||
-                   name.Equals("InstanceGuid", StringComparison.Ordinal) ||
-                   name.Equals("Category", StringComparison.Ordinal) ||
-                   name.Equals("SubCategory", StringComparison.Ordinal) ||
-                   name.Equals("Description", StringComparison.Ordinal) ||
-                   name.Equals("Locked", StringComparison.Ordinal) ||
-                   name.Equals("Hidden", StringComparison.Ordinal) ||
-                   name.Equals("Attributes", StringComparison.Ordinal) ||
-                   name.Equals("Params", StringComparison.Ordinal) ||
-                   name.Equals("DataType", StringComparison.Ordinal) ||
-                   name.Equals("Access", StringComparison.Ordinal) ||
-                   name.Equals("Optional", StringComparison.Ordinal) ||
-                   name.Equals("SourceCount", StringComparison.Ordinal) ||
-                   name.Equals("Recipients", StringComparison.Ordinal) ||
-                   name.Equals("VolatileData", StringComparison.Ordinal) ||
-                   name.Equals("PersistentData", StringComparison.Ordinal);
+            return BasePropertyNames.Contains(name);
         }
 
         /// <summary>

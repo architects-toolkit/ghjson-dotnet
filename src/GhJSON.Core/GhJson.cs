@@ -403,6 +403,16 @@ namespace GhJSON.Core
             return DocumentFixer.RegenerateInstanceGuids(doc);
         }
 
+        /// <summary>
+        /// Normalizes enum casing (e.g. "Flatten" to "flatten") in parameter settings and extensions.
+        /// </summary>
+        /// <param name="doc">The document to fix.</param>
+        /// <returns>A fix result containing the fixed document and applied actions.</returns>
+        public static FixResult NormalizeEnumCasing(GhJsonDocument doc)
+        {
+            return DocumentFixer.NormalizeEnumCasing(doc);
+        }
+
         #endregion
 
         #region Merge Operations

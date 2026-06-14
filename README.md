@@ -168,6 +168,7 @@ Object handlers serialize and deserialize component-specific properties via the 
 | IronPython Script | `gh.ironpython` | Script code, marshalling options |
 | GhPython Script | `gh.ghpython` | Legacy GhPython script code |
 | VB Script | `gh.vbscript` | VB script code sections (imports, script, additional) |
+| SmartHopper | `smarthopper.state` | Selected AI provider name and canvas object selections |
 
 Core handlers (applied to all objects):
 

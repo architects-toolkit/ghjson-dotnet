@@ -26,6 +26,7 @@ using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.Serialization;
+using GhJSON.Grasshopper.Serialization.ObjectHandlers;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -169,7 +170,7 @@ namespace GhJSON.Grasshopper.PutOperations
             {
                 if (component.Id.HasValue && idToObject.TryGetValue(component.Id.Value, out var placedObj))
                 {
-                    ObjectHandlers.SmartHopperStateHandler.ApplySelectedObjects(component, placedObj, idToObject);
+                    SmartHopperStateHandler.ApplySelectedObjects(component, placedObj, idToObject);
                 }
             }
 

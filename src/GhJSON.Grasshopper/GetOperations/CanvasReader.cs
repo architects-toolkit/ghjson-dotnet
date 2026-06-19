@@ -23,6 +23,7 @@ using System.Linq;
 using System.Reflection;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
+using GhJSON.Grasshopper.Serialization.ObjectHandlers;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -138,7 +139,7 @@ namespace GhJSON.Grasshopper.GetOperations
 #endif
 
             // Post-process SmartHopper selectedObjects from GUIDs to numeric IDs
-            ObjectHandlers.SmartHopperStateHandler.PostProcessSelectedObjectsToIds(
+            SmartHopperStateHandler.PostProcessSelectedObjectsToIds(
                 builder.Components?.ToList() ?? new List<GhJsonComponent>(),
                 guidToId);
 

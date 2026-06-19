@@ -37,6 +37,13 @@ namespace GhJSON.Core.Validation
     internal static class GhJsonValidator
     {
         /// <summary>
+        /// Synchronizes access to <see cref="JsonSchema.Evaluate(JsonNode?, EvaluationOptions)"/>.
+        /// JsonSchema.Net v7 has an internal race when the same <see cref="JsonSchema"/> instance
+        /// is evaluated concurrently from multiple threads. A global lock ensures deterministic
+        /// results in parallel test runs and multi-threaded callers.
+        /// </summary>
+        private static readonly object SchemaEvaluationLock = new object();
+        /// <summary>
         /// Validates a GhJSON document.
         /// </summary>
         /// <param name="document">The document to validate.</param>
@@ -126,7 +133,7 @@ namespace GhJSON.Core.Validation
                     // Explicitly validate each known extension value against its schema.
                     // This ensures additionalProperties constraints in extension schemas are
                     // enforced even when the library's $ref chain doesn't propagate them.
-                    ValidateExtensionSchemas(json, result, schemaVersion ?? SchemaLoader.DefaultVersion);
+                    ValidateExtensionSchemas(json, result, schemaVersion ?? SchemaLoader.DefaultVersion, bundle);
                 }
             }
 
@@ -220,7 +227,7 @@ namespace GhJSON.Core.Validation
                 if (bundle != null)
                 {
                     ValidateRawJsonAgainstSchema(json, result, bundle);
-                    ValidateExtensionSchemas(json, result, schemaVersion ?? SchemaLoader.DefaultVersion);
+                    ValidateExtensionSchemas(json, result, schemaVersion ?? SchemaLoader.DefaultVersion, bundle);
                 }
             }
 
@@ -295,7 +302,7 @@ namespace GhJSON.Core.Validation
                 return;
             }
 
-            EvaluateSchema(bundle.Main, instance, result);
+            EvaluateSchema(bundle.Main, instance, result, bundle);
         }
 
         /// <summary>
@@ -319,10 +326,10 @@ namespace GhJSON.Core.Validation
                 return;
             }
 
-            EvaluateSchema(bundle.Main, instance, result);
+            EvaluateSchema(bundle.Main, instance, result, bundle);
         }
 
-        private static void EvaluateSchema(JsonSchema schema, JsonNode? instance, ValidationResult result)
+        private static void EvaluateSchema(JsonSchema schema, JsonNode? instance, ValidationResult result, SchemaLoader.Bundle bundle)
         {
             var options = new EvaluationOptions
             {
@@ -330,10 +337,18 @@ namespace GhJSON.Core.Validation
                 EvaluateAs = SpecVersion.Draft202012,
             };
 
+            foreach (var kvp in bundle.Schemas)
+            {
+                options.SchemaRegistry.Register(kvp.Key, kvp.Value);
+            }
+
             EvaluationResults evaluation;
             try
             {
-                evaluation = schema.Evaluate(instance, options);
+                lock (SchemaEvaluationLock)
+                {
+                    evaluation = schema.Evaluate(instance, options);
+                }
             }
             catch (Exception ex)
             {
@@ -383,7 +398,7 @@ namespace GhJSON.Core.Validation
         /// deterministic enforcement of extension-level <c>additionalProperties</c> constraints
         /// that may not propagate reliably through <c>$ref</c> chains in all environments.
         /// </summary>
-        private static void ValidateExtensionSchemas(string json, ValidationResult result, string schemaVersion)
+        private static void ValidateExtensionSchemas(string json, ValidationResult result, string schemaVersion, SchemaLoader.Bundle bundle)
         {
             JsonNode? root;
             try
@@ -428,18 +443,9 @@ namespace GhJSON.Core.Validation
 
                     var schemaUri = new Uri($"{baseUri}{extensionKey}.schema.json");
                     JsonSchema? schema = null;
-                    try
+                    if (bundle.Schemas.TryGetValue(schemaUri, out var s))
                     {
-                        var schemaDoc = SchemaRegistry.Global.Get(schemaUri);
-                        if (schemaDoc is JsonSchema s)
-                        {
-                            schema = s;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine(
-                            $"[GhJsonValidator] No schema registered for extension '{extensionKey}': {ex.Message}");
+                        schema = s;
                     }
 
                     if (schema == null)
@@ -456,7 +462,10 @@ namespace GhJSON.Core.Validation
                     EvaluationResults evaluation;
                     try
                     {
-                        evaluation = schema.Evaluate(extensionValue, options);
+                        lock (SchemaEvaluationLock)
+                        {
+                            evaluation = schema.Evaluate(extensionValue, options);
+                        }
                     }
                     catch (Exception ex)
                     {

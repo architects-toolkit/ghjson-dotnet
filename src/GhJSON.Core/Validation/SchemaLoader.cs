@@ -33,7 +33,9 @@ namespace GhJSON.Core.Validation
     /// <summary>
     /// Loads the GhJSON JSON Schema bundle (main schema + extension registry +
     /// per-extension schemas) from embedded resources or from the official online
-    /// repository. Loaded schemas are registered in the global <see cref="SchemaRegistry"/>.
+    /// repository. Loaded schemas are collected in a <see cref="Bundle"/> and can be
+    /// registered into an <see cref="EvaluationOptions.SchemaRegistry"/> for isolated
+    /// evaluation, eliminating race conditions from shared global state.
     /// <para>
     /// The embedded snapshot under <c>Validation/Schemas/v{version}/</c> is kept in
     /// sync with the published spec by <c>tools/Sync-Schemas.ps1</c>. By default the
@@ -242,6 +244,7 @@ namespace GhJSON.Core.Validation
 
             JsonSchema? main = null;
             var ids = new List<Uri>();
+            var schemas = new Dictionary<Uri, JsonSchema>();
 
             foreach (var resourceName in resourceNames)
             {
@@ -256,7 +259,7 @@ namespace GhJSON.Core.Validation
                     continue;
                 }
 
-                SchemaRegistry.Global.Register(id, schema);
+                schemas[id] = schema;
                 ids.Add(id);
 
                 if (resourceName.EndsWith(MainSchemaFileName, StringComparison.OrdinalIgnoreCase))
@@ -272,8 +275,8 @@ namespace GhJSON.Core.Validation
             }
 
             Debug.WriteLine(
-                $"[SchemaLoader] Registered {ids.Count} GhJSON schema(s) from embedded resources (version {version}).");
-            return new Bundle(main, ids);
+                $"[SchemaLoader] Loaded {ids.Count} GhJSON schema(s) from embedded resources (version {version}).");
+            return new Bundle(main, ids, schemas);
         }
 
         private static JsonSchema LoadPatchSchemaEmbedded(string version)
@@ -335,27 +338,32 @@ namespace GhJSON.Core.Validation
 
             var main = JsonSchema.FromText(mainText);
             var ids = new List<Uri>();
+            var schemas = new Dictionary<Uri, JsonSchema>();
 
             var id = main.GetId();
             if (id != null)
             {
-                SchemaRegistry.Global.Register(id, main);
+                schemas[id] = main;
                 ids.Add(id);
             }
 
             // Discover and download extension schemas referenced by the main schema
-            var extensionIds = await DiscoverAndDownloadExtensionsAsync(versionUrl, linkedToken).ConfigureAwait(false);
-            ids.AddRange(extensionIds);
+            var extensionSchemas = await DiscoverAndDownloadExtensionsAsync(versionUrl, linkedToken).ConfigureAwait(false);
+            foreach (var kvp in extensionSchemas)
+            {
+                schemas[kvp.Key] = kvp.Value;
+                ids.Add(kvp.Key);
+            }
 
             Debug.WriteLine(
-                $"[SchemaLoader] Registered {ids.Count} GhJSON schema(s) from online (version {version}).");
-            return new Bundle(main, ids);
+                $"[SchemaLoader] Loaded {ids.Count} GhJSON schema(s) from online (version {version}).");
+            return new Bundle(main, ids, schemas);
         }
 
-        private static async Task<List<Uri>> DiscoverAndDownloadExtensionsAsync(
+        private static async Task<Dictionary<Uri, JsonSchema>> DiscoverAndDownloadExtensionsAsync(
             string baseUrl, CancellationToken cancellationToken)
         {
-            var ids = new List<Uri>();
+            var schemas = new Dictionary<Uri, JsonSchema>();
             var httpClient = LazyHttpClient.Value;
 
             // Discover extension schemas from the extensions registry
@@ -369,15 +377,14 @@ namespace GhJSON.Core.Validation
             }
             catch
             {
-                return ids;
+                return schemas;
             }
 
             var registrySchema = JsonSchema.FromText(registryText);
             var registryId = registrySchema.GetId();
             if (registryId != null)
             {
-                SchemaRegistry.Global.Register(registryId, registrySchema);
-                ids.Add(registryId);
+                schemas[registryId] = registrySchema;
             }
 
             // Parse registry to find $refs
@@ -400,8 +407,7 @@ namespace GhJSON.Core.Validation
                     var extId = extSchema.GetId();
                     if (extId != null)
                     {
-                        SchemaRegistry.Global.Register(extId, extSchema);
-                        ids.Add(extId);
+                        schemas[extId] = extSchema;
                     }
                 }
                 catch (Exception ex)
@@ -410,7 +416,7 @@ namespace GhJSON.Core.Validation
                 }
             }
 
-            return ids;
+            return schemas;
         }
 
         private static List<string> ExtractRefsFromRegistry(string registryText)
@@ -461,10 +467,12 @@ namespace GhJSON.Core.Validation
             /// </summary>
             /// <param name="main">The main GhJSON schema.</param>
             /// <param name="ids">The registered schema IDs.</param>
-            public Bundle(JsonSchema main, IReadOnlyList<Uri> ids)
+            /// <param name="schemas">All loaded schemas keyed by their <c>$id</c> URI.</param>
+            public Bundle(JsonSchema main, IReadOnlyList<Uri> ids, IReadOnlyDictionary<Uri, JsonSchema> schemas)
             {
                 this.Main = main;
                 this.Ids = ids;
+                this.Schemas = schemas;
             }
 
             /// <summary>
@@ -473,9 +481,14 @@ namespace GhJSON.Core.Validation
             public JsonSchema Main { get; }
 
             /// <summary>
-            /// The <c>$id</c> URIs of every registered schema.
+            /// The <c>$id</c> URIs of every loaded schema.
             /// </summary>
             public IReadOnlyList<Uri> Ids { get; }
+
+            /// <summary>
+            /// All loaded schemas keyed by their <c>$id</c> URI.
+            /// </summary>
+            public IReadOnlyDictionary<Uri, JsonSchema> Schemas { get; }
         }
     }
 }

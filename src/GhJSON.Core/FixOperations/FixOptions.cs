@@ -61,5 +61,11 @@ namespace GhJSON.Core.FixOperations
         /// Gets or sets a value indicating whether to remove invalid group members.
         /// </summary>
         public bool RemoveInvalidGroupMembers { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to normalize enum casing
+        /// (e.g. <c>"Flatten"</c> → <c>"flatten"</c>) in parameter settings and extensions.
+        /// </summary>
+        public bool NormalizeEnumCasing { get; set; } = true;
     }
 }

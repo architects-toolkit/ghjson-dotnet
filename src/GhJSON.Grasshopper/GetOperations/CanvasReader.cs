@@ -23,6 +23,7 @@ using System.Linq;
 using System.Reflection;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization;
+using GhJSON.Grasshopper.Serialization.ObjectHandlers;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -113,10 +114,22 @@ namespace GhJSON.Grasshopper.GetOperations
             // Serialize components
             foreach (var obj in components)
             {
-                var component = ObjectHandlerOrchestrator.Serialize(obj);
+                var component = ObjectHandlerOrchestrator.Serialize(obj, options);
                 component.Id = nextId;
                 guidToId[obj.InstanceGuid] = nextId;
                 nextId++;
+
+                // Audit: flag components serialized without a specialized handler
+                var objType = obj.GetType();
+                bool isFromExternalPlugin = objType.Assembly != typeof(IGH_DocumentObject).Assembly;
+                bool hasSpecializedHandler = component.ComponentState?.Extensions?.Count > 0;
+                if (isFromExternalPlugin && !hasSpecializedHandler && !(obj is GH_Group))
+                {
+                    component.Warnings ??= new List<string>();
+                    component.Warnings.Add(
+                        $"Component '{obj.Name}' from '{objType.Assembly.GetName().Name}' " +
+                        "was serialized without a specialized handler. Custom state may be missing.");
+                }
 
                 builder = builder.AddComponent(component);
             }
@@ -124,6 +137,11 @@ namespace GhJSON.Grasshopper.GetOperations
 #if DEBUG
             Debug.WriteLine($"[CanvasReader.CreateDocument] Serialized {components.Count} components");
 #endif
+
+            // Post-process SmartHopper selectedObjects from GUIDs to numeric IDs
+            SmartHopperStateHandler.PostProcessSelectedObjectsToIds(
+                builder.Components?.ToList() ?? new List<GhJsonComponent>(),
+                guidToId);
 
             // Extract connections
             List<GhJsonConnection>? extractedConnections = null;

@@ -26,6 +26,7 @@ using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.Serialization;
+using GhJSON.Grasshopper.Serialization.ObjectHandlers;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -124,10 +125,13 @@ namespace GhJSON.Grasshopper.PutOperations
                             (float)(component.Pivot.X + effectiveOffset.X),
                             (float)(component.Pivot.Y + effectiveOffset.Y));
                     }
-                    else if (component.InstanceGuid.HasValue && 
-                             layoutPositions.TryGetValue(component.InstanceGuid.Value, out var calculatedPosition))
+                    else if (Core.GhJson.GetLayoutKey(component) is var layoutKey &&
+                             layoutKey != Guid.Empty &&
+                             layoutPositions.TryGetValue(layoutKey, out var calculatedPosition))
                     {
-                        // Use dependency graph calculated position for components without pivots
+                        // Use dependency graph calculated position for components without pivots.
+                        // Use the same stable key as the layout engine so id-only components
+                        // (no InstanceGuid) also receive their calculated position.
                         obj.Attributes.Pivot = calculatedPosition;
 #if DEBUG
                         Debug.WriteLine($"[CanvasPlacer.Put] Applied layout position for '{component.Name}': ({calculatedPosition.X:F2}, {calculatedPosition.Y:F2})");
@@ -161,18 +165,23 @@ namespace GhJSON.Grasshopper.PutOperations
             Debug.WriteLine($"[CanvasPlacer.Put] Placed {result.ComponentsPlaced} components, {result.FailedComponents.Count} failed");
 #endif
 
+            // Late post-placement: resolve SmartHopper selectedObjects IDs to objects
+            foreach (var component in document.Components)
+            {
+                if (component.Id.HasValue && idToObject.TryGetValue(component.Id.Value, out var placedObj))
+                {
+                    SmartHopperStateHandler.ApplySelectedObjects(component, placedObj, idToObject);
+                }
+            }
+
             // Create connections
             if (options.CreateConnections && document.Connections != null)
             {
                 foreach (var connection in document.Connections)
                 {
-                    if (CreateConnection(connection, idToObject))
+                    if (CreateConnection(connection, idToObject, document, result))
                     {
                         result.ConnectionsCreated++;
-                    }
-                    else
-                    {
-                        result.Warnings.Add($"Failed to create connection from {connection.From.Id} to {connection.To.Id}");
                     }
                 }
 
@@ -207,11 +216,16 @@ namespace GhJSON.Grasshopper.PutOperations
             return result;
         }
 
-        private static bool CreateConnection(GhJsonConnection connection, Dictionary<int, IGH_DocumentObject> idToObject)
+        private static bool CreateConnection(GhJsonConnection connection, Dictionary<int, IGH_DocumentObject> idToObject, GhJsonDocument document, PutResult result)
         {
             if (!idToObject.TryGetValue(connection.From.Id, out var fromObj) ||
                 !idToObject.TryGetValue(connection.To.Id, out var toObj))
             {
+                var missingFrom = document.Components.FirstOrDefault(c => c.Id == connection.From.Id);
+                var missingTo = document.Components.FirstOrDefault(c => c.Id == connection.To.Id);
+                var fromName = missingFrom?.Name ?? $"id:{connection.From.Id}";
+                var toName = missingTo?.Name ?? $"id:{connection.To.Id}";
+                result.Warnings.Add($"Connection from '{fromName}' to '{toName}' lost: component not installed.");
                 return false;
             }
 
@@ -220,6 +234,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
             if (sourceParam == null || targetParam == null)
             {
+                result.Warnings.Add($"Connection from '{fromObj.Name}' ({connection.From.ParamName}) to '{toObj.Name}' ({connection.To.ParamName}) lost: parameter not found.");
                 return false;
             }
 

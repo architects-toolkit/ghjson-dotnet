@@ -33,6 +33,31 @@ namespace GhJSON.Core.DependencyGraph
 
         public GhJsonPivot? Origin { get; set; } = null;
 
+        /// <summary>
+        /// Default component width used for bounds-aware column spacing when a node does not
+        /// carry a measured width. Grasshopper consumers refine this with real canvas bounds.
+        /// </summary>
+        public float DefaultNodeWidth { get; set; } = 100f;
+
+        /// <summary>
+        /// Default component height used for bounds-aware row spacing when a node does not
+        /// carry a measured height.
+        /// </summary>
+        public float DefaultNodeHeight { get; set; } = 60f;
+
+        /// <summary>
+        /// Maximum crossing-minimization iterations (down/up sweeps). The optimizer keeps the
+        /// best ordering it has seen, so a higher cap never produces a worse result.
+        /// </summary>
+        public int MaxOrderingIterations { get; set; } = 24;
+
+        /// <summary>
+        /// When packing multiple disconnected islands, islands are laid out left-to-right on
+        /// "shelves" until this width budget is exceeded, then wrapped to a new shelf. This
+        /// keeps many small islands from forming one tall vertical strip.
+        /// </summary>
+        public float IslandWrapWidth { get; set; } = 2000f;
+
         public static LayoutOptions Default => new LayoutOptions();
     }
 }

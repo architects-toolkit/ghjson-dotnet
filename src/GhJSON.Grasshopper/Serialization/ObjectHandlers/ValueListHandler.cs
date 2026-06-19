@@ -29,7 +29,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class ValueListHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.valuelist";
+        private static readonly Guid ValueListGuid = new Guid("0b59d304-6b5c-49ce-baaf-041dc057adcc");
 
         /// <inheritdoc/>
         public int Priority => 100;
@@ -38,17 +38,21 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         public string? SchemaExtensionUrl => null;
 
         /// <inheritdoc/>
+        public string ExtensionKey => "gh.valuelist";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => ValueListGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Value List";
+
+        /// <inheritdoc/>
         public bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is GH_ValueList;
         }
 
-        /// <inheritdoc/>
-        public bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == "Value List" ||
-                   component.ComponentGuid == new Guid("0b59d304-6b5c-49ce-baaf-041dc057adcc");
-        }
+
 
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)

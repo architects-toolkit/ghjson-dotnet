@@ -17,83 +17,315 @@
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 
 namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
 {
+    /// <summary>
+    /// Refines the within-layer ordering (<see cref="LayoutNode.Order"/>) to minimize wire
+    /// crossings. Each iteration performs a weighted-median sweep (alternating down/up)
+    /// followed by a transpose pass (adjacent swaps that strictly reduce crossings). The
+    /// total crossing count is measured after every iteration and the best ordering seen is
+    /// retained, so increasing <see cref="LayoutOptions.MaxOrderingIterations"/> can never
+    /// yield a worse result. All neighbor lookups go through per-layer order maps, keeping
+    /// each sweep near-linear in the number of edges.
+    /// </summary>
     internal static class CrossingMinimizer
     {
-        public static void MinimizeCrossings(List<LayoutNode> nodes)
+        public static void MinimizeCrossings(List<LayoutNode> nodes, int maxIterations = 24)
         {
-            bool changed;
-            do
+            var layers = BuildLayers(nodes);
+            if (layers.Count < 2)
             {
-                var oldY = nodes.ToDictionary(n => n.ComponentId, n => n.Pivot.Y);
-                ApplySinglePass(nodes);
-                changed = nodes.Any(n => Math.Abs(n.Pivot.Y - oldY[n.ComponentId]) > 0.001f);
+                return; // Nothing to cross.
             }
-            while (changed);
-        }
 
-        private static void ApplySinglePass(List<LayoutNode> nodes)
-        {
-            var byLayer = nodes.GroupBy(n => (int)n.Pivot.X)
-                               .OrderBy(g => g.Key)
-                               .Select(g => g.ToList())
-                               .ToList();
+            var bestOrder = SnapshotOrder(nodes);
+            var bestCrossings = CountAllCrossings(layers);
 
-            for (int layerIndex = 1; layerIndex < byLayer.Count; layerIndex++)
+            for (var iter = 0; iter < maxIterations && bestCrossings > 0; iter++)
             {
-                var prevLayer = byLayer[layerIndex - 1];
-                var currLayer = byLayer[layerIndex];
-                currLayer.Sort((a, b) => CalculateMedian(a, prevLayer, useParents: true)
-                                      .CompareTo(CalculateMedian(b, prevLayer, useParents: true)));
-                for (int i = 0; i < currLayer.Count; i++)
+                var down = iter % 2 == 0;
+                MedianSweep(layers, down);
+                Transpose(layers);
+
+                var crossings = CountAllCrossings(layers);
+                if (crossings < bestCrossings)
                 {
-                    currLayer[i].Pivot = new PointF(currLayer[i].Pivot.X, i);
+                    bestCrossings = crossings;
+                    bestOrder = SnapshotOrder(nodes);
                 }
             }
 
-            for (int layerIndex = byLayer.Count - 2; layerIndex >= 0; layerIndex--)
+            RestoreOrder(nodes, bestOrder);
+        }
+
+        /// <summary>
+        /// Counts the total number of edge crossings in the current ordering. Exposed so the
+        /// layout engine can report it as a diagnostic / quality metric.
+        /// </summary>
+        public static int CountCrossings(List<LayoutNode> nodes)
+        {
+            return CountAllCrossings(BuildLayers(nodes));
+        }
+
+        private static List<List<LayoutNode>> BuildLayers(List<LayoutNode> nodes)
+        {
+            return nodes.GroupBy(n => n.Layer)
+                        .OrderBy(g => g.Key)
+                        .Select(g => g.OrderBy(n => n.Order).ToList())
+                        .ToList();
+        }
+
+        private static void MedianSweep(List<List<LayoutNode>> layers, bool down)
+        {
+            if (down)
             {
-                var nextLayer = byLayer[layerIndex + 1];
-                var currLayer = byLayer[layerIndex];
-                currLayer.Sort((a, b) => CalculateMedian(a, nextLayer, useParents: false)
-                                      .CompareTo(CalculateMedian(b, nextLayer, useParents: false)));
-                for (int i = 0; i < currLayer.Count; i++)
+                for (var li = 1; li < layers.Count; li++)
                 {
-                    currLayer[i].Pivot = new PointF(currLayer[i].Pivot.X, i);
+                    ReorderLayer(layers[li], BuildOrderLookup(layers[li - 1]), useParents: true);
+                }
+            }
+            else
+            {
+                for (var li = layers.Count - 2; li >= 0; li--)
+                {
+                    ReorderLayer(layers[li], BuildOrderLookup(layers[li + 1]), useParents: false);
                 }
             }
         }
 
-        private static float CalculateMedian(LayoutNode node, List<LayoutNode> adjacentLayer, bool useParents)
+        /// <summary>
+        /// Sorts <paramref name="layer"/> by each node's median neighbor position. Nodes with
+        /// no neighbor in the adjacent layer are pinned to their current position (classic
+        /// Sugiyama behavior) rather than being swept to one end.
+        /// </summary>
+        private static void ReorderLayer(List<LayoutNode> layer, Dictionary<Guid, int> adjacentOrder, bool useParents)
+        {
+            // Capture fixed nodes' slots so they stay put; sort the rest by median.
+            var medians = new Dictionary<Guid, float>(layer.Count);
+            var movable = new List<LayoutNode>();
+            foreach (var node in layer)
+            {
+                var median = Median(node, adjacentOrder, useParents);
+                if (median < 0f)
+                {
+                    medians[node.ComponentId] = -1f; // fixed
+                }
+                else
+                {
+                    medians[node.ComponentId] = median;
+                    movable.Add(node);
+                }
+            }
+
+            if (movable.Count == 0)
+            {
+                return;
+            }
+
+            // Sort movable nodes by median (stable on ComponentId), then re-thread them back
+            // into the slots not occupied by fixed nodes, preserving fixed node positions.
+            movable.Sort((a, b) =>
+            {
+                var cmp = medians[a.ComponentId].CompareTo(medians[b.ComponentId]);
+                return cmp != 0 ? cmp : a.ComponentId.CompareTo(b.ComponentId);
+            });
+
+            var result = new LayoutNode[layer.Count];
+            var fixedSlots = new HashSet<int>();
+            for (var i = 0; i < layer.Count; i++)
+            {
+                if (medians[layer[i].ComponentId] < 0f)
+                {
+                    result[i] = layer[i];
+                    fixedSlots.Add(i);
+                }
+            }
+
+            var m = 0;
+            for (var i = 0; i < layer.Count; i++)
+            {
+                if (fixedSlots.Contains(i))
+                {
+                    continue;
+                }
+
+                result[i] = movable[m++];
+            }
+
+            for (var i = 0; i < layer.Count; i++)
+            {
+                layer[i] = result[i];
+                layer[i].Order = i;
+            }
+        }
+
+        /// <summary>
+        /// Transpose heuristic: repeatedly swap adjacent nodes within a layer when doing so
+        /// reduces the combined crossings with the neighboring layers, until no swap helps.
+        /// </summary>
+        private static void Transpose(List<List<LayoutNode>> layers)
+        {
+            var improved = true;
+            var guard = 0;
+            while (improved && guard++ < 4)
+            {
+                improved = false;
+                for (var li = 0; li < layers.Count; li++)
+                {
+                    var layer = layers[li];
+                    for (var i = 0; i < layer.Count - 1; i++)
+                    {
+                        var before = LocalCrossings(layers, li);
+                        Swap(layer, i, i + 1);
+                        var after = LocalCrossings(layers, li);
+                        if (after < before)
+                        {
+                            improved = true;
+                        }
+                        else
+                        {
+                            Swap(layer, i, i + 1); // revert
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void Swap(List<LayoutNode> layer, int i, int j)
+        {
+            (layer[i], layer[j]) = (layer[j], layer[i]);
+            layer[i].Order = i;
+            layer[j].Order = j;
+        }
+
+        private static int LocalCrossings(List<List<LayoutNode>> layers, int layerIndex)
+        {
+            var total = 0;
+            if (layerIndex > 0)
+            {
+                total += CountCrossingsBetween(layers[layerIndex - 1], layers[layerIndex]);
+            }
+
+            if (layerIndex < layers.Count - 1)
+            {
+                total += CountCrossingsBetween(layers[layerIndex], layers[layerIndex + 1]);
+            }
+
+            return total;
+        }
+
+        private static int CountAllCrossings(List<List<LayoutNode>> layers)
+        {
+            var total = 0;
+            for (var li = 0; li < layers.Count - 1; li++)
+            {
+                total += CountCrossingsBetween(layers[li], layers[li + 1]);
+            }
+
+            return total;
+        }
+
+        /// <summary>
+        /// Counts crossings between two adjacent layers by collecting all edges as
+        /// (upperOrder, lowerOrder) pairs and counting inversions.
+        /// </summary>
+        private static int CountCrossingsBetween(List<LayoutNode> upper, List<LayoutNode> lower)
+        {
+            var lowerOrder = BuildOrderLookup(lower);
+            var edges = new List<(int Upper, int Lower)>();
+            foreach (var u in upper)
+            {
+                foreach (var childId in u.Children.Keys)
+                {
+                    if (lowerOrder.TryGetValue(childId, out var lo))
+                    {
+                        edges.Add((u.Order, lo));
+                    }
+                }
+            }
+
+            // Sort by upper position, then count inversions in the lower positions.
+            edges.Sort((a, b) => a.Upper != b.Upper ? a.Upper.CompareTo(b.Upper) : a.Lower.CompareTo(b.Lower));
+
+            var crossings = 0;
+            for (var i = 0; i < edges.Count; i++)
+            {
+                for (var j = i + 1; j < edges.Count; j++)
+                {
+                    if (edges[j].Lower < edges[i].Lower)
+                    {
+                        crossings++;
+                    }
+                }
+            }
+
+            return crossings;
+        }
+
+        private static Dictionary<Guid, int> BuildOrderLookup(List<LayoutNode> layer)
+        {
+            var map = new Dictionary<Guid, int>(layer.Count);
+            foreach (var n in layer)
+            {
+                map[n.ComponentId] = n.Order;
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// Weighted median of a node's neighbor positions in the adjacent layer. Returns -1
+        /// when the node has no resolvable neighbor (treated as "fixed in place").
+        /// </summary>
+        private static float Median(LayoutNode node, Dictionary<Guid, int> adjacentOrder, bool useParents)
         {
             var connected = useParents ? node.Parents.Keys : node.Children.Keys;
-            var positions = new List<float>();
+            var positions = new List<int>();
             foreach (var id in connected)
             {
-                var found = adjacentLayer.FirstOrDefault(n => n.ComponentId == id);
-                if (found != null)
+                if (adjacentOrder.TryGetValue(id, out var order))
                 {
-                    positions.Add(found.Pivot.Y);
+                    positions.Add(order);
                 }
             }
 
-            if (!positions.Any())
+            if (positions.Count == 0)
             {
-                return float.MaxValue;
+                return -1f;
             }
 
             positions.Sort();
-            int mid = positions.Count / 2;
+            var mid = positions.Count / 2;
             if (positions.Count % 2 == 1)
             {
                 return positions[mid];
             }
 
             return (positions[mid - 1] + positions[mid]) / 2f;
+        }
+
+        private static Dictionary<Guid, int> SnapshotOrder(List<LayoutNode> nodes)
+        {
+            var snapshot = new Dictionary<Guid, int>(nodes.Count);
+            foreach (var n in nodes)
+            {
+                snapshot[n.ComponentId] = n.Order;
+            }
+
+            return snapshot;
+        }
+
+        private static void RestoreOrder(List<LayoutNode> nodes, Dictionary<Guid, int> order)
+        {
+            foreach (var n in nodes)
+            {
+                if (order.TryGetValue(n.ComponentId, out var o))
+                {
+                    n.Order = o;
+                }
+            }
         }
     }
 }

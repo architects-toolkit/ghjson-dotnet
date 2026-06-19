@@ -40,6 +40,8 @@ ghjson-dotnet/
 │   │   ├── Validation/                 # Schema validation
 │   │   ├── FixOperations/              # Schema fix operations
 │   │   ├── MergeOperations/            # Schema merge operations
+│   │   ├── DiffOperations/             # Diff/patch operations on `.ghpatch` documents
+│   │   ├── PatchModels/                # Strongly-typed model for `.ghpatch` documents
 │   │   ├── NameResolution/             # Fuzzy name matching for components and parameters
 │   │   ├── TidyUpOperations/           # Schema tidy up operations
 │   │   └── GhJson.cs                   # Main façade entry point
@@ -125,11 +127,21 @@ namespace GhJSON.Core
         public static string ToJson(GhJsonDocument doc, WriteOptions? options = null);
 
         // Validation
-        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
-        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard);
+        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+
+        // Async Validation
+        public static Task<ValidationResult> ValidateAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<ValidationResult> ValidateAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<bool> IsValidAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<bool> IsValidAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+
+        // Convenience: prefer online schema
+        public static ValidationResult ValidateOnline(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null);
+        public static ValidationResult ValidateOnline(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null);
 
         // Fix
         public static FixResult Fix(GhJsonDocument doc, FixOptions? options = null);
@@ -141,6 +153,18 @@ namespace GhJSON.Core
 
         // Merge
         public static MergeResult Merge(GhJsonDocument baseDoc, GhJsonDocument incomingDoc, MergeOptions? options = null);
+
+        // Diff & Patch (`.ghpatch` sibling profile)
+        public static DiffResult Diff(GhJsonDocument left, GhJsonDocument right, DiffOptions? options = null);
+        public static GhPatchDocument DiffToPatch(GhJsonDocument left, GhJsonDocument right, DiffOptions? options = null);
+        public static GhPatchDocument PatchFromJson(string json);
+        public static string PatchToJson(GhPatchDocument patch, WriteOptions? options = null);
+        public static GhPatchDocument PatchFromFile(string path);
+        public static void PatchToFile(GhPatchDocument patch, string path, WriteOptions? options = null);
+        public static ApplyPatchResult ApplyPatch(GhJsonDocument baseDoc, GhPatchDocument patch, ApplyPatchOptions? options = null);
+        public static ApplyPatchResult ApplyPatch(string baseJson, string patchJson, ApplyPatchOptions? options = null);
+        public static ValidationResult ValidatePatch(GhPatchDocument patch, bool preferOnline = false, string? schemaVersion = null);
+        public static ValidationResult ValidatePatch(string patchJson, bool preferOnline = false, string? schemaVersion = null);
 
         // Schema Migration
         public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null);
@@ -302,7 +326,7 @@ Parameter settings configure input and output parameters on components. All bool
 |----------|------|-------------|
 | `parameterName` | string | **Required**. The name of the parameter. |
 | `nickName` | string | Custom nickname for the parameter. |
-| `dataMapping` | string | Data tree mapping mode: `"None"`, `"Flatten"`, `"Graft"`. |
+| `dataMapping` | string | Data tree mapping mode: `"none"`, `"flatten"`, `"graft"`. |
 | `expression` | string | Expression that transforms parameter data. Presence implies the parameter has an expression. |
 | `access` | string | Data access mode for script parameters: `"item"`, `"list"`, `"tree"`. |
 | `typeHint` | string | Type hint for script parameters (e.g., `"int"`, `"double"`, `"Point3d"`). |

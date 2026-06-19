@@ -18,6 +18,7 @@
 using System;
 using System.Linq;
 using GhJSON.Core.DependencyGraph;
+using GhJSON.Core.DependencyGraph.Internal;
 using GhJSON.Core.SchemaModels;
 
 namespace GhJSON.Core
@@ -75,8 +76,11 @@ namespace GhJSON.Core
             
             foreach (var component in document.Components)
             {
-                if (component.InstanceGuid.HasValue &&
-                    layoutResult.Positions.TryGetValue(component.InstanceGuid.Value, out var newPivot))
+                // Match by the same stable key used by GraphBuilder so layout flows through
+                // for components that only expose an integer Id (no InstanceGuid).
+                var key = GraphBuilder.GetStableKey(component);
+                if (key != Guid.Empty &&
+                    layoutResult.Positions.TryGetValue(key, out var newPivot))
                 {
                     var updatedComponent = new GhJsonComponent
                     {
@@ -118,6 +122,25 @@ namespace GhJSON.Core
             }
 
             return builder.Build();
+        }
+
+        /// <summary>
+        /// Returns the stable layout key used to identify <paramref name="component"/> in a
+        /// <see cref="LayoutResult"/>. This is the component's <c>InstanceGuid</c> when present,
+        /// otherwise a deterministic GUID synthesized from its integer <c>Id</c>. Callers that
+        /// need to look up calculated positions for components that may only expose an <c>Id</c>
+        /// (no <c>InstanceGuid</c>) must use this key rather than <c>InstanceGuid</c> directly.
+        /// </summary>
+        /// <param name="component">The component to compute the key for.</param>
+        /// <returns>The stable layout key, or <see cref="Guid.Empty"/> when the component has neither identifier.</returns>
+        public static Guid GetLayoutKey(GhJsonComponent component)
+        {
+            if (component == null)
+            {
+                throw new ArgumentNullException(nameof(component));
+            }
+
+            return GraphBuilder.GetStableKey(component);
         }
 
         /// <summary>

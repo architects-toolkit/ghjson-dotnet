@@ -77,7 +77,7 @@ namespace GhJSON.Core.NameResolution
             {
                 // *pattern* - contains match
                 var inner = pattern.Substring(1, pattern.Length - 2);
-                return typeName.Contains(inner, StringComparison.OrdinalIgnoreCase);
+                return typeName.IndexOf(inner, StringComparison.OrdinalIgnoreCase) >= 0;
             }
             else if (pattern.StartsWith("*") && pattern.Length > 1)
             {

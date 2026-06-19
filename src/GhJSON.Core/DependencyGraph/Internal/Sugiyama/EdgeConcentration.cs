@@ -22,72 +22,80 @@ using System.Linq;
 
 namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
 {
+    /// <summary>
+    /// Splits every edge that spans more than one layer into a chain of synthetic "dummy"
+    /// routing nodes, one per intermediate layer. This is the standard Sugiyama device that
+    /// lets the ordering / crossing-minimization passes reason about long edges the same way
+    /// as short ones, producing straighter wires and meaningful crossing counts. Dummy nodes
+    /// are flagged via <see cref="LayoutNode.IsDummy"/> and are never emitted as real
+    /// component positions.
+    /// </summary>
     internal static class EdgeConcentration
     {
-        public static List<LayoutNode> InsertHubNodes(List<LayoutNode> nodes)
+        public static List<LayoutNode> InsertDummyChains(List<LayoutNode> nodes, LayoutOptions options)
         {
-            var newNodes = new List<LayoutNode>(nodes);
-            var byLayer = nodes.GroupBy(n => n.Pivot.X).OrderBy(g => g.Key).ToList();
+            var byId = nodes.ToDictionary(n => n.ComponentId, n => n);
+            var result = new List<LayoutNode>(nodes);
 
-            for (int li = 0; li < byLayer.Count - 1; li++)
+            // Snapshot edges first so the adjacency can be mutated while iterating.
+            var edges = new List<(Guid From, Guid To, int ParamIndex)>();
+            foreach (var u in nodes)
             {
-                var leftLayer = byLayer[li].ToList();
-                var rightIds = new HashSet<Guid>(byLayer[li + 1].Select(n => n.ComponentId));
-
-                var groups = leftLayer.Select(n => new
+                foreach (var kv in u.Children)
                 {
-                    Node = n,
-                    Targets = n.Children.Keys.Where(id => rightIds.Contains(id)).OrderBy(id => id).ToList(),
-                })
-                .GroupBy(x => string.Join(",", x.Targets))
-                .Where(g => g.Count() > 1 && g.First().Targets.Count > 1);
+                    if (byId.ContainsKey(kv.Key))
+                    {
+                        edges.Add((u.ComponentId, kv.Key, kv.Value));
+                    }
+                }
+            }
 
-                foreach (var group in groups)
+            var dummyWidth = options.DefaultNodeWidth * 0.1f;
+            var dummyHeight = options.DefaultNodeHeight * 0.1f;
+
+            foreach (var (fromId, toId, paramIndex) in edges)
+            {
+                var from = byId[fromId];
+                var to = byId[toId];
+                var span = to.Layer - from.Layer;
+                if (span <= 1)
                 {
-                    var sourceNodes = group.Select(x => x.Node).ToList();
-                    var targetIds = group.First().Targets;
+                    // Same-layer (cycle) or adjacent edges need no routing nodes.
+                    continue;
+                }
 
-                    var hubNode = new LayoutNode
+                // Drop the direct edge; it is replaced by the dummy chain.
+                from.Children.Remove(toId);
+                to.Parents.Remove(fromId);
+
+                var prevId = fromId;
+                for (var lyr = from.Layer + 1; lyr < to.Layer; lyr++)
+                {
+                    var dummy = new LayoutNode
                     {
                         ComponentId = Guid.NewGuid(),
-                        Pivot = new PointF(leftLayer[0].Pivot.X + 0.5f, 0),
+                        IsDummy = true,
+                        Layer = lyr,
+                        Width = dummyWidth,
+                        Height = dummyHeight,
                         Parents = new Dictionary<Guid, int>(),
                         Children = new Dictionary<Guid, int>(),
                     };
 
-                    foreach (var source in sourceNodes)
-                    {
-                        foreach (var targetId in targetIds)
-                        {
-                            source.Children.Remove(targetId);
-                        }
-                    }
+                    result.Add(dummy);
+                    byId[dummy.ComponentId] = dummy;
 
-                    foreach (var target in newNodes.Where(n => targetIds.Contains(n.ComponentId)))
-                    {
-                        foreach (var source in sourceNodes)
-                        {
-                            target.Parents.Remove(source.ComponentId);
-                        }
-                    }
-
-                    foreach (var source in sourceNodes)
-                    {
-                        source.Children[hubNode.ComponentId] = -1;
-                        hubNode.Parents[source.ComponentId] = -1;
-                    }
-
-                    foreach (var target in newNodes.Where(n => targetIds.Contains(n.ComponentId)))
-                    {
-                        target.Parents[hubNode.ComponentId] = -1;
-                        hubNode.Children[target.ComponentId] = -1;
-                    }
-
-                    newNodes.Add(hubNode);
+                    byId[prevId].Children[dummy.ComponentId] = -1;
+                    dummy.Parents[prevId] = -1;
+                    prevId = dummy.ComponentId;
                 }
+
+                // Re-attach the final segment to the real target, preserving the param index.
+                byId[prevId].Children[toId] = paramIndex;
+                to.Parents[prevId] = paramIndex;
             }
 
-            return newNodes;
+            return result;
         }
     }
 }

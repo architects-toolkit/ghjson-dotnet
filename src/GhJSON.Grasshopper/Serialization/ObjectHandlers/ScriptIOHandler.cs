@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
@@ -312,7 +313,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             // Data mapping
             if (!string.IsNullOrEmpty(settings.DataMapping) &&
-                Enum.TryParse<GH_DataMapping>(settings.DataMapping, out var mapping))
+                Enum.TryParse<GH_DataMapping>(settings.DataMapping, ignoreCase: true, out var mapping))
             {
                 param.DataMapping = mapping;
             }
@@ -605,17 +606,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             return param.NickName;
         }
 
-        /// <summary>
-        /// Known script component GUIDs (C#, Python 3, IronPython 2, VB.NET).
-        /// </summary>
-        private static readonly HashSet<Guid> ScriptComponentGuids = new()
-        {
-            new Guid("b6ba1144-02d6-4a2d-b53c-ec62e290eeb7"), // C# Script
-            new Guid("719467e6-7cf5-4848-99b0-c5dd57e5442c"), // Python 3 Script
-            new Guid("97aa26ef-88ae-4ba6-98a6-ed6ddeca11d1"), // IronPython 2 Script
-            new Guid("079bd9bd-54a0-41d4-98af-db999015f63d"), // VB Script
-        };
-
         private static bool IsScriptComponent(IGH_Component comp)
         {
             // Check IScriptComponent interface (C#, Python, IronPython in Rhino 8+)
@@ -633,7 +623,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             // Fallback: match by GUID for legacy components (VB.NET)
             return comp is IGH_VariableParameterComponent &&
-                   ScriptComponentGuids.Contains(comp.ComponentGuid);
+                   ScriptComponentRegistry.IsScriptComponent(comp.ComponentGuid);
         }
 
         private static bool HasIScriptComponentInterface(IGH_Component comp)

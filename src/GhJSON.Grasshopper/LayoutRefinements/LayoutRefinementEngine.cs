@@ -56,27 +56,17 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     options.SpacingY);
             }
 
-            if (options.MinimizeConnectionLengths)
+            // Single, coherent port-alignment pass replaces the former trio of competing
+            // passes (param-to-port, one-to-one, connection-length minimization) that used to
+            // overwrite each other's Y. Any of the legacy flags enables it.
+            if (options.AlignParamsToInputPorts ||
+                options.AlignOneToOneConnections ||
+                options.MinimizeConnectionLengths)
             {
-                positions = CollisionResolver.MinimizeConnectionLengths(positions, document);
+                positions = PortAlignment.AlignToPorts(positions, document);
             }
 
-            if (options.AlignParamsToInputPorts)
-            {
-                positions = PortAlignment.AlignParamsToInputPorts(
-                    positions,
-                    document,
-                    options.SpacingY);
-            }
-
-            if (options.AlignOneToOneConnections)
-            {
-                positions = PortAlignment.AlignOneToOneConnections(
-                    positions,
-                    document,
-                    options.SpacingY);
-            }
-
+            // Always the final pass: guarantees no two components in a column overlap.
             if (options.AvoidCollisions)
             {
                 positions = CollisionResolver.AvoidCollisions(positions);

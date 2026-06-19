@@ -27,24 +27,27 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class ButtonHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.button";
-
         private static readonly Guid ButtonGuid = new Guid("a8b97322-2d53-47cd-905e-e3a78807825d");
 
         public int Priority => 100;
 
         public string? SchemaExtensionUrl => null;
 
+        /// <inheritdoc/>
+        public string ExtensionKey => "gh.button";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => ButtonGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Button";
+
         public bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is GH_ButtonObject;
         }
 
-        public bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == "Button" ||
-                   component.ComponentGuid == ButtonGuid;
-        }
+
 
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {

@@ -107,7 +107,13 @@ namespace GhJSON.Core.NameResolution
 
             if (containsMatches.Count > 1)
             {
-                var shortest = containsMatches.OrderBy(c => c.Length).First();
+                // Deterministic tie-breaking: shortest first, then lexicographical order, so
+                // repeated calls with equivalent candidate sets always return the same result
+                // regardless of the enumeration order of the underlying collection.
+                var shortest = containsMatches
+                    .OrderBy(c => c.Length)
+                    .ThenBy(c => c, StringComparer.Ordinal)
+                    .First();
                 Debug.WriteLine($"[FuzzyMatcher.FindBestMatch] Found {containsMatches.Count} contains matches, selecting shortest: '{shortest}'");
                 return shortest;
             }

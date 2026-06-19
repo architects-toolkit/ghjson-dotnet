@@ -16,17 +16,16 @@
  */
 
 using System;
+using GhJSON.Core.NameResolution;
 
 namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class CSharpScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid CSharpGuid = new Guid("b6ba1144-02d6-4a2d-b53c-ec62e290eeb7");
-
         public override string ExtensionKey => "gh.csharp";
 
-        protected override Guid ComponentGuid => CSharpGuid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.CSharp;
 
-        protected override string ComponentName => "C#";
+        public override string ComponentName => "C#";
     }
 }

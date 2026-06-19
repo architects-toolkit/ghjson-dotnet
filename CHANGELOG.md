@@ -7,37 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### New Features
 
-- Automatic ID assignment in `DocumentBuilder.Build()`: Components lacking both `id` and `instanceGuid` now automatically receive sequential IDs before validation, eliminating the need for callers to manually assign IDs to new components
-- CI/CD infrastructure adapted from SmartHopper project:
-  - Reusable composite actions: `get-version`, `update-version`, `update-badges`, `update-changelog`
-  - Automatic version badge update workflow (`chore-version-badge.yml`)
-  - Dev-to-main PR validation: block `-dev` versions (`pr-block-dev-to-main.yml`)
-  - Prepare release workflow on dev→main PR (`chore-version-main-release.yml`)
-  - License header check on PRs to both `main` and `dev` branches
-  - Automatic copyright year update workflow (`chore-update-copyright-year.yml`)
-    - Scheduled to run annually on January 1st at 00:00 UTC
-    - Updates all C# file license headers via `Update-LicenseHeaders.ps1`
-    - Updates copyright year in `Directory.Build.props` via `Update-CopyrightYear.ps1`
-    - Creates automated PR to dev with the changes
-  - Release workflow documentation (`RELEASE_WORKFLOW.md`)
-- Learning from Grasshopper MCP (https://github.com/alfredatnycu/grasshopper-mcp): This is an open-source MCP to connect Grasshopper with Claude Desktop using MIT License. This open-source license is compatible with our Apache License 2.0. That's why we are implementing some Grasshopper MCP features in GhJSON-dotnet. We implemented the following features:
-  - Fuzzy name resolution for component and parameter names (`GhJSON.Core.NameResolution`)
-    - `ComponentNameResolver`: alias dictionary + fuzzy matching for Grasshopper component names
-    - `ComponentTypeResolver`: pattern dictionary to prioritize/deprioritize certain component types (e.g. legacy script components)
-    - `ParameterNameResolver`: alias dictionary + fuzzy matching for parameter names
-    - `FuzzyMatcher`: core utility with exact, normalized, prefix, contains, and Levenshtein matching
-    - `NameResolver`: unified public facade exposed via `GhJson.ResolveComponentName()` / `GhJson.ResolveParameterName()`
-- Fuzzy fallback in `ComponentInstantiator` when exact name lookup fails during deserialization
-- Fuzzy fallback in `CanvasPlacer.GetParameter` when exact parameter name lookup fails during connection wiring
-- Delete operations (`GhJSON.Grasshopper.DeleteOperations`):
-  - `GhJsonGrasshopper.Delete()`: Delete specific objects from the canvas by GUID with batch undo support
-  - `GhJsonGrasshopper.Clear()`: Clear all objects from the canvas
-  - `DeleteOptions`: Configuration for deletion behavior (redraw)
-  - `DeleteResult`: Structured result with deleted/failed GUIDs and counts
-  - All operations register proper Grasshopper undo events for Ctrl+Z support
-- `CanvasSelector.WithViewport(RectangleF)`: New fluent filter to restrict query results to objects within a given viewport rectangle. Applied as step 0 (before GUID/type/category/attribute filters) using bounds intersection.
+#### Automatic Component Layout
+
 - **Dependency Graph Layout Engine**: New algorithm-based layout system with Sugiyama implementation
   - `LayoutEngine.CalculateLayout()` - Main entry point for layout calculations
   - `LayoutOptions` - Configurable spacing and algorithm selection
@@ -57,16 +30,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `LayoutRefinementEngine` - Orchestrates all refinement passes with configurable options
   - `LayoutRefinementOptions` - Configuration for enabling/disabling specific refinements
 
-### Changed
+#### Fuzzy Name Resolution (AI-Friendly)
 
-- **CanvasPlacer** now uses new layout API with Grasshopper-aware refinements for improved component positioning
-- Updated README badges to `for-the-badge` style with version and status badges
-- Downgrade Rhino and Grasshopper dependencies to 8.0
-- TODO: Updated validation logic to use ghjson.schema.json v1.0
+- **Smart component name matching** when exact names are unknown or misspelled
+  - `ComponentNameResolver`: alias dictionary + fuzzy matching for Grasshopper component names
+  - `ComponentTypeResolver`: pattern dictionary to prioritize/deprioritize certain component types (e.g. legacy script components)
+  - `ParameterNameResolver`: alias dictionary + fuzzy matching for parameter names
+  - `FuzzyMatcher`: core utility with exact, normalized, prefix, contains, and Levenshtein matching
+  - `NameResolver`: unified public facade exposed via `GhJson.ResolveComponentName()` / `GhJson.ResolveParameterName()`
+- **Automatic fallback** in deserialization and connection wiring when exact lookups fail
+  - `ComponentInstantiator` falls back to fuzzy matching when exact name lookup fails during deserialization
+  - `CanvasPlacer.GetParameter` falls back to fuzzy matching when exact parameter name lookup fails during connection wiring
+  - Example: `"python"` now correctly resolves to `"Python 3 Script"` on Rhino 8 (previously failed)
+- **Inspired by [Grasshopper MCP](https://github.com/alfredatnycu/grasshopper-mcp)** — an open-source MCP to connect Grasshopper with Claude Desktop (MIT License, compatible with our Apache License 2.0)
+
+#### Canvas Operations
+
+- **Delete operations** (`GhJSON.Grasshopper.DeleteOperations`) with full undo support
+  - `GhJsonGrasshopper.Delete()`: Delete specific objects from the canvas by GUID with batch undo support
+  - `GhJsonGrasshopper.Clear()`: Clear all objects from the canvas
+  - `DeleteOptions`: Configuration for deletion behavior (redraw)
+  - `DeleteResult`: Structured result with deleted/failed GUIDs and counts
+  - All operations register proper Grasshopper undo events for Ctrl+Z support
+- **Viewport filtering** — `CanvasSelector.WithViewport(RectangleF)` restricts queries to visible canvas area
+
+#### Schema Validation
+
+- **JSON Schema validation** against official GhJSON v1.0 specification
+  - Validates raw JSON to catch unknown/invalid properties (catches errors that strong-typed deserialization would silently drop)
+  - Three levels: `Minimal` (fast), `Standard` (with schema), `Strict` (with semantics)
+  - Offline validation using embedded schema bundle (14 schemas including all extensions)
+
+#### Document Building
+
+- **Automatic ID assignment** in `DocumentBuilder.Build()`: Components lacking both `id` and `instanceGuid` now automatically receive sequential IDs before validation, eliminating the need for callers to manually assign IDs to new components
+
+#### Diff and Patch Operations
+
+- **Compare and apply document changes** (`GhJSON.Core.DiffOperations`, `GhJSON.Core.PatchModels`)
+  - `GhJson.Diff(left, right, options?)` / `GhJson.DiffToPatch(...)` compare two `GhJsonDocument` instances and produce a `GhPatchDocument` describing the differences
+  - `GhJson.ApplyPatch(baseDoc, patch, options?)` applies a `GhPatchDocument` to a base document, recording any conflicts in the result
+  - `GhJson.PatchFromJson` / `GhJson.PatchToJson` / `GhJson.PatchFromFile` / `GhJson.PatchToFile` for `.ghpatch` serialization
+  - `GhJson.ValidatePatch(...)` for structural patch validation
+- **Identity precedence for matching**: `instanceGuid` > `id` > structural fingerprint (`componentGuid` + `name` + optional `pivot`)
+- **Connection identity**: canonical `paramName`, with fallback to `paramIndex`
+- **Diff options** (`DiffOptions`) defaults: ignore runtime messages, metadata counters and timestamps; pivots are diffed by default
+- **Apply patch options** (`ApplyPatchOptions`) defaults: `VerifyBase = true` (refuses apply on base checksum mismatch), `ContinueOnConflict = true`, `RenumberCollidingAddedIds = true`
+- **Conflict kinds**: `MatchNotFound`, `MatchAmbiguous`, `InstanceGuidCollision`, `ConnectionAlreadyPresent`, `ConnectionNotFound`, `DanglingMember`, `BaseChecksumMismatch`, `SchemaVersionMismatch`
+- Implements the sibling `.ghpatch` profile defined in [ghjson-spec](https://architects-toolkit.github.io/ghjson-spec/)
+
+### Noticeable Changes for End Users
+
+- **Improved component positioning** — `CanvasPlacer` now uses the new layout engine with refinements for cleaner, more professional-looking Grasshopper definitions
+- **More forgiving name matching** — AI-generated or hand-written GhJSON using informal names ("python", "slider", "pt") now works reliably
+- **Better Rhino 8 compatibility** — component resolution correctly maps to current Grasshopper naming (e.g., "Python 3 Script" instead of legacy "Python Script")
+- **Reliable undo** — deleting multiple objects via GhJSON now reverts with a single Ctrl+Z
+
+### Noticeable Changes for Developers
+
+- **Automatic ID assignment** — `DocumentBuilder.Build()` now auto-assigns sequential IDs to components lacking both `id` and `instanceGuid`, eliminating manual ID management
+- **Stable layout keys** — components with only `id` (no `instanceGuid`) no longer collide into `Guid.Empty`; deterministic synthetic GUIDs ensure layout works for id-only documents
+- **Headless-safe refinements** — `CollisionResolver` and `PortAlignment` gracefully degrade when no Grasshopper canvas is available (tests, automation)
+- **Iterative layout algorithm** — `LayerAssignment` rewritten to avoid stack overflow on deep chains (thousands of nodes) and detect cycles instead of infinite recursion
+- **Deterministic fuzzy matching** — `FuzzyMatcher` tie-breaking is now stable across runs
+
+### Infrastructure & Tooling
+
+- **Schema synchronization** — `tools/Sync-Schemas.ps1` downloads and validates schema drift from the official ghjson-spec repository; dynamically discovers all extension schemas
+- **Automated workflows** — version badge updates, copyright year management, dev-to-main PR validation, license header checks
+- **CI/CD** — composite actions for versioning, changelog updates, and release preparation
+- **Dependencies** — Rhino and Grasshopper downgraded to 8.0 for broader compatibility
 
 ### Fixed
 
-- `ComponentNameResolver.Resolve` no longer returns an alias result that does not exist in the known component names. Previously, `"Python"` resolved to the alias `"Python Script"` and was returned verbatim, failing to instantiate on Rhino 8 where the canonical name is `"Python 3 Script"`. The resolver now verifies alias membership in the known set and, when absent, uses the alias as a seed for fuzzy matching against the actual registered names (e.g. `"python"` → alias `"Python Script"` → fuzzy → `"Python 3 Script"`, Levenshtein distance 2).
+- `ComponentNameResolver` Python aliases now resolve to `"Python 3 Script"` (Rhino 8 canonical name) instead of legacy `"Python Script"`
+- `ComponentNameResolver` IronPython alias now resolves to `"IronPython 2 Script"` (Rhino 8 canonical name) instead of legacy `"IronPython Script"`
+- `ComponentNameResolver` alias dictionary expanded with missing entries: `"python3"`, `"ghpython"`, `"python script"`, `"csharp script"`, `"c# component"`, `"number slider"` (with space), `"str"`, `"string"` (→ Text), `"streamfilter"`, `"filter"` (→ Stream Filter)
+- `BaseScriptHandler.CanHandle` now also checks for extension key presence in `componentState.extensions`, preventing handler mismatch when component names are rewritten by alias resolution
+- `ComponentNameResolver` alias verification — no longer returns aliases absent from the known set; falls back to fuzzy matching
+- `GraphBuilder` GUID collision — id-only components now get stable synthetic keys instead of collapsing to `Guid.Empty`
+- `CanvasDeleter` race condition — now blocks until UI thread completion; result reflects actual deletion outcome
+- `PortAlignment` drift — removed accumulating `+ spacingY / 2` offset on chained connections
+- `CrossingMinimizer` — added iteration cap (24) to prevent theoretical non-convergence
+
+
+
+
 
 ## [1.0.0] - 2026-02-08
 

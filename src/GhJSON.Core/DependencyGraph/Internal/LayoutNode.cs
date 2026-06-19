@@ -25,7 +25,31 @@ namespace GhJSON.Core.DependencyGraph.Internal
     {
         public Guid ComponentId { get; set; }
 
+        /// <summary>
+        /// Final pixel position, produced by <see cref="Sugiyama.CoordinateAssigner"/>.
+        /// During the rank/order phases this is unused; ranks live in <see cref="Layer"/>
+        /// and within-layer order in <see cref="Order"/>.
+        /// </summary>
         public PointF Pivot { get; set; }
+
+        /// <summary>Column index (0 = left). Sources are pinned to layer 0.</summary>
+        public int Layer { get; set; }
+
+        /// <summary>Within-layer vertical order index (0 = top).</summary>
+        public int Order { get; set; }
+
+        /// <summary>
+        /// True for synthetic routing nodes inserted along edges that span more than one
+        /// layer. Dummy nodes participate in ordering/crossing minimization but are never
+        /// emitted as real component positions.
+        /// </summary>
+        public bool IsDummy { get; set; }
+
+        /// <summary>Estimated component width, used for bounds-aware column spacing.</summary>
+        public float Width { get; set; }
+
+        /// <summary>Estimated component height, used for bounds-aware row spacing.</summary>
+        public float Height { get; set; }
 
         public Dictionary<Guid, int> Parents { get; set; } = new Dictionary<Guid, int>();
 

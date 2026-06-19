@@ -51,7 +51,7 @@ namespace GhJSON.Core.SchemaModels
         public string? Description { get; set; }
 
         /// <summary>
-        /// Gets or sets the data tree mapping mode (None, Flatten, Graft).
+        /// Gets or sets the data tree mapping mode (none, flatten, graft).
         /// </summary>
         [JsonProperty("dataMapping", NullValueHandling = NullValueHandling.Ignore)]
         public string? DataMapping { get; set; }

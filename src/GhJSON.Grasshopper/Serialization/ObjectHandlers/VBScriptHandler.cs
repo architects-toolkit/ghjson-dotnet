@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Shared;
 
@@ -27,13 +28,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class VBScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid VBNetGuid = new Guid("079bd9bd-54a0-41d4-98af-db999015f63d");
-
         public override string ExtensionKey => "gh.vbscript";
 
-        protected override Guid ComponentGuid => VBNetGuid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.VB;
 
-        protected override string ComponentName => "VB Script";
+        public override string ComponentName => "VB Script";
 
         public override void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {

@@ -15,81 +15,94 @@
  * limitations under the License.
  */
 
+using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 
 namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
 {
+    /// <summary>
+    /// Produces a sensible initial within-layer ordering (<see cref="LayoutNode.Order"/>) via
+    /// a single top-down barycenter pass seeded from a deterministic source ordering. The
+    /// <see cref="CrossingMinimizer"/> then iteratively refines this ordering.
+    /// </summary>
     internal static class RowOrdering
     {
-        public static void AssignRows(List<LayoutNode> nodes)
+        /// <summary>
+        /// Assigns an initial <see cref="LayoutNode.Order"/> to every node, grouped by
+        /// <see cref="LayoutNode.Layer"/>.
+        /// </summary>
+        public static void AssignInitialOrder(List<LayoutNode> nodes)
         {
-            var byLayer = nodes.GroupBy(n => (int)n.Pivot.X)
+            var byLayer = nodes.GroupBy(n => n.Layer)
                                .OrderBy(g => g.Key)
                                .Select(g => g.ToList())
                                .ToList();
 
-            for (int layerIndex = 0; layerIndex < byLayer.Count; layerIndex++)
+            if (byLayer.Count == 0)
             {
-                var currentLayer = byLayer[layerIndex].ToList();
-                if (layerIndex == 0)
-                {
-                    currentLayer.Sort((a, b) =>
-                    {
-                        float aOut = a.Children.Any() ? (float)a.Children.Values.Average() : float.MaxValue;
-                        float bOut = b.Children.Any() ? (float)b.Children.Values.Average() : float.MaxValue;
-                        return aOut.CompareTo(bOut);
-                    });
-                }
-                else
-                {
-                    SortLayerByBarycenter(currentLayer, byLayer[layerIndex - 1].ToList(), useParents: false);
-                }
-
-                for (int i = 0; i < currentLayer.Count; i++)
-                {
-                    currentLayer[i].Pivot = new PointF(currentLayer[i].Pivot.X, i);
-                }
+                return;
             }
 
-            for (int layerIndex = byLayer.Count - 2; layerIndex >= 0; layerIndex--)
+            // Layer 0: stable deterministic seed (by ComponentId) so output is reproducible.
+            var first = byLayer[0];
+            first.Sort((a, b) => a.ComponentId.CompareTo(b.ComponentId));
+            AssignOrderIndices(first);
+
+            // Subsequent layers: order by barycenter of already-placed parents.
+            for (var li = 1; li < byLayer.Count; li++)
             {
-                var currentLayer = byLayer[layerIndex].ToList();
-                SortLayerByBarycenter(currentLayer, byLayer[layerIndex + 1].ToList(), useParents: true);
-                for (int i = 0; i < currentLayer.Count; i++)
+                var prevOrder = BuildOrderLookup(byLayer[li - 1]);
+                var current = byLayer[li];
+                current.Sort((a, b) =>
                 {
-                    currentLayer[i].Pivot = new PointF(currentLayer[i].Pivot.X, i);
-                }
+                    var cmp = Barycenter(a, prevOrder, useParents: true)
+                        .CompareTo(Barycenter(b, prevOrder, useParents: true));
+                    return cmp != 0 ? cmp : a.ComponentId.CompareTo(b.ComponentId);
+                });
+                AssignOrderIndices(current);
             }
         }
 
-        private static void SortLayerByBarycenter(List<LayoutNode> currentLayer,
-            List<LayoutNode> adjacentLayer, bool useParents)
+        private static void AssignOrderIndices(List<LayoutNode> layer)
         {
-            currentLayer.Sort((a, b) =>
+            for (var i = 0; i < layer.Count; i++)
             {
-                float aKey = CalculateBarycenter(a, adjacentLayer, useParents);
-                float bKey = CalculateBarycenter(b, adjacentLayer, useParents);
-                return aKey.CompareTo(bKey);
-            });
+                layer[i].Order = i;
+            }
         }
 
-        private static float CalculateBarycenter(LayoutNode node,
-            List<LayoutNode> adjacentLayer, bool useParents)
+        private static Dictionary<Guid, int> BuildOrderLookup(List<LayoutNode> layer)
+        {
+            var map = new Dictionary<Guid, int>(layer.Count);
+            foreach (var n in layer)
+            {
+                map[n.ComponentId] = n.Order;
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// Average order index of a node's neighbors in the adjacent layer. Nodes with no
+        /// resolvable neighbor return <see cref="float.MaxValue"/> so they sort to the end of
+        /// the initial ordering (the crossing minimizer subsequently keeps them in place).
+        /// </summary>
+        private static float Barycenter(LayoutNode node, Dictionary<Guid, int> adjacentOrder, bool useParents)
         {
             var connected = useParents ? node.Parents.Keys : node.Children.Keys;
-            var positions = new List<float>();
+            var sum = 0f;
+            var count = 0;
             foreach (var id in connected)
             {
-                var found = adjacentLayer.FirstOrDefault(n => n.ComponentId == id);
-                if (found != null)
+                if (adjacentOrder.TryGetValue(id, out var order))
                 {
-                    positions.Add(found.Pivot.Y);
+                    sum += order;
+                    count++;
                 }
             }
 
-            return positions.Any() ? (float)positions.Average() : float.MaxValue;
+            return count == 0 ? float.MaxValue : sum / count;
         }
     }
 }

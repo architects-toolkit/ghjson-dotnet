@@ -37,6 +37,11 @@ namespace GhJSON.Core
             private readonly IReadOnlyList<GhJsonConnection>? connections;
             private readonly IReadOnlyList<GhJsonGroup>? groups;
 
+            /// <summary>
+            /// Gets the components currently in the builder.
+            /// </summary>
+            public IReadOnlyList<GhJsonComponent> Components => this.components;
+
             private DocumentBuilder(
                 string? schema,
                 GhJsonMetadata? metadata,

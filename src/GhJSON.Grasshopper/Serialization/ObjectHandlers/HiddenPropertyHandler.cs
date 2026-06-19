@@ -26,7 +26,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     internal sealed class HiddenPropertyHandler : IObjectHandler
     {
         /// <inheritdoc/>
-        public int Priority => 0;
+        public int Priority => 1000;
 
         /// <inheritdoc/>
         public string? SchemaExtensionUrl => null;

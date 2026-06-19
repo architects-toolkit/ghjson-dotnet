@@ -67,9 +67,9 @@ namespace GhJSON.Core.Tests.SchemaModels
         {
             var param = GhJson.CreateComponentParameterObject();
             param.ParameterName = "A";
-            param.DataMapping = "Flatten";
+            param.DataMapping = "flatten";
 
-            Assert.Equal("Flatten", param.DataMapping);
+            Assert.Equal("flatten", param.DataMapping);
         }
 
         [Fact]

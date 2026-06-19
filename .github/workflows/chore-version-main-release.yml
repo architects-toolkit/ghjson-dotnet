@@ -1,0 +1,87 @@
+name: 🔄 Prepare Release for Main
+
+# Description: Automatically strips the date component from the version in Directory.Build.props
+# when a pull request targets the main branch. Updates badges and changelog accordingly.
+# Creates a pull request back to the PR branch to bypass branch protection rules.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Directory.Build.props'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    name: 🔄 Prepare Release for Main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Get current version
+        id: get-version
+        uses: ./.github/actions/versioning/get-version
+
+      - name: Strip date from version
+        id: strip-date
+        shell: bash
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          echo "Original version: $VERSION"
+          if [[ "$VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([a-zA-Z0-9]+)\.[0-9]{6}$ ]]; then
+            BASE="${BASH_REMATCH[1]}"
+            PRE="${BASH_REMATCH[2]}"
+            NEW_VERSION="$BASE-$PRE"
+          else
+            echo "No date suffix to remove, version unchanged"
+            NEW_VERSION="$VERSION"
+          fi
+          echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version in Directory.Build.props
+        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version
+        uses: ./.github/actions/versioning/update-version
+        with:
+          new-version: ${{ steps.strip-date.outputs.new-version }}
+
+      - name: Update badges
+        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version
+        id: update-badges
+        uses: ./.github/actions/documentation/update-badges
+
+      - name: Create release section in changelog
+        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version
+        id: update-changelog
+        uses: ./.github/actions/documentation/update-changelog
+        with:
+          action: create-release
+          version: ${{ steps.strip-date.outputs.new-version }}
+
+      - name: Create Pull Request
+        if: github.event_name == 'pull_request' && steps.strip-date.outputs.new-version != steps.get-version.outputs.version
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: prepare release ${{ steps.strip-date.outputs.new-version }} for main"
+          title: "chore: prepare release ${{ steps.strip-date.outputs.new-version }} for main"
+          body: |
+            This PR prepares the release for version ${{ steps.strip-date.outputs.new-version }} by stripping the date suffix from the version and creating a release section in the changelog.
+
+            This is an automated PR created by the Prepare Release for Main workflow.
+          branch: "chore/prepare-release-${{ github.event.pull_request.head.ref }}"
+          base: ${{ github.event.pull_request.head.ref }}
+          delete-branch: true
+          labels: |
+            automated

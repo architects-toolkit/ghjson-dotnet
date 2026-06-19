@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,13 +27,20 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class ToggleHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.toggle";
-
         private static readonly Guid ToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
 
         public int Priority => 100;
 
         public string? SchemaExtensionUrl => null;
+
+        /// <inheritdoc/>
+        public string ExtensionKey => "gh.toggle";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => ToggleGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Boolean Toggle";
 
         public bool CanHandle(IGH_DocumentObject obj)
         {

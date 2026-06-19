@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ namespace GhJSON.Grasshopper
                 IncludeGroups = options.IncludeGroups,
                 IncludeInternalizedData = options.IncludeInternalizedData,
                 IncludeRuntimeMessages = options.IncludeRuntimeMessages,
+                IncludeSelectedState = options.IncludeSelectedState,
                 IncludeMetadata = options.IncludeMetadata,
                 MetadataTitle = options.MetadataTitle,
                 MetadataDescription = options.MetadataDescription,
@@ -113,6 +114,34 @@ namespace GhJSON.Grasshopper
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Checks if a component can be instantiated in the current Grasshopper environment.
+        /// Useful for pre-validation before calling <see cref="Deserialize"/> or <see cref="Put"/>.
+        /// </summary>
+        /// <param name="component">The component to check.</param>
+        /// <returns>True if the component can be instantiated; false otherwise.</returns>
+        public static bool CanInstantiate(GhJsonComponent component)
+        {
+            return ComponentInstantiator.CanInstantiate(component);
+        }
+
+        /// <summary>
+        /// Validates all components in a document to check if they can be instantiated.
+        /// Returns a dictionary mapping component index to validation result.
+        /// </summary>
+        /// <param name="document">The document to validate.</param>
+        /// <returns>A dictionary where keys are component indices and values indicate if that component can be instantiated.</returns>
+        public static Dictionary<int, bool> ValidateComponents(GhJsonDocument document)
+        {
+            var results = new Dictionary<int, bool>();
+            for (int i = 0; i < document.Components.Count; i++)
+            {
+                results[i] = ComponentInstantiator.CanInstantiate(document.Components[i]);
+            }
+
+            return results;
         }
 
         #endregion
@@ -195,6 +224,34 @@ namespace GhJSON.Grasshopper
         public static IEnumerable<IDataTypeSerializer> GetRegisteredDataTypeSerializers()
         {
             return DataTypeRegistry.GetAll();
+        }
+
+        #endregion
+
+        #region Delete (remove from canvas)
+
+        /// <summary>
+        /// Deletes objects from the canvas by their GUIDs.
+        /// </summary>
+        /// <param name="guids">The GUIDs of objects to delete.</param>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted/failed/skipped GUIDs.</returns>
+        public static DeleteOperations.DeleteResult Delete(
+            IEnumerable<Guid> guids,
+            DeleteOperations.DeleteOptions? options = null)
+        {
+            return DeleteOperations.CanvasDeleter.DeleteByGuids(guids, options);
+        }
+
+        /// <summary>
+        /// Clears all objects from the canvas.
+        /// </summary>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted/skipped GUIDs.</returns>
+        public static DeleteOperations.DeleteResult Clear(
+            DeleteOperations.DeleteOptions? options = null)
+        {
+            return DeleteOperations.CanvasDeleter.Clear(options);
         }
 
         #endregion

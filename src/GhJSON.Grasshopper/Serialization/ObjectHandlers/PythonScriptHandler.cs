@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
  */
 
 using System;
+using GhJSON.Core.NameResolution;
 
 using Grasshopper.Kernel;
 
@@ -23,12 +24,10 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class PythonScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid Python3Guid = new Guid("719467e6-7cf5-4848-99b0-c5dd57e5442c");
-
         public override string ExtensionKey => "gh.python";
 
-        protected override Guid ComponentGuid => Python3Guid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.Python3;
 
-        protected override string ComponentName => "Python";
+        public override string ComponentName => "Python";
     }
 }

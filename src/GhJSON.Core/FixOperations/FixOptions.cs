@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,5 +61,11 @@ namespace GhJSON.Core.FixOperations
         /// Gets or sets a value indicating whether to remove invalid group members.
         /// </summary>
         public bool RemoveInvalidGroupMembers { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to normalize enum casing
+        /// (e.g. <c>"Flatten"</c> → <c>"flatten"</c>) in parameter settings and extensions.
+        /// </summary>
+        public bool NormalizeEnumCasing { get; set; } = true;
     }
 }

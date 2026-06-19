@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
  */
 
 using System;
+using GhJSON.Core.NameResolution;
 
 using Grasshopper.Kernel;
 
@@ -23,12 +24,10 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class IronPythonScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid IronPython2Guid = new Guid("97aa26ef-88ae-4ba6-98a6-ed6ddeca11d1");
-
         public override string ExtensionKey => "gh.ironpython";
 
-        protected override Guid ComponentGuid => IronPython2Guid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.IronPython2;
 
-        protected override string ComponentName => "IronPython";
+        public override string ComponentName => "IronPython";
     }
 }

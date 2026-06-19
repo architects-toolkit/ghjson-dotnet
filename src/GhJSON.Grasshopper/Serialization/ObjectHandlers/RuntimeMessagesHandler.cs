@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     internal sealed class RuntimeMessagesHandler : IObjectHandler
     {
         /// <inheritdoc/>
-        public int Priority => 0;
+        public int Priority => 1000;
 
         /// <inheritdoc/>
         public string? SchemaExtensionUrl => null;
@@ -48,6 +48,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {
+            if (ObjectHandlerOrchestrator.CurrentOptions?.IncludeRuntimeMessages != true)
+            {
+                return;
+            }
+
             if (obj is IGH_ActiveObject activeObj)
             {
                 var errors = activeObj.RuntimeMessages(GH_RuntimeMessageLevel.Error);

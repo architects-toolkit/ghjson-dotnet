@@ -1,15 +1,29 @@
-name: Header Check
+name: 📝 Header Check
+
+# Description: Validates that all C# source files have the correct Apache-2.0 license header.
+# This is a required check for PRs targeting main and dev branches.
+#
+# Trigger: Automatically when a pull request targets main or dev
+#
+# Permissions:
+# - contents:read - Required to read repository content
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
+
+permissions:
+  contents: read
 
 jobs:
   check-headers:
+    name: 📝 License Header Check
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Check C# headers
         shell: pwsh

@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                 new GhJsonParameterSettings
                 {
                     ParameterName = "A",
-                    DataMapping = "Flatten"
+                    DataMapping = "flatten"
                 }
             };
             var doc = GhJson.CreateDocumentBuilder()
@@ -123,7 +123,7 @@ namespace GhJSON.Grasshopper.Tests.Deserialization
                 .Build();
 
             Assert.Single(component.InputSettings);
-            Assert.Equal("Flatten", component.InputSettings[0].DataMapping);
+            Assert.Equal("flatten", component.InputSettings[0].DataMapping);
         }
 
         [Fact]

@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     internal sealed class IOModifiersHandler : IObjectHandler
     {
         /// <inheritdoc/>
-        public int Priority => 0;
+        public int Priority => 1000;
 
         /// <inheritdoc/>
         public string? SchemaExtensionUrl => null;
@@ -112,7 +112,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             // Data mapping
             if (param.DataMapping != GH_DataMapping.None)
             {
-                settings.DataMapping = param.DataMapping.ToString();
+                settings.DataMapping = param.DataMapping.ToString().ToLowerInvariant();
             }
 
             // Simplify
@@ -233,7 +233,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             // Data mapping
             if (!string.IsNullOrEmpty(settings.DataMapping))
             {
-                if (System.Enum.TryParse<GH_DataMapping>(settings.DataMapping, out var mapping))
+                if (System.Enum.TryParse<GH_DataMapping>(settings.DataMapping, ignoreCase: true, out var mapping))
                 {
                     param.DataMapping = mapping;
                 }

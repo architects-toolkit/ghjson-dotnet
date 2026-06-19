@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class PanelHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.panel";
+        private static readonly Guid PanelGuid = new Guid("59e0b89a-e487-49f8-bab8-b5bab16be14c");
 
         /// <inheritdoc/>
         public int Priority => 100;
@@ -41,17 +41,21 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         public string? SchemaExtensionUrl => null;
 
         /// <inheritdoc/>
+        public string ExtensionKey => "gh.panel";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => PanelGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Panel";
+
+        /// <inheritdoc/>
         public bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is GH_Panel;
         }
 
-        /// <inheritdoc/>
-        public bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == "Panel" ||
-                   component.ComponentGuid == new Guid("59e0b89a-e487-49f8-bab8-b5bab16be14c");
-        }
+
 
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)

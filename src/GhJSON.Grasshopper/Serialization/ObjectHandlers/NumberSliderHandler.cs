@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class NumberSliderHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.numberslider";
+        private static readonly Guid SliderGuid = new Guid("57da07bd-ecab-415d-9d86-af36d7073abc");
 
         /// <inheritdoc/>
         public int Priority => 100;
@@ -44,17 +44,21 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         public string? SchemaExtensionUrl => null;
 
         /// <inheritdoc/>
+        public string ExtensionKey => "gh.numberslider";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => SliderGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Number Slider";
+
+        /// <inheritdoc/>
         public bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is GH_NumberSlider;
         }
 
-        /// <inheritdoc/>
-        public bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == "Number Slider" ||
-                   component.ComponentGuid == new Guid("57da07bd-ecab-415d-9d86-af36d7073abc");
-        }
+
 
         /// <inheritdoc/>
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)

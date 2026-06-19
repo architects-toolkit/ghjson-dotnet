@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,6 +53,11 @@ namespace GhJSON.Grasshopper.GetOperations
         /// Gets or sets a value indicating whether to include runtime messages.
         /// </summary>
         public bool IncludeRuntimeMessages { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to include the selected state of components.
+        /// </summary>
+        public bool IncludeSelectedState { get; set; } = false;
 
         /// <summary>
         /// Gets or sets a value indicating whether to include document metadata

@@ -40,6 +40,9 @@ ghjson-dotnet/
 │   │   ├── Validation/                 # Schema validation
 │   │   ├── FixOperations/              # Schema fix operations
 │   │   ├── MergeOperations/            # Schema merge operations
+│   │   ├── DiffOperations/             # Diff/patch operations on `.ghpatch` documents
+│   │   ├── PatchModels/                # Strongly-typed model for `.ghpatch` documents
+│   │   ├── NameResolution/             # Fuzzy name matching for components and parameters
 │   │   ├── TidyUpOperations/           # Schema tidy up operations
 │   │   └── GhJson.cs                   # Main façade entry point
 │   │
@@ -124,11 +127,21 @@ namespace GhJSON.Core
         public static string ToJson(GhJsonDocument doc, WriteOptions? options = null);
 
         // Validation
-        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
-        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard);
-        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard);
+        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false);
+
+        // Async Validation
+        public static Task<ValidationResult> ValidateAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<ValidationResult> ValidateAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<bool> IsValidAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+        public static Task<bool> IsValidAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default);
+
+        // Convenience: prefer online schema
+        public static ValidationResult ValidateOnline(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null);
+        public static ValidationResult ValidateOnline(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null);
 
         // Fix
         public static FixResult Fix(GhJsonDocument doc, FixOptions? options = null);
@@ -141,9 +154,27 @@ namespace GhJSON.Core
         // Merge
         public static MergeResult Merge(GhJsonDocument baseDoc, GhJsonDocument incomingDoc, MergeOptions? options = null);
 
+        // Diff & Patch (`.ghpatch` sibling profile)
+        public static DiffResult Diff(GhJsonDocument left, GhJsonDocument right, DiffOptions? options = null);
+        public static GhPatchDocument DiffToPatch(GhJsonDocument left, GhJsonDocument right, DiffOptions? options = null);
+        public static GhPatchDocument PatchFromJson(string json);
+        public static string PatchToJson(GhPatchDocument patch, WriteOptions? options = null);
+        public static GhPatchDocument PatchFromFile(string path);
+        public static void PatchToFile(GhPatchDocument patch, string path, WriteOptions? options = null);
+        public static ApplyPatchResult ApplyPatch(GhJsonDocument baseDoc, GhPatchDocument patch, ApplyPatchOptions? options = null);
+        public static ApplyPatchResult ApplyPatch(string baseJson, string patchJson, ApplyPatchOptions? options = null);
+        public static ValidationResult ValidatePatch(GhPatchDocument patch, bool preferOnline = false, string? schemaVersion = null);
+        public static ValidationResult ValidatePatch(string patchJson, bool preferOnline = false, string? schemaVersion = null);
+
         // Schema Migration
         public static MigrationResult MigrateSchema(GhJsonDocument doc, string? targetVersion = null);
         public static bool NeedsMigration(GhJsonDocument doc, string? targetVersion = null);
+
+        // Name Resolution
+        public static string? ResolveComponentAlias(string input);
+        public static string? ResolveComponentName(string input, IEnumerable<string> knownComponentNames, int maxLevenshteinDistance = 3);
+        public static string? ResolveParameterAlias(string input);
+        public static string? ResolveParameterName(string input, IEnumerable<string> knownParameterNames, int maxLevenshteinDistance = 2);
     }
 }
 ```
@@ -295,7 +326,7 @@ Parameter settings configure input and output parameters on components. All bool
 |----------|------|-------------|
 | `parameterName` | string | **Required**. The name of the parameter. |
 | `nickName` | string | Custom nickname for the parameter. |
-| `dataMapping` | string | Data tree mapping mode: `"None"`, `"Flatten"`, `"Graft"`. |
+| `dataMapping` | string | Data tree mapping mode: `"none"`, `"flatten"`, `"graft"`. |
 | `expression` | string | Expression that transforms parameter data. Presence implies the parameter has an expression. |
 | `access` | string | Data access mode for script parameters: `"item"`, `"list"`, `"tree"`. |
 | `typeHint` | string | Type hint for script parameters (e.g., `"int"`, `"double"`, `"Point3d"`). |
@@ -385,10 +416,17 @@ Extensions allow component handlers to add specialized properties without modify
 
 | Extension Key | Description |
 |---------------|-------------|
+| `gh.numberslider` | Slider value, rounding mode |
 | `gh.panel` | Panel text, font, alignment, bounds, multiline, wrap settings |
 | `gh.scribble` | Scribble text, font, corners |
 | `gh.valuelist` | Value list items, list mode, selected indices |
-| `gh.numberslider` | Slider value, rounding mode |
+| `gh.button` | Button state |
+| `gh.toggle` | Toggle state |
+| `gh.colourswatch` | Colour swatch value |
+| `gh.csharp` | C# Script code, marshalling options |
+| `gh.python` | Python 3 Script code, marshalling options |
+| `gh.ironpython` | IronPython Script code, marshalling options |
+| `gh.ghpython` | Legacy GhPython script code |
 | `gh.vbscript` | VB Script code sections (imports, script, additional) |
 
 **Example with extensions:**
@@ -489,10 +527,11 @@ The object serialization is designed to extend compatibility with new components
 ### Deserialization process
 
 1. The Deserialize method receives a list of GhJsonComponent.
-2. For each component, the ObjectHandlerOrchestrator checks all compatible handlers and applies all them in the priority order.
-3. For property value deserialization, the ObjectHandlerOrchestrator checks for compatible DataTypeSerializers. This is easier than serialization, because all DataTypes use a prefix to identify the data type.
-4. Subsequent handlers will never set again properties that were already set by previous handlers. This protection is ensured at ObjectHandlerOrchestrator level, not at IObjectHandler level.
-5. For special components or specific data types, custom handlers can set additional properties to the IGH_DocumentObject from the componentState property of the component schema.
+2. For each component, `ComponentInstantiator` tries to create the object by GUID first, then by exact name, then by fuzzy name resolution (alias dictionary + approximate matching via `ComponentNameResolver`).
+3. For each component, the ObjectHandlerOrchestrator checks all compatible handlers and applies all them in the priority order.
+4. For property value deserialization, the ObjectHandlerOrchestrator checks for compatible DataTypeSerializers. This is easier than serialization, because all DataTypes use a prefix to identify the data type.
+5. Subsequent handlers will never set again properties that were already set by previous handlers. This protection is ensured at ObjectHandlerOrchestrator level, not at IObjectHandler level.
+6. For special components or specific data types, custom handlers can set additional properties to the IGH_DocumentObject from the componentState property of the component schema.
 
 ```csharp
 public interface IObjectHandler
@@ -527,8 +566,17 @@ ObjectHandlerRegistry.Register(new IOModifiersHandler(), priority: 0);
 ObjectHandlerRegistry.Register(new InternalizedDataHandler(), priority: 0);
 
 // Extension objects (their data is in the extensions property in componentState)
-ObjectHandlerRegistry.Register(new NumberSliderHandler(), priority: 100); // Will serialize and deserialize number slider value, interval, and rounding
-ObjectHandlerRegistry.Register(new PanelHandler(), priority: 100); // Will serialize and deserialize panel text, font, color, alignment, etc.
-ObjectHandlerRegistry.Register(new ScribbleHandler(), priority: 100); // Will serialize and deserialize scribble data, size, etc.
-ObjectHandlerRegistry.Register(new ValueListHandler(), priority: 100); // Will serialize and deserialize value list options, and selected options
+ObjectHandlerRegistry.Register(new NumberSliderHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new PanelHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ScribbleHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ValueListHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ButtonHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ToggleHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ColorSwatchHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new ScriptIOHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new CSharpScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new PythonScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new IronPythonScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new VBScriptHandler(), priority: 100);
+ObjectHandlerRegistry.Register(new GhPythonScriptHandler(), priority: 100);
 ```

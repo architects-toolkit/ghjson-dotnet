@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Shared;
 
@@ -27,13 +28,11 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class VBScriptHandler : BaseScriptHandler
     {
-        private static readonly Guid VBNetGuid = new Guid("079bd9bd-54a0-41d4-98af-db999015f63d");
-
         public override string ExtensionKey => "gh.vbscript";
 
-        protected override Guid ComponentGuid => VBNetGuid;
+        public override Guid ComponentGuid => ScriptComponentRegistry.VB;
 
-        protected override string ComponentName => "VB Script";
+        public override string ComponentName => "VB Script";
 
         public override void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {

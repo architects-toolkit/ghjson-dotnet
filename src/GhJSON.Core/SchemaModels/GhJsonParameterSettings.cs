@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ namespace GhJSON.Core.SchemaModels
         public string? Description { get; set; }
 
         /// <summary>
-        /// Gets or sets the data tree mapping mode (None, Flatten, Graft).
+        /// Gets or sets the data tree mapping mode (none, flatten, graft).
         /// </summary>
         [JsonProperty("dataMapping", NullValueHandling = NullValueHandling.Ignore)]
         public string? DataMapping { get; set; }

@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.GetOperations;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.Serialization
@@ -31,6 +32,15 @@ namespace GhJSON.Grasshopper.Serialization
     /// </summary>
     internal static class ObjectHandlerOrchestrator
     {
+        [ThreadStatic]
+        private static GetOptions? _currentOptions;
+
+        /// <summary>
+        /// Gets the serialization options for the current thread during a <see cref="Serialize"/> call.
+        /// Handlers can read this to respect flags such as <see cref="GetOptions.IncludeInternalizedData"/>.
+        /// </summary>
+        internal static GetOptions? CurrentOptions => _currentOptions;
+
         /// <summary>
         /// Serializes a Grasshopper document object to a GhJSON component.
         /// Applies all compatible handlers in priority order using shared state.
@@ -40,33 +50,54 @@ namespace GhJSON.Grasshopper.Serialization
         /// <returns>The serialized component.</returns>
         public static GhJsonComponent Serialize(IGH_DocumentObject obj)
         {
+            return Serialize(obj, null);
+        }
+
+        /// <summary>
+        /// Serializes a Grasshopper document object to a GhJSON component with options.
+        /// </summary>
+        /// <param name="obj">The document object to serialize.</param>
+        /// <param name="options">Serialization options.</param>
+        /// <returns>The serialized component.</returns>
+        public static GhJsonComponent Serialize(IGH_DocumentObject obj, GetOptions? options)
+        {
 #if DEBUG
             Debug.WriteLine($"[ObjectHandlerOrchestrator.Serialize] Serializing object: {obj?.Name}, Type: {obj?.GetType().Name}");
 #endif
 
-            var component = new GhJsonComponent();
+            var previousOptions = _currentOptions;
+            _currentOptions = options;
 
-            // Pre-initialize lists to ensure handlers only add to them, never overwrite
-            component.InputSettings = new List<GhJsonParameterSettings>();
-            component.OutputSettings = new List<GhJsonParameterSettings>();
-
-            var handlerCount = 0;
-
-            foreach (var handler in ObjectHandlerRegistry.GetAll())
+            try
             {
-                if (handler.CanHandle(obj))
+                var component = new GhJsonComponent();
+
+                // Pre-initialize lists to ensure handlers only add to them, never overwrite
+                component.InputSettings = new List<GhJsonParameterSettings>();
+                component.OutputSettings = new List<GhJsonParameterSettings>();
+
+                var handlerCount = 0;
+
+                foreach (var handler in ObjectHandlerRegistry.GetAll())
                 {
-                    // Sequential stateful execution: handlers build on shared component
-                    handler.Serialize(obj, component);
-                    handlerCount++;
+                    if (handler.CanHandle(obj))
+                    {
+                        // Sequential stateful execution: handlers build on shared component
+                        handler.Serialize(obj, component);
+                        handlerCount++;
+                    }
                 }
-            }
 
 #if DEBUG
-            Debug.WriteLine($"[ObjectHandlerOrchestrator.Serialize] Applied {handlerCount} handlers, ComponentName: {component.Name}");
+                Debug.WriteLine($"[ObjectHandlerOrchestrator.Serialize] Applied {handlerCount} handlers, ComponentName: {component.Name}");
 #endif
 
-            return component;
+                return component;
+            }
+            finally
+            {
+                _currentOptions = previousOptions;
+            }
         }
 
         /// <summary>
@@ -76,11 +107,22 @@ namespace GhJSON.Grasshopper.Serialization
         /// <returns>List of serialized components.</returns>
         public static List<GhJsonComponent> Serialize(IEnumerable<IGH_DocumentObject> objects)
         {
+            return Serialize(objects, null);
+        }
+
+        /// <summary>
+        /// Serializes multiple Grasshopper document objects with options.
+        /// </summary>
+        /// <param name="objects">The objects to serialize.</param>
+        /// <param name="options">Serialization options.</param>
+        /// <returns>List of serialized components.</returns>
+        public static List<GhJsonComponent> Serialize(IEnumerable<IGH_DocumentObject> objects, GetOptions? options)
+        {
             var components = new List<GhJsonComponent>();
 
             foreach (var obj in objects)
             {
-                components.Add(Serialize(obj));
+                components.Add(Serialize(obj, options));
             }
 
             return components;

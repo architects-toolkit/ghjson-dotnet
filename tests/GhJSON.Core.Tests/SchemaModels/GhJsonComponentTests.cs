@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,7 +99,7 @@ namespace GhJSON.Core.Tests.SchemaModels
             
             var paramSettings = GhJson.CreateComponentParameterObject();
             paramSettings.ParameterName = "A";
-            paramSettings.DataMapping = "None";
+            paramSettings.DataMapping = "none";
             
             component.InputSettings = new System.Collections.Generic.List<GhJsonParameterSettings> { paramSettings };
 

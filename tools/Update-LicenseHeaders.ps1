@@ -11,7 +11,7 @@ Set-Location (Resolve-Path $Root)
 $newHeader = @'
 /*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-{current_year} Marc Roca Musach
+ * Copyright (C) {year} Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,16 @@ $newHeader = @'
 '@
 
 $currentYear = (Get-Date).Year
-$newHeader = $newHeader.Replace('{current_year}', $currentYear)
+$initialYear = 2026
+
+if ($currentYear -eq $initialYear) {
+    $yearRange = "$initialYear"
+}
+else {
+    $yearRange = "$initialYear-$currentYear"
+}
+
+$newHeader = $newHeader.Replace('{year}', $yearRange)
  
 function Remove-ExistingHeader {
     param(
@@ -80,6 +89,52 @@ function Remove-ExistingHeader {
     return $t
 }
  
+$csprojHeader = @'
+<!--
+  GhJSON - JSON format for Grasshopper definitions
+  Copyright (C) {year} Marc Roca Musach
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+'@
+
+$csprojHeader = $csprojHeader.Replace('{year}', $yearRange)
+
+function Remove-ExistingCsprojHeader {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Text
+    )
+
+    # Normalize: remove BOM if present
+    $t = $Text -replace '^[\uFEFF]', ''
+    
+    # Strip leading whitespace
+    $t = $t.TrimStart("`r", "`n", " ", "`t")
+    
+    # Remove XML comment header at the beginning
+    if ($t -match '^<!--') {
+        $endIdx = $t.IndexOf('-->')
+        if ($endIdx -ge 0) {
+            $after = $t.Substring($endIdx + 3)
+            return $after.TrimStart("`r", "`n", " ", "`t")
+        }
+        return $t
+    }
+    
+    return $t
+}
+
 $changedCount = 0
  
 Get-ChildItem -Path "..\src", "..\tests" -Recurse -Filter *.cs | ForEach-Object {
@@ -98,7 +153,10 @@ Get-ChildItem -Path "..\src", "..\tests" -Recurse -Filter *.cs | ForEach-Object 
         $body = Remove-ExistingHeader -Text $content
         $normalized = ($newHeader + "`r`n`r`n" + $body.TrimStart("`r", "`n"))
  
-        $isDifferent = $normalized -ne ($content -replace '^[\uFEFF]', '')
+        # Normalize line endings for comparison to avoid false positives
+        $normalizedForComparison = $normalized -replace "\r\n", "`n"
+        $originalForComparison = ($content -replace '^[\uFEFF]', '') -replace "\r?\n", "`n"
+        $isDifferent = $normalizedForComparison -ne $originalForComparison
         if ($isDifferent) {
             $changedCount++
         }
@@ -118,6 +176,39 @@ Get-ChildItem -Path "..\src", "..\tests" -Recurse -Filter *.cs | ForEach-Object 
     }
 }
  
+Get-ChildItem -Path "..\src", "..\tests" -Recurse -Filter *.csproj -ErrorAction SilentlyContinue | ForEach-Object {
+    try {
+        $path = $_.FullName
+
+        # Read as UTF-8 text (handles BOM correctly)
+        $content = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+
+        $body = Remove-ExistingCsprojHeader -Text $content
+        $normalized = ($csprojHeader + "`r`n" + $body.TrimStart("`r", "`n"))
+
+        # Normalize line endings for comparison to avoid false positives
+        $normalizedForComparison = $normalized -replace "\r\n", "`n"
+        $originalForComparison = ($content -replace '^[\uFEFF]', '') -replace "\r?\n", "`n"
+        $isDifferent = $normalizedForComparison -ne $originalForComparison
+        if ($isDifferent) {
+            $changedCount++
+        }
+
+        if (-not $Check) {
+            [System.IO.File]::WriteAllText($path, $normalized, [System.Text.Encoding]::UTF8)
+            if ($isDifferent) {
+                Write-Host "Header normalized: $path"
+            }
+        }
+    }
+    catch {
+        Write-Host "Error updating $($_.FullName): $_" -ForegroundColor Red
+        if ($Check) {
+            exit 2
+        }
+    }
+}
+
 if ($Check) {
     if ($changedCount -gt 0) {
         Write-Host "Header normalization required in $changedCount file(s)." -ForegroundColor Yellow

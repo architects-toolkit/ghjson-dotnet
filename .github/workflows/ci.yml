@@ -1,13 +1,27 @@
-name: CI
+name: 🔨 CI Build & Test
+
+# Description: Builds the solution and runs tests on every push and PR.
+# This is a required check for PRs targeting main and dev branches.
+#
+# Triggers:
+# - Push to main or dev branches
+# - Pull requests targeting main or dev branches
+#
+# Permissions:
+# - contents:read - Required to read repository content
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
+
+permissions:
+  contents: read
 
 jobs:
   build:
+    name: 🔨 Build & Test
     runs-on: windows-latest
     strategy:
       matrix:

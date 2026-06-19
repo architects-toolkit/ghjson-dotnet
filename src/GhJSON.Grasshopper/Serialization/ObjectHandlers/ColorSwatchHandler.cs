@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,24 +28,27 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class ColorSwatchHandler : IObjectHandler
     {
-        private const string ExtensionKey = "gh.colorswatch";
-
         private static readonly Guid ColorSwatchGuid = new Guid("9c53bac0-ba66-40bd-8154-ce9829b9db1a");
 
         public int Priority => 100;
 
         public string? SchemaExtensionUrl => null;
 
+        /// <inheritdoc/>
+        public string ExtensionKey => "gh.colorswatch";
+
+        /// <inheritdoc/>
+        Guid IObjectHandler.ComponentGuid => ColorSwatchGuid;
+
+        /// <inheritdoc/>
+        string IObjectHandler.ComponentName => "Color Swatch";
+
         public bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is GH_ColourSwatch;
         }
 
-        public bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == "Color Swatch" ||
-                   component.ComponentGuid == ColorSwatchGuid;
-        }
+
 
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {

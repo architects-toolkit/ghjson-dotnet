@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,19 +34,13 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         public abstract string ExtensionKey { get; }
 
-        protected abstract Guid ComponentGuid { get; }
+        public abstract Guid ComponentGuid { get; }
 
-        protected abstract string ComponentName { get; }
+        public abstract string ComponentName { get; }
 
         public virtual bool CanHandle(IGH_DocumentObject obj)
         {
             return obj is IGH_Component comp && comp.ComponentGuid == this.ComponentGuid;
-        }
-
-        public virtual bool CanHandle(GhJsonComponent component)
-        {
-            return component.Name == this.ComponentName ||
-                   component.ComponentGuid == this.ComponentGuid;
         }
 
         public virtual void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
@@ -281,7 +275,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             if (outParam.DataMapping != GH_DataMapping.None)
             {
-                modifiers["dataMapping"] = outParam.DataMapping.ToString();
+                modifiers["dataMapping"] = outParam.DataMapping.ToString().ToLowerInvariant();
             }
 
             var exprProp = ReflectionCache.GetProperty(outParam.GetType(), "Expression");
@@ -337,7 +331,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
 
             if (modifiers.TryGetValue("dataMapping", out var dmObj) &&
-                Enum.TryParse<GH_DataMapping>(dmObj?.ToString(), out var dm))
+                Enum.TryParse<GH_DataMapping>(dmObj?.ToString(), ignoreCase: true, out var dm))
             {
                 outParam.DataMapping = dm;
             }

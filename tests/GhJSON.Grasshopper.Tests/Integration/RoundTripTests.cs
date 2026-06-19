@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,7 +150,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
                 {
                     ParameterName = "A",
                     NickName = "First",
-                    DataMapping = "Flatten",
+                    DataMapping = "flatten",
                     Expression = "x * 2",
                     IsSimplified = true,
                     IsReversed = false
@@ -167,7 +167,7 @@ namespace GhJSON.Grasshopper.Tests.Integration
             var param = loadedDoc.Components[0].InputSettings[0];
             Assert.Equal("A", param.ParameterName);
             Assert.Equal("First", param.NickName);
-            Assert.Equal("Flatten", param.DataMapping);
+            Assert.Equal("flatten", param.DataMapping);
             Assert.Equal("x * 2", param.Expression);
             Assert.True(param.IsSimplified);
         }

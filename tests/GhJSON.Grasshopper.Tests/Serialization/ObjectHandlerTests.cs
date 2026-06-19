@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,20 +98,20 @@ namespace GhJSON.Grasshopper.Tests.Serialization
             var handlers = ObjectHandlerRegistry.GetAll();
             Assert.NotEmpty(handlers);
 
-            // Verify that core handlers (priority 0) come before extension handlers (priority 100)
+            // Verify that core handlers (priority 1000) come before extension handlers (priority 100)
             var handlerList = handlers.ToList();
-            var coreHandlers = handlerList.Where(h => h.Priority == 0).ToList();
-            var extensionHandlers = handlerList.Where(h => h.Priority >= 100).ToList();
+            var coreHandlers = handlerList.Where(h => h.Priority == 1000).ToList();
+            var extensionHandlers = handlerList.Where(h => h.Priority is >= 100 and < 1000).ToList();
 
             Assert.NotEmpty(coreHandlers);
             Assert.NotEmpty(extensionHandlers);
 
-            // Verify handlers are sorted by priority
+            // Verify handlers are sorted by priority (descending: higher values run first)
             for (int i = 0; i < handlerList.Count - 1; i++)
             {
-                Assert.True(handlerList[i].Priority <= handlerList[i + 1].Priority,
+                Assert.True(handlerList[i].Priority >= handlerList[i + 1].Priority,
                     $"Handler at index {i} has priority {handlerList[i].Priority} " +
-                    $"which is greater than handler at index {i + 1} with priority {handlerList[i + 1].Priority}");
+                    $"which is less than handler at index {i + 1} with priority {handlerList[i + 1].Priority}");
             }
         }
     }

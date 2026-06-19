@@ -1,6 +1,6 @@
 ﻿/*
  * GhJSON - JSON format for Grasshopper definitions
- * Copyright (C) 2024-2026 Marc Roca Musach
+ * Copyright (C) 2026 Marc Roca Musach
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GhJSON.Core.FixOperations;
 using GhJSON.Core.MergeOperations;
+using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Core.SchemaMigration;
 using GhJSON.Core.Serialization;
@@ -206,10 +210,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="doc">The document to validate.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>A validation result containing errors, warnings, and info messages.</returns>
-        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard)
+        public static ValidationResult Validate(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return GhJsonValidator.Validate(doc, level);
+            return GhJsonValidator.Validate(doc, level, schemaVersion, preferOnline);
         }
 
         /// <summary>
@@ -217,10 +223,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="json">The JSON string to validate.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>A validation result containing errors, warnings, and info messages.</returns>
-        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard)
+        public static ValidationResult Validate(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return GhJsonValidator.Validate(json, level);
+            return GhJsonValidator.Validate(json, level, schemaVersion, preferOnline);
         }
 
         /// <summary>
@@ -228,10 +236,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="doc">The document to check.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard)
+        public static bool IsValid(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return Validate(doc, level).IsValid;
+            return Validate(doc, level, schemaVersion, preferOnline).IsValid;
         }
 
         /// <summary>
@@ -239,10 +249,12 @@ namespace GhJSON.Core
         /// </summary>
         /// <param name="json">The JSON string to check.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard)
+        public static bool IsValid(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
-            return Validate(json, level).IsValid;
+            return Validate(json, level, schemaVersion, preferOnline).IsValid;
         }
 
         /// <summary>
@@ -251,14 +263,16 @@ namespace GhJSON.Core
         /// <param name="json">The JSON string to check.</param>
         /// <param name="message">A human-readable message describing validation errors, if any.</param>
         /// <param name="level">The validation level.</param>
+        /// <param name="schemaVersion">The schema version to validate against. Defaults to the current version.</param>
+        /// <param name="preferOnline">When <c>true</c>, attempts to download the schema from the official online repository first, falling back to embedded resources on failure.</param>
         /// <returns>True if valid, false otherwise.</returns>
-        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard)
+        public static bool IsValid(string json, out string? message, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false)
         {
             message = null;
 
             try
             {
-                var result = Validate(json, level);
+                var result = Validate(json, level, schemaVersion, preferOnline);
                 if (result.IsValid)
                 {
                     return true;
@@ -272,6 +286,56 @@ namespace GhJSON.Core
                 message = ex.Message;
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Validates a GhJSON document, preferring the online schema repository.
+        /// </summary>
+        public static ValidationResult ValidateOnline(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null)
+        {
+            return Validate(doc, level, schemaVersion, preferOnline: true);
+        }
+
+        /// <summary>
+        /// Validates a JSON string as a GhJSON document, preferring the online schema repository.
+        /// </summary>
+        public static ValidationResult ValidateOnline(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null)
+        {
+            return Validate(json, level, schemaVersion, preferOnline: true);
+        }
+
+        /// <summary>
+        /// Validates a GhJSON document asynchronously.
+        /// </summary>
+        public static Task<ValidationResult> ValidateAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            return GhJsonValidator.ValidateAsync(doc, level, schemaVersion, preferOnline, cancellationToken);
+        }
+
+        /// <summary>
+        /// Validates a JSON string as a GhJSON document asynchronously.
+        /// </summary>
+        public static Task<ValidationResult> ValidateAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            return GhJsonValidator.ValidateAsync(json, level, schemaVersion, preferOnline, cancellationToken);
+        }
+
+        /// <summary>
+        /// Checks if a GhJSON document is valid asynchronously.
+        /// </summary>
+        public static async Task<bool> IsValidAsync(GhJsonDocument doc, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            var result = await ValidateAsync(doc, level, schemaVersion, preferOnline, cancellationToken).ConfigureAwait(false);
+            return result.IsValid;
+        }
+
+        /// <summary>
+        /// Checks if a JSON string is a valid GhJSON document asynchronously.
+        /// </summary>
+        public static async Task<bool> IsValidAsync(string json, ValidationLevel level = ValidationLevel.Standard, string? schemaVersion = null, bool preferOnline = false, CancellationToken cancellationToken = default)
+        {
+            var result = await ValidateAsync(json, level, schemaVersion, preferOnline, cancellationToken).ConfigureAwait(false);
+            return result.IsValid;
         }
 
         #endregion
@@ -339,6 +403,16 @@ namespace GhJSON.Core
             return DocumentFixer.RegenerateInstanceGuids(doc);
         }
 
+        /// <summary>
+        /// Normalizes enum casing (e.g. "Flatten" to "flatten") in parameter settings and extensions.
+        /// </summary>
+        /// <param name="doc">The document to fix.</param>
+        /// <returns>A fix result containing the fixed document and applied actions.</returns>
+        public static FixResult NormalizeEnumCasing(GhJsonDocument doc)
+        {
+            return DocumentFixer.NormalizeEnumCasing(doc);
+        }
+
         #endregion
 
         #region Merge Operations
@@ -379,6 +453,56 @@ namespace GhJSON.Core
         public static bool NeedsMigration(GhJsonDocument doc, string? targetVersion = null)
         {
             return SchemaMigrator.NeedsMigration(doc, targetVersion);
+        }
+
+        #endregion
+
+        #region Name Resolution
+
+        /// <summary>
+        /// Resolves a component name using the built-in alias dictionary.
+        /// </summary>
+        /// <param name="input">The component name or alias to resolve.</param>
+        /// <returns>The canonical component name, or null if no alias matches.</returns>
+        public static string? ResolveComponentAlias(string input)
+        {
+            return NameResolver.ResolveComponentAlias(input);
+        }
+
+        /// <summary>
+        /// Resolves a component name by checking aliases first, then fuzzy matching
+        /// against the provided list of known component names.
+        /// </summary>
+        /// <param name="input">The component name or alias to resolve.</param>
+        /// <param name="knownComponentNames">The set of known canonical component names.</param>
+        /// <param name="maxLevenshteinDistance">Maximum edit distance for fuzzy matching. Defaults to 3.</param>
+        /// <returns>The resolved component name, or null if no match is found.</returns>
+        public static string? ResolveComponentName(string input, IEnumerable<string> knownComponentNames, int maxLevenshteinDistance = 3)
+        {
+            return NameResolver.ResolveComponentName(input, knownComponentNames, maxLevenshteinDistance);
+        }
+
+        /// <summary>
+        /// Resolves a parameter name using the built-in alias dictionary.
+        /// </summary>
+        /// <param name="input">The parameter name or alias to resolve.</param>
+        /// <returns>The canonical parameter name, or null if no alias matches.</returns>
+        public static string? ResolveParameterAlias(string input)
+        {
+            return NameResolver.ResolveParameterAlias(input);
+        }
+
+        /// <summary>
+        /// Resolves a parameter name by checking aliases first, then fuzzy matching
+        /// against the provided list of known parameter names.
+        /// </summary>
+        /// <param name="input">The parameter name or alias to resolve.</param>
+        /// <param name="knownParameterNames">The set of known canonical parameter names.</param>
+        /// <param name="maxLevenshteinDistance">Maximum edit distance for fuzzy matching. Defaults to 2.</param>
+        /// <returns>The resolved parameter name, or null if no match is found.</returns>
+        public static string? ResolveParameterName(string input, IEnumerable<string> knownParameterNames, int maxLevenshteinDistance = 2)
+        {
+            return NameResolver.ResolveParameterName(input, knownParameterNames, maxLevenshteinDistance);
         }
 
         #endregion

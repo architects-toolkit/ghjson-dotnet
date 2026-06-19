@@ -1,7 +1,7 @@
-# GhJSON.NET
+﻿# GhJSON.NET
 
-[![Package Version](https://img.shields.io/badge/version-1.1.0--dev.260518-brown?style=for-the-badge)](https://www.nuget.org/packages/GhJSON.Core)
-[![Status](https://img.shields.io/badge/status-Unstable%20Development-brown?style=for-the-badge)](https://github.com/architects-toolkit/ghjson-dotnet)
+[![Package Version](https://img.shields.io/badge/version-1.1.0-brightgreen?style=for-the-badge)](https://www.nuget.org/packages/GhJSON.Core)
+[![Status](https://img.shields.io/badge/status-Stable-brightgreen?style=for-the-badge)](https://github.com/architects-toolkit/ghjson-dotnet)
 [![Schema Version](https://img.shields.io/badge/schema-v1.0-blue?style=for-the-badge)](https://architects-toolkit.github.io/ghjson-spec/schema/v1.0/ghjson.schema.json)
 [![License](https://img.shields.io/badge/license-Apache--2.0-white?style=for-the-badge)](LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/architects-toolkit/ghjson-dotnet)
@@ -12,8 +12,8 @@
 
 GhJSON is a JSON-based format for representing [Grasshopper](https://discourse.mcneel.com/c/grasshopper) definitions. This library provides:
 
-- **GhJSON.Core** — Platform-independent document model and operations (read, write, validate, fix, merge, migrate)
-- **GhJSON.Grasshopper** — Grasshopper integration (serialize from canvas, place on canvas, data type serializers, object handlers)
+- **GhJSON.Core** â€” Platform-independent document model and operations (read, write, validate, fix, merge, migrate, diff/patch, name resolution, layout calculation)
+- **GhJSON.Grasshopper** â€” Grasshopper integration (serialize from canvas, place on canvas, automatic layout, data type serializers, object handlers)
 
 ## Documentation
 
@@ -31,7 +31,7 @@ dotnet add package GhJSON.Grasshopper
 
 ## Quick Start
 
-### Serialization (Grasshopper Canvas → GhJSON)
+### Serialization (Grasshopper Canvas â†’ GhJSON)
 
 ```csharp
 using GhJSON.Core;
@@ -45,7 +45,7 @@ string json = GhJson.ToJson(document);
 var selected = GhJsonGrasshopper.GetSelected();
 ```
 
-### Deserialization (GhJSON → Grasshopper Canvas)
+### Deserialization (GhJSON â†’ Grasshopper Canvas)
 
 ```csharp
 using GhJSON.Core;
@@ -108,23 +108,25 @@ var doc = GhJson.CreateDocumentBuilder()
 
 ### Core Operations (GhJSON.Core)
 
-- **Read/Write** — Parse GhJSON from string, file, or stream; serialize back to JSON or file
-- **Document Builder** — Fluent API for programmatic document construction
-- **Validation** — Schema conformance, structural integrity (unique IDs, connection references, group membership), with online/offline schema loading and version selection
-- **Fix** — Auto-repair metadata, assign missing IDs, regenerate instance GUIDs
-- **Merge** — Combine two GhJSON documents with configurable conflict resolution
-- **Schema Migration** — Migrate documents between schema versions
-- **Name Resolution** — Fuzzy matching for component and parameter names (alias dictionaries + Levenshtein distance)
+- **Read/Write** â€” Parse GhJSON from string, file, or stream; serialize back to JSON or file
+- **Document Builder** â€” Fluent API for programmatic document construction
+- **Validation** â€” Schema conformance, structural integrity (unique IDs, connection references, group membership), with online/offline schema loading and version selection
+- **Fix** â€” Auto-repair metadata, assign missing IDs, regenerate instance GUIDs
+- **Merge** â€” Combine two GhJSON documents with configurable conflict resolution
+- **Schema Migration** â€” Migrate documents between schema versions
+- **Diff/Patch** â€” Compare documents and apply `.ghpatch` changes with conflict tracking
+- **Name Resolution** â€” Fuzzy matching for component and parameter names (alias dictionaries + Levenshtein distance)
 
 ### Grasshopper Integration (GhJSON.Grasshopper)
 
-- **Serialize** — Read objects from the Grasshopper canvas into GhJSON documents
-- **Deserialize** — Instantiate Grasshopper objects from GhJSON (without placing on canvas)
-- **Get** — Query the active canvas with filters (selection, GUIDs, viewport)
-- **Put** — Place GhJSON documents on the canvas with positioning and connection wiring
-- **Delete** — Remove objects from the canvas by GUID with batch undo support
-- **Query** — Fluent `CanvasSelector` API with viewport, GUID, type, category, and attribute filters
-- **Grasshopper Validation** — Component existence checks, parameter matching, type compatibility
+- **Serialize** â€” Read objects from the Grasshopper canvas into GhJSON documents
+- **Deserialize** â€” Instantiate Grasshopper objects from GhJSON (without placing on canvas)
+- **Get** â€” Query the active canvas with filters (selection, GUIDs, viewport)
+- **Put** â€” Place GhJSON documents on the canvas with positioning and connection wiring
+- **Layout** â€” Automatic component positioning with dependency-graph layout and collision-aware refinements
+- **Delete** â€” Remove objects from the canvas by GUID with batch undo support
+- **Query** â€” Fluent `CanvasSelector` API with viewport, GUID, type, category, and attribute filters
+- **Grasshopper Validation** â€” Component existence checks, parameter matching, type compatibility
 
 ### Supported Data Types
 
@@ -172,15 +174,15 @@ Object handlers serialize and deserialize component-specific properties via the 
 
 Core handlers (applied to all objects):
 
-- **IdentificationHandler** — Component name, GUID, instance GUID
-- **PivotHandler** — Canvas position
-- **SelectedPropertyHandler** — Selection state
-- **LockedPropertyHandler** — Lock (disabled) state
-- **HiddenPropertyHandler** — Preview visibility state
-- **RuntimeMessagesHandler** — Error, warning, remark messages
-- **IOIdentificationHandler** — Input/output parameter identification
-- **IOModifiersHandler** — Data mapping, expressions, reverse, simplify, invert, reparameterize
-- **InternalizedDataHandler** — Persistent/internalized parameter data
+- **IdentificationHandler** â€” Component name, GUID, instance GUID
+- **PivotHandler** â€” Canvas position
+- **SelectedPropertyHandler** â€” Selection state
+- **LockedPropertyHandler** â€” Lock (disabled) state
+- **HiddenPropertyHandler** â€” Preview visibility state
+- **RuntimeMessagesHandler** â€” Error, warning, remark messages
+- **IOIdentificationHandler** â€” Input/output parameter identification
+- **IOModifiersHandler** â€” Data mapping, expressions, reverse, simplify, invert, reparameterize
+- **InternalizedDataHandler** â€” Persistent/internalized parameter data
 
 Custom object handlers can be registered via `ObjectHandlerRegistry.Register()`.
 
@@ -223,5 +225,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Related Projects
 
-- [ghjson-spec](https://github.com/architects-toolkit/ghjson-spec) — GhJSON format specification
-- [SmartHopper](https://github.com/architects-toolkit/SmartHopper) — AI-powered Grasshopper plugin (uses GhJSON)
+- [ghjson-spec](https://github.com/architects-toolkit/ghjson-spec) â€” GhJSON format specification
+- [SmartHopper](https://github.com/architects-toolkit/SmartHopper) â€” AI-powered Grasshopper plugin (uses GhJSON)

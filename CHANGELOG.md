@@ -113,10 +113,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PortAlignment` drift — removed accumulating `+ spacingY / 2` offset on chained connections
 - `CrossingMinimizer` — added iteration cap (24) to prevent theoretical non-convergence
 
-
-
-
-
 ## [1.0.0] - 2026-02-08
 
 - Initial release

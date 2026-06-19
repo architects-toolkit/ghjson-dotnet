@@ -6,6 +6,7 @@ param(
     [switch]$Check
 )
 
+$repoRoot = Split-Path -Parent $Root
 Set-Location (Resolve-Path $Root)
 
 $currentYear = (Get-Date).Year
@@ -21,7 +22,7 @@ else {
 }
 
 # Update Directory.Build.props
-$propsPath = "Directory.Build.props"
+$propsPath = Join-Path $repoRoot "Directory.Build.props"
 if (Test-Path $propsPath) {
     try {
         $content = [System.IO.File]::ReadAllText($propsPath, [System.Text.Encoding]::UTF8)

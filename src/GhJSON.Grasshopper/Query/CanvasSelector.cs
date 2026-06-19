@@ -156,7 +156,7 @@ namespace GhJSON.Grasshopper.Query
         }
 
         /// <summary>
-        /// Restricts the result set to objects whose pivot falls within the given viewport rectangle.
+        /// Restricts the result set to objects whose bounds intersect with the given viewport rectangle.
         /// Typically obtained from <c>Instances.ActiveCanvas.Viewport.VisibleRegion</c>.
         /// </summary>
         /// <param name="bounds">The viewport rectangle in canvas coordinates.</param>

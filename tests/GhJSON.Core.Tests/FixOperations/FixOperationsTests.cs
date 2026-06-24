@@ -210,5 +210,199 @@ namespace GhJSON.Core.Tests.FixOperations
             Assert.True(result.WasModified);
             Assert.Contains(1, result.Document.Groups[0].Members);
         }
+
+        [Fact]
+        public void Fix_RemoveInvalidConnections_RemovesDanglingReferences()
+        {
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[] { new GhJsonComponent { Name = "A", Id = 1 } },
+                connections: new[]
+                {
+                    new GhJsonConnection
+                    {
+                        From = new GhJsonConnectionEndpoint { Id = 99, ParamName = "X" },
+                        To = new GhJsonConnectionEndpoint { Id = 1, ParamName = "A" }
+                    }
+                },
+                groups: null);
+
+            var options = new FixOptions
+            {
+                RemoveInvalidConnections = true,
+                AssignMissingIds = false,
+                GenerateMissingInstanceGuids = false,
+                FixMetadata = false,
+                NormalizeEnumCasing = false
+            };
+            var result = GhJson.Fix(doc, options);
+
+            Assert.True(result.WasModified);
+            Assert.Null(result.Document.Connections);
+        }
+
+        [Fact]
+        public void Fix_RemoveInvalidGroupMembers_RemovesMissingMembers()
+        {
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[] { new GhJsonComponent { Name = "A", Id = 1 } },
+                connections: null,
+                groups: new[]
+                {
+                    new GhJsonGroup
+                    {
+                        Id = 1,
+                        Members = new System.Collections.Generic.List<int> { 1, 99 }
+                    }
+                });
+
+            var options = new FixOptions
+            {
+                RemoveInvalidGroupMembers = true,
+                AssignMissingIds = false,
+                GenerateMissingInstanceGuids = false,
+                FixMetadata = false,
+                NormalizeEnumCasing = false
+            };
+            var result = GhJson.Fix(doc, options);
+
+            Assert.True(result.WasModified);
+            Assert.Single(result.Document.Groups[0].Members);
+            Assert.Contains(1, result.Document.Groups[0].Members);
+        }
+
+        [Fact]
+        public void Fix_NormalizeEnumCasing_LowercasesDataMapping()
+        {
+            var component = new GhJsonComponent { Name = "A", Id = 1 };
+            component.InputSettings = new System.Collections.Generic.List<GhJsonParameterSettings>
+            {
+                new GhJsonParameterSettings { ParameterName = "X", DataMapping = "Flatten" }
+            };
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[] { component },
+                connections: null,
+                groups: null);
+
+            var options = new FixOptions
+            {
+                NormalizeEnumCasing = true,
+                AssignMissingIds = false,
+                GenerateMissingInstanceGuids = false,
+                FixMetadata = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false
+            };
+            var result = GhJson.Fix(doc, options);
+
+            Assert.True(result.WasModified);
+            Assert.Equal("flatten", result.Document.Components[0].InputSettings[0].DataMapping);
+        }
+
+        [Fact]
+        public void Fix_GenerateMissingInstanceGuids_DoesNotChangeExistingOnes()
+        {
+            var existingGuid = System.Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, InstanceGuid = existingGuid })
+                .AddComponent(new GhJsonComponent { Name = "B", Id = 2 })
+                .Build();
+
+            var options = new FixOptions
+            {
+                GenerateMissingInstanceGuids = true,
+                AssignMissingIds = false,
+                FixMetadata = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                NormalizeEnumCasing = false
+            };
+            var result = GhJson.Fix(doc, options);
+
+            Assert.True(result.WasModified);
+            Assert.Equal(existingGuid, result.Document.Components[0].InstanceGuid);
+            Assert.NotNull(result.Document.Components[1].InstanceGuid);
+        }
+
+        [Fact]
+        public void Fix_RegenerateInstanceGuids_ChangesAllGuids()
+        {
+            var originalGuid = System.Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, InstanceGuid = originalGuid })
+                .Build();
+
+            var options = new FixOptions
+            {
+                RegenerateInstanceGuids = true,
+                AssignMissingIds = false,
+                FixMetadata = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false,
+                NormalizeEnumCasing = false
+            };
+            var result = GhJson.Fix(doc, options);
+
+            Assert.True(result.WasModified);
+            Assert.NotEqual(originalGuid, result.Document.Components[0].InstanceGuid);
+        }
+
+        [Fact]
+        public void Fix_MultipleOptions_AppliedInCorrectOrder()
+        {
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[]
+                {
+                    new GhJsonComponent { Name = "A" },
+                    new GhJsonComponent { Name = "B", Id = 10 }
+                },
+                connections: new[]
+                {
+                    new GhJsonConnection
+                    {
+                        From = new GhJsonConnectionEndpoint { Id = 99, ParamName = "X" },
+                        To = new GhJsonConnectionEndpoint { Id = 10, ParamName = "A" }
+                    }
+                },
+                groups: null);
+
+            var result = GhJson.Fix(doc);
+
+            Assert.True(result.WasModified);
+            // IDs assigned, connections fixed, metadata fixed
+            Assert.All(result.Document.Components, c => Assert.NotNull(c.Id));
+            Assert.NotNull(result.Document.Metadata);
+            // Invalid connection should be removed
+            Assert.True(result.Document.Connections == null || result.Document.Connections.Count == 0);
+        }
+
+        [Fact]
+        public void FixResult_ReportsAppliedActions()
+        {
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[] { new GhJsonComponent { Name = "A" } },
+                connections: null,
+                groups: null);
+
+            var result = GhJson.Fix(doc, new FixOptions
+            {
+                FixMetadata = false,
+                NormalizeEnumCasing = false,
+                RemoveInvalidConnections = false,
+                RemoveInvalidGroupMembers = false
+            });
+
+            Assert.True(result.WasModified);
+            Assert.NotEmpty(result.AppliedActions);
+        }
     }
 }

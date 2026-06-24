@@ -564,5 +564,431 @@ namespace GhJSON.Core.Tests.DiffOperations
             Assert.Equal(2, apply.Document.Components.Count);
             Assert.Equal(2, apply.Document.Components.First(c => c.Name == "B").Id);
         }
+
+        // ---- DiffOptions ----
+
+        [Fact]
+        public void Diff_WithIgnorePivots_DoesNotProduceModifyForPivotChange()
+        {
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, Pivot = new GhJsonPivot { X = 0, Y = 0 } })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, Pivot = new GhJsonPivot { X = 100, Y = 200 } })
+                .Build();
+
+            var options = new DiffOptions { IgnorePivots = true };
+            var diff = GhJson.Diff(left, right, options);
+
+            Assert.False(diff.HasChanges);
+        }
+
+        [Fact]
+        public void Diff_WithIgnoreRuntimeMessages_DoesNotProduceModifyForErrors()
+        {
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, Errors = new List<string> { "error1" } })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, Errors = new List<string> { "error2" } })
+                .Build();
+
+            var options = new DiffOptions { IgnoreRuntimeMessages = true };
+            var diff = GhJson.Diff(left, right, options);
+
+            Assert.False(diff.HasChanges);
+        }
+
+        [Fact]
+        public void Diff_WithIgnoreMetadataCounters_DoesNotProduceModifyForCounts()
+        {
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .WithMetadata(new GhJsonMetadata { Title = "Test", ComponentCount = 1 })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .AddComponent(new GhJsonComponent { Name = "B", Id = 2 })
+                .WithMetadata(new GhJsonMetadata { Title = "Test", ComponentCount = 2 })
+                .Build();
+
+            var options = new DiffOptions { IgnoreMetadataCounters = true };
+            var diff = GhJson.Diff(left, right, options);
+
+            // Should only detect the added component, not metadata counter change
+            Assert.True(diff.HasChanges);
+            Assert.NotNull(diff.Patch.Patch.Components);
+            Assert.Single(diff.Patch.Patch.Components!.Add!);
+            Assert.Null(diff.Patch.Patch.Metadata);
+        }
+
+        [Fact]
+        public void Diff_WithIgnoreMetadataTimestamps_DoesNotProduceModifyForModified()
+        {
+            var now = DateTime.UtcNow;
+            var later = now.AddHours(1);
+
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .WithMetadata(new GhJsonMetadata { Title = "Test", Modified = now })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .WithMetadata(new GhJsonMetadata { Title = "Test", Modified = later })
+                .Build();
+
+            var options = new DiffOptions { IgnoreMetadataTimestamps = true };
+            var diff = GhJson.Diff(left, right, options);
+
+            Assert.False(diff.HasChanges);
+        }
+
+        [Fact]
+        public void Diff_WithIncludeBaseChecksum_ProducesChecksumInPatch()
+        {
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var options = new DiffOptions { IncludeBaseChecksum = true };
+            var diff = GhJson.Diff(left, right, options);
+
+            Assert.NotNull(diff.Patch.Patch.Base);
+            Assert.False(string.IsNullOrEmpty(diff.Patch.Patch.Base!.Checksum));
+        }
+
+        [Fact]
+        public void Diff_WithoutIncludeBaseChecksum_OmitsChecksum()
+        {
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var options = new DiffOptions { IncludeBaseChecksum = false };
+            var diff = GhJson.Diff(left, right, options);
+
+            Assert.True(diff.Patch.Patch.Base == null || string.IsNullOrEmpty(diff.Patch.Patch.Base.Checksum));
+        }
+
+        // ---- PatchApplier edge cases ----
+
+        [Fact]
+        public void ApplyPatch_SchemaMismatch_WithContinueOnConflict_RecordsConflictButContinues()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("1.0")
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Kind = "ghpatch",
+                Patch = new GhPatchBody
+                {
+                    Base = new GhPatchBaseRef { Schema = "2.0" },
+                    Components = new GhPatchComponentsOp
+                    {
+                        Modify = new List<GhPatchComponentModify>
+                        {
+                            new GhPatchComponentModify
+                            {
+                                Match = new GhPatchComponentMatch { Id = 1 },
+                                Set = new JObject { ["name"] = "Renamed" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var options = new ApplyPatchOptions { ContinueOnConflict = true };
+            var apply = GhJson.ApplyPatch(doc, patch, options);
+
+            Assert.True(apply.HasConflicts);
+            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.SchemaVersionMismatch);
+            // Should still apply the modify because ContinueOnConflict is true
+            Assert.Equal("Renamed", apply.Document.Components[0].Name);
+        }
+
+        [Fact]
+        public void ApplyPatch_SchemaMismatch_WithoutContinueOnConflict_ReturnsFailure()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .WithSchema("1.0")
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Kind = "ghpatch",
+                Patch = new GhPatchBody
+                {
+                    Base = new GhPatchBaseRef { Schema = "2.0" },
+                    Components = new GhPatchComponentsOp
+                    {
+                        Modify = new List<GhPatchComponentModify>
+                        {
+                            new GhPatchComponentModify
+                            {
+                                Match = new GhPatchComponentMatch { Id = 1 },
+                                Set = new JObject { ["name"] = "Renamed" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var options = new ApplyPatchOptions { ContinueOnConflict = false };
+            var apply = GhJson.ApplyPatch(doc, patch, options);
+
+            Assert.False(apply.Success);
+            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.SchemaVersionMismatch);
+            Assert.Equal(0, apply.ComponentsModified);
+        }
+
+        [Fact]
+        public void ApplyPatch_ComponentAdd_WithIdCollision_AndRenumberCollidingAddedIds_Renumbers()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Add = new List<GhJsonComponent>
+                        {
+                            new GhJsonComponent { Name = "B", Id = 1 }
+                        }
+                    }
+                }
+            };
+
+            var options = new ApplyPatchOptions { RenumberCollidingAddedIds = true };
+            var apply = GhJson.ApplyPatch(doc, patch, options);
+
+            Assert.True(apply.Success);
+            Assert.Equal(2, apply.Document.Components.Count);
+            Assert.Equal(2, apply.Document.Components.First(c => c.Name == "B").Id);
+        }
+
+        [Fact]
+        public void ApplyPatch_ComponentAdd_WithIdCollision_WithoutRenumber_ReturnsConflict()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Add = new List<GhJsonComponent>
+                        {
+                            new GhJsonComponent { Name = "B", Id = 1 }
+                        }
+                    }
+                }
+            };
+
+            var options = new ApplyPatchOptions { RenumberCollidingAddedIds = false };
+            var apply = GhJson.ApplyPatch(doc, patch, options);
+
+            Assert.True(apply.HasConflicts);
+            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.MatchAmbiguous || c.Message.Contains("already exists"));
+        }
+
+        [Fact]
+        public void ApplyPatch_ComponentAdd_WithGuidCollision_ReturnsConflict()
+        {
+            var guid = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, InstanceGuid = guid })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Add = new List<GhJsonComponent>
+                        {
+                            new GhJsonComponent { Name = "B", Id = 2, InstanceGuid = guid }
+                        }
+                    }
+                }
+            };
+
+            var apply = GhJson.ApplyPatch(doc, patch);
+
+            Assert.True(apply.HasConflicts);
+            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.InstanceGuidCollision);
+        }
+
+        [Fact]
+        public void ApplyPatch_MatchAmbiguous_RecordsConflict()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, ComponentGuid = Guid.NewGuid() })
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 2, ComponentGuid = Guid.NewGuid() })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Modify = new List<GhPatchComponentModify>
+                        {
+                            new GhPatchComponentModify
+                            {
+                                Match = new GhPatchComponentMatch { Name = "A" },
+                                Set = new JObject { ["name"] = "Renamed" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var apply = GhJson.ApplyPatch(doc, patch);
+
+            Assert.True(apply.HasConflicts);
+            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.MatchAmbiguous);
+        }
+
+        [Fact]
+        public void ApplyPatch_ConnectionAdd_ReferencesNewlyAddedComponent()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Components = new GhPatchComponentsOp
+                    {
+                        Add = new List<GhJsonComponent>
+                        {
+                            new GhJsonComponent { Name = "B", Id = 2 }
+                        }
+                    },
+                    Connections = new GhPatchConnectionsOp
+                    {
+                        Add = new List<GhJsonConnection>
+                        {
+                            new GhJsonConnection
+                            {
+                                From = new GhJsonConnectionEndpoint { Id = 1, ParamName = "out" },
+                                To = new GhJsonConnectionEndpoint { Id = 2, ParamName = "in" }
+                            }
+                        }
+                    }
+                }
+            };
+
+            var apply = GhJson.ApplyPatch(doc, patch);
+
+            Assert.True(apply.Success);
+            Assert.Equal(2, apply.Document.Components.Count);
+            Assert.NotNull(apply.Document.Connections);
+            Assert.Single(apply.Document.Connections!);
+        }
+
+        [Fact]
+        public void ApplyPatch_GroupRemove_RemovesGroupAndMembersReference()
+        {
+            var guid = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .AddGroup(new GhJsonGroup { InstanceGuid = guid, Id = 1, Name = "Group1", Members = new List<int> { 1 } })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Groups = new GhPatchGroupsOp
+                    {
+                        Remove = new List<GhPatchGroupMatch>
+                        {
+                            new GhPatchGroupMatch { InstanceGuid = guid }
+                        }
+                    }
+                }
+            };
+
+            var apply = GhJson.ApplyPatch(doc, patch);
+
+            Assert.True(apply.Success);
+            Assert.Equal(1, apply.GroupsRemoved);
+            Assert.True(apply.Document.Groups == null || apply.Document.Groups.Count == 0);
+        }
+
+        [Fact]
+        public void ApplyPatch_MetadataSet_UpdatesMetadata()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .WithMetadata(new GhJsonMetadata { Title = "Old" })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Patch = new GhPatchBody
+                {
+                    Metadata = new GhPatchMetadataOp
+                    {
+                        Set = new JObject { ["title"] = "New" }
+                    }
+                }
+            };
+
+            var apply = GhJson.ApplyPatch(doc, patch);
+
+            Assert.True(apply.Success);
+            Assert.NotNull(apply.Document.Metadata);
+            Assert.Equal("New", apply.Document.Metadata.Title);
+        }
+
+        [Fact]
+        public void ApplyPatch_EmptyPatch_IsNoOp()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var patch = new GhPatchDocument
+            {
+                Kind = "ghpatch",
+                Patch = new GhPatchBody()
+            };
+
+            var apply = GhJson.ApplyPatch(doc, patch);
+
+            Assert.True(apply.Success);
+            Assert.False(apply.HasConflicts);
+            Assert.Single(apply.Document.Components);
+            Assert.Equal("A", apply.Document.Components[0].Name);
+        }
     }
 }

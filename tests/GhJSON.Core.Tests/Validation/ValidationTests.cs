@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Threading.Tasks;
 using GhJSON.Core;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Core.Validation;
@@ -196,6 +197,86 @@ namespace GhJSON.Core.Tests.Validation
             var result = GhJson.Validate(doc, ValidationLevel.Strict);
 
             Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_ValidDocument_ReturnsSuccess()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1 })
+                .Build();
+
+            var result = await GhJson.ValidateAsync(doc);
+
+            Assert.True(result.IsValid);
+            Assert.Empty(result.Errors);
+        }
+
+        [Fact]
+        public async Task ValidateAsync_String_ReturnsResult()
+        {
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1}]}";
+
+            var result = await GhJson.ValidateAsync(json);
+
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public void Validate_MinimalLevel_PerformsOnlyBasicChecks()
+        {
+            // A document with a dangling connection reference would fail Standard,
+            // but Minimal should pass because it only does basic structural checks.
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[] { new GhJsonComponent { Name = "A", Id = 1 } },
+                connections: new[]
+                {
+                    new GhJsonConnection
+                    {
+                        From = new GhJsonConnectionEndpoint { Id = 99, ParamName = "X" },
+                        To = new GhJsonConnectionEndpoint { Id = 1, ParamName = "A" }
+                    }
+                },
+                groups: null);
+
+            var result = GhJson.Validate(doc, ValidationLevel.Minimal);
+
+            // Minimal should be valid because it skips connection reference validation
+            Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public void Validate_MinimalLevel_DoesNotValidateConnections()
+        {
+            var doc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[] { new GhJsonComponent { Name = "A", Id = 1 } },
+                connections: new[]
+                {
+                    new GhJsonConnection
+                    {
+                        From = new GhJsonConnectionEndpoint { Id = 99, ParamName = "X" },
+                        To = new GhJsonConnectionEndpoint { Id = 1, ParamName = "A" }
+                    }
+                },
+                groups: null);
+
+            var minimal = GhJson.Validate(doc, ValidationLevel.Minimal);
+            var standard = GhJson.Validate(doc, ValidationLevel.Standard);
+
+            Assert.True(minimal.IsValid);
+            Assert.False(standard.IsValid);
+        }
+
+        [Fact]
+        public void IsValid_StringOverload_ReturnsTrueForValidJson()
+        {
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1}]}";
+
+            Assert.True(GhJson.IsValid(json));
         }
     }
 }

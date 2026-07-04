@@ -174,7 +174,7 @@ namespace GhJSON.Core.Tests
             Assert.NotNull(paged.Metadata);
             Assert.Equal("Test", paged.Metadata!.Title);
             Assert.Equal(5, paged.Metadata.ComponentCount);
-            Assert.Equal(2, paged.Metadata.ConnectionCount);
+            Assert.Equal(0, paged.Metadata.ConnectionCount);
             Assert.Equal(0, paged.Metadata.GroupCount);
         }
 

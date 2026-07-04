@@ -29,7 +29,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     /// <summary>
     /// Handler for Scribble component state.
-    /// Serializes text content, rotation angle, corners (relative to pivot), and font settings.
+    /// Serializes text content, corners (relative to pivot), and font settings.
+    /// Rotation is preserved implicitly through the corners and is not stored separately.
     /// Deserialization mirrors native GH_Scribble.Read() via reflection to preserve rotation.
     /// </summary>
     internal sealed class ScribbleHandler : IObjectHandler, IPostPlacementHandler
@@ -87,12 +88,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                         FormatPoint(b.X - pivot.X, b.Y - pivot.Y),
                         FormatPoint(d.X - pivot.X, d.Y - pivot.Y)
                     };
-
-                    // Store rotation angle (degrees) from A→B direction for clarity.
-                    var dx = (double)(b.X - a.X);
-                    var dy = (double)(b.Y - a.Y);
-                    var angleDeg = Math.Atan2(dy, dx) * (180.0 / Math.PI);
-                    scribbleData["rotation"] = Math.Round(angleDeg, 6);
                 }
 
                 // Serialize font settings as separate fields

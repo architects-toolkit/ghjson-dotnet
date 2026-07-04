@@ -16,6 +16,8 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using GhJSON.Core;
 using GhJSON.Core.SchemaModels;
@@ -24,6 +26,7 @@ using Xunit;
 
 namespace GhJSON.Core.Tests.Validation
 {
+    [Collection("SchemaRegistry")]
     public class ValidationTests
     {
         [Fact]
@@ -220,6 +223,97 @@ namespace GhJSON.Core.Tests.Validation
             var result = await GhJson.ValidateAsync(json);
 
             Assert.True(result.IsValid);
+        }
+
+        [Fact]
+        public void Validate_CompactStringPivot_ReturnsSuccess()
+        {
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":""100.5,200.25""}]}";
+
+            var result = GhJson.Validate(json);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
+        }
+
+        [Fact]
+        public void Validate_DocumentBuilderWithCompactPivot_ReturnsSuccess()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1, Pivot = new GhJsonPivot(100.5, 200.25) })
+                .Build();
+
+            var result = GhJson.Validate(doc);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
+        }
+
+        [Fact]
+        public void Validate_ManyComponentsWithCompactPivots_ReturnsSuccess()
+        {
+            var builder = GhJson.CreateDocumentBuilder();
+            for (int i = 1; i <= 130; i++)
+            {
+                builder = builder.AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = i,
+                    Pivot = new GhJsonPivot(i * 10.5, i * 20.25),
+                });
+            }
+
+            var doc = builder.Build();
+
+            var result = GhJson.Validate(doc);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
+        }
+
+        [Fact]
+        public void Validate_ScribbleExtension_ReturnsSuccess()
+        {
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Scribble"",""id"":1,""pivot"":""100,200"",""componentState"":{""extensions"":{""gh.scribble"":{""text"":""Hello"",""corners"":[""0,0"",""100,0"",""0,50""]}}}}]}";
+
+            var result = GhJson.Validate(json);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
+        }
+
+        [Fact]
+        public void Validate_MixedDocumentWithScribbles_ReturnsSuccess()
+        {
+            var builder = GhJson.CreateDocumentBuilder();
+            for (int i = 1; i <= 130; i++)
+            {
+                var component = new GhJsonComponent
+                {
+                    Name = i % 33 == 0 ? "Scribble" : "Addition",
+                    Id = i,
+                    Pivot = new GhJsonPivot(i * 10.5, i * 20.25),
+                };
+
+                if (i % 33 == 0)
+                {
+                    component.ComponentState = new GhJsonComponentState
+                    {
+                        Extensions = new Dictionary<string, object>
+                        {
+                            ["gh.scribble"] = new Dictionary<string, object>
+                            {
+                                ["text"] = "Hello",
+                                ["corners"] = new[] { "0,0", "100,0", "0,50" },
+                            },
+                        },
+                    };
+                }
+
+                builder = builder.AddComponent(component);
+            }
+
+            var doc = builder.Build();
+
+            var result = GhJson.Validate(doc);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
         }
 
         [Fact]

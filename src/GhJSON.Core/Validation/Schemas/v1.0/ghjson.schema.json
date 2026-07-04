@@ -406,6 +406,10 @@
         "to": {
           "$ref": "#/$defs/connectionEndpoint",
           "description": "The target endpoint (input parameter)."
+        },
+        "boundary": {
+          "type": "boolean",
+          "description": "When true, one or both endpoints reference components that are not present in this document (e.g. because of pagination)."
         }
       },
       "additionalProperties": false

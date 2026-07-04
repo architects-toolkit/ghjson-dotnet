@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.ConnectionOperations;
 using GhJSON.Grasshopper.DeleteOperations;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.GetOperations;
@@ -223,6 +224,54 @@ namespace GhJSON.Grasshopper
         public static DeleteResult Clear(DeleteOptions? options = null)
         {
             return CanvasDeleter.Clear(options);
+        }
+
+        #endregion
+
+        #region Connect (wire components)
+
+        /// <summary>
+        /// Connects two parameters on the active canvas by component GUID and parameter name.
+        /// </summary>
+        /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
+        /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
+        /// <param name="sourceParamName">NickName or Name of the source output parameter. If null or empty, the first output is used.</param>
+        /// <param name="targetParamName">NickName or Name of the target input parameter. If null or empty, the first input is used.</param>
+        /// <returns><c>true</c> if the connection was created or already existed.</returns>
+        public static bool Connect(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName = null,
+            string? targetParamName = null)
+        {
+            var doc = CanvasReader.GetActiveDocument();
+            if (doc == null)
+            {
+                return false;
+            }
+
+            var sourceObj = doc.FindObject(sourceGuid, true);
+            var targetObj = doc.FindObject(targetGuid, true);
+            if (sourceObj == null || targetObj == null)
+            {
+                return false;
+            }
+
+            var sourceParam = ConnectionHelper.ResolveOutput(sourceObj, sourceParamName);
+            var targetParam = ConnectionHelper.ResolveInput(targetObj, targetParamName);
+
+            if (sourceParam == null || targetParam == null)
+            {
+                return false;
+            }
+
+            if (targetParam.Sources.Contains(sourceParam))
+            {
+                return true;
+            }
+
+            targetParam.AddSource(sourceParam);
+            return true;
         }
 
         #endregion

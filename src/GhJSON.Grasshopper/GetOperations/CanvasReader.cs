@@ -42,7 +42,7 @@ namespace GhJSON.Grasshopper.GetOperations
         /// <returns>A GhJSON document containing the objects.</returns>
         public static GhJsonDocument GetAll(GetOptions? options = null)
         {
-            var doc = Instances.ActiveCanvas?.Document;
+            var doc = GetActiveDocument();
             if (doc == null)
             {
                 return GhJSON.Core.GhJson.CreateDocumentBuilder().Build();
@@ -68,7 +68,7 @@ namespace GhJSON.Grasshopper.GetOperations
         /// <returns>A GhJSON document containing the specified objects.</returns>
         public static GhJsonDocument GetByGuids(IEnumerable<Guid> guids)
         {
-            var doc = Instances.ActiveCanvas?.Document;
+            var doc = GetActiveDocument();
             if (doc == null)
             {
                 return GhJSON.Core.GhJson.CreateDocumentBuilder().Build();
@@ -78,6 +78,33 @@ namespace GhJSON.Grasshopper.GetOperations
             var objects = doc.Objects.Where(obj => guidSet.Contains(obj.InstanceGuid)).ToList();
 
             return CreateDocument(objects, new GetOptions());
+        }
+
+        /// <summary>
+        /// Gets the active Grasshopper document, swallowing any access exceptions.
+        /// </summary>
+        /// <returns>The active document, or null if none is available.</returns>
+        internal static GH_Document? GetActiveDocument()
+        {
+            try
+            {
+                return Instances.ActiveCanvas?.Document;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Finds a canvas object by its instance GUID.
+        /// </summary>
+        /// <param name="doc">The Grasshopper document to search.</param>
+        /// <param name="guid">The instance GUID to match.</param>
+        /// <returns>The matching object, or null if not found.</returns>
+        internal static IGH_DocumentObject? FindObject(GH_Document doc, Guid guid)
+        {
+            return doc.Objects.FirstOrDefault(o => o.InstanceGuid == guid);
         }
 
         private static GhJsonDocument GetFromDocument(GH_Document doc, GetOptions? options)
@@ -163,7 +190,7 @@ namespace GhJSON.Grasshopper.GetOperations
                 if (!effectiveGroups.Any())
                 {
                     // Auto-discover groups from the active document that contain serialized components
-                    var doc = ghDocument ?? Instances.ActiveCanvas?.Document;
+                    var doc = ghDocument ?? GetActiveDocument();
                     if (doc != null)
                     {
                         effectiveGroups = doc.Objects

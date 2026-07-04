@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using GhJSON.Grasshopper.GetOperations;
 using Grasshopper;
 using Grasshopper.Kernel;
 
@@ -63,7 +64,7 @@ namespace GhJSON.Grasshopper.Query
         /// <returns>A new <see cref="CanvasSelector"/> instance.</returns>
         public static CanvasSelector FromActiveCanvas()
         {
-            var doc = Instances.ActiveCanvas?.Document;
+            var doc = CanvasReader.GetActiveDocument();
             if (doc == null)
             {
                 return new CanvasSelector(new List<IGH_DocumentObject>());

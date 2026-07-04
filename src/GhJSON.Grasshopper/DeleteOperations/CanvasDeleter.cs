@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using GhJSON.Grasshopper.GetOperations;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Rhino;
@@ -59,7 +60,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
             options ??= DeleteOptions.Default;
             var result = new DeleteResult { Success = true };
 
-            var doc = GetActiveDocument();
+            var doc = CanvasReader.GetActiveDocument();
             if (doc == null)
             {
                 result.Success = false;
@@ -76,7 +77,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
 
             foreach (var guid in guids)
             {
-                var obj = FindObject(doc, guid);
+                var obj = CanvasReader.FindObject(doc, guid);
                 if (obj == null)
                 {
                     result.Failed.Add((guid, "Object not found"));
@@ -108,7 +109,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
             options ??= DeleteOptions.Default;
             var result = new DeleteResult { Success = true };
 
-            var doc = GetActiveDocument();
+            var doc = CanvasReader.GetActiveDocument();
             if (doc == null)
             {
                 result.Success = false;
@@ -232,21 +233,5 @@ namespace GhJSON.Grasshopper.DeleteOperations
             }
         }
 
-        private static GH_Document? GetActiveDocument()
-        {
-            try
-            {
-                return Instances.ActiveCanvas?.Document;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static IGH_DocumentObject? FindObject(GH_Document doc, Guid guid)
-        {
-            return doc.Objects.FirstOrDefault(o => o.InstanceGuid == guid);
-        }
     }
 }

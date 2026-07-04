@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using GhJSON.Grasshopper.GetOperations;
 using Grasshopper;
 using Grasshopper.Kernel;
 
@@ -45,7 +46,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 float maxWidth = 0;
                 foreach (var kvp in layer)
                 {
-                    var obj = Instances.ActiveCanvas?.Document?.FindObject(kvp.Key, false);
+                    var obj = CanvasReader.GetActiveDocument()?.FindObject(kvp.Key, false);
                     if (obj?.Attributes?.Bounds != null)
                     {
                         maxWidth = Math.Max(maxWidth, obj.Attributes.Bounds.Width);
@@ -68,7 +69,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 float maxHeight = 0;
                 foreach (var kvp in row)
                 {
-                    var obj = Instances.ActiveCanvas?.Document?.FindObject(kvp.Key, false);
+                    var obj = CanvasReader.GetActiveDocument()?.FindObject(kvp.Key, false);
                     if (obj?.Attributes?.Bounds != null)
                     {
                         maxHeight = Math.Max(maxHeight, obj.Attributes.Bounds.Height);

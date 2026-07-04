@@ -94,6 +94,42 @@ namespace GhJSON.Grasshopper.Serialization
 
                 return component;
             }
+            catch (Exception ex)
+            {
+                // A single misbehaving object (e.g., a corrupted scribble or third-party
+                // component) should not break the whole-document serialization that tools
+                // such as gh_get rely on. Return a thin placeholder so the caller can
+                // continue and report the skipped object.
+#if DEBUG
+                Debug.WriteLine($"[ObjectHandlerOrchestrator.Serialize] Failed to serialize {obj?.Name}: {ex.Message}");
+#endif
+                var failedComponent = new GhJsonComponent
+                {
+                    InputSettings = new List<GhJsonParameterSettings>(),
+                    OutputSettings = new List<GhJsonParameterSettings>(),
+                    Warnings = new List<string> { $"Object '{obj?.Name ?? "unknown"}' could not be serialized: {ex.Message}" },
+                };
+
+                try
+                {
+                    failedComponent.Name = obj?.Name;
+                    failedComponent.NickName = obj?.NickName != obj?.Name ? obj?.NickName : null;
+                    failedComponent.ComponentGuid = obj?.ComponentGuid;
+                    failedComponent.InstanceGuid = obj?.InstanceGuid;
+                    if (obj?.Attributes?.Pivot != null)
+                    {
+                        var pivot = obj.Attributes.Pivot;
+                        failedComponent.Pivot = new GhJsonPivot(pivot.X, pivot.Y);
+                    }
+                }
+                catch
+                {
+                    // Best-effort identification; if even reading these properties throws,
+                    // we still keep the placeholder with the warning above.
+                }
+
+                return failedComponent;
+            }
             finally
             {
                 _currentOptions = previousOptions;

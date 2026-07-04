@@ -443,7 +443,7 @@ namespace GhJSON.Core.Tests.Validation
         }
 
         [Fact]
-        public void Serialize_RuntimeData_PivotIsObject()
+        public void Serialize_RuntimeData_PivotIsCompactString()
         {
             var doc = GhJson.CreateDocumentBuilder()
                 .AddComponent(new GhJsonComponent
@@ -470,7 +470,7 @@ namespace GhJSON.Core.Tests.Validation
 
             var json = GhJson.ToJson(doc, new GhJSON.Core.Serialization.WriteOptions { Indented = false });
 
-            Assert.Contains("\"pivot\":{\"x\":100,\"y\":200}", json);
+            Assert.Contains("\"pivot\":\"100,200\"", json);
             Assert.Contains("\"runtimeData\"", json);
         }
 

@@ -77,15 +77,9 @@ namespace GhJSON.Core.Serialization
                 return;
             }
 
-            // Write as an object so the schema validation is unambiguous and does not depend
-            // on a regex pattern that can fail for certain serialized forms. The object format
-            // is explicitly allowed by the GhJSON schema and keeps integer coordinates visible.
-            writer.WriteStartObject();
-            writer.WritePropertyName("x");
-            writer.WriteValue(value.X);
-            writer.WritePropertyName("y");
-            writer.WriteValue(value.Y);
-            writer.WriteEndObject();
+            // Emit the compact integer string form. The v1.0 schema accepts both the compact
+            // "X,Y" format and the object {x,y} format as long as coordinates are integers.
+            writer.WriteValue(value.ToCompact());
         }
     }
 }

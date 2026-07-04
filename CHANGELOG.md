@@ -18,8 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pagination metadata** added to `GhJsonMetadata` via `GhJsonPagination`
   - `page`, `pageSize`, `totalPages` fields
   - Automatically populated by `GhJson.SegmentDocument()` when the document spans multiple pages
+- **Page joining** via `GhJson.JoinPages()` reuses `DocumentMerger` to reassemble paginated documents
+  - Deduplicates overlapping components by ID and instance GUID
+  - Resolves boundary connections when both endpoints are present
+  - Merges group members across pages and removes empty groups
+  - Strips pagination metadata and recomputes counts
 
-## [1.0.0] - 2026-06-19
+## [1.1.0] - 2026-06-19
 
 ### New Features
 

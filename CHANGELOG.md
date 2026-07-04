@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New Features
 
+#### Paginated GhJSON Documents
+
+- **Boundary connections** preserved across pages instead of silently dropped
+  - `GhJsonConnection.Boundary` flag marks connections that reference components outside the current page
+  - `GhJson.SegmentDocument()` now keeps any connection that touches the requested page and marks cross-page ones as boundary
+  - `GhJsonValidator` allows boundary connections and reports them as informational messages instead of errors
+- **Pagination metadata** added to `GhJsonMetadata` via `GhJsonPagination`
+  - `page`, `pageSize`, `totalPages` fields
+  - Automatically populated by `GhJson.SegmentDocument()` when the document spans multiple pages
+
+## [1.0.0] - 2026-06-19
+
+### New Features
+
 #### Automatic Component Layout
 
 - **Dependency Graph Layout Engine**: New algorithm-based layout system with Sugiyama implementation

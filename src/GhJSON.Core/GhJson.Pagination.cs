@@ -26,8 +26,9 @@ namespace GhJSON.Core
     {
         /// <summary>
         /// Returns a single page of a GhJSON document.
-        /// Serializes the full document first, then keeps only the components in the requested page,
-        /// plus the connections and groups whose members are fully contained in that page.
+        /// Keeps the components in the requested page, plus any connection that touches the page.
+        /// Connections that cross the page boundary are marked with <c>boundary: true</c>.
+        /// Groups are only kept when all of their members are on the page.
         /// </summary>
         /// <param name="document">The full document to segment.</param>
         /// <param name="page">Zero-based page index.</param>
@@ -52,12 +53,15 @@ namespace GhJSON.Core
 
             var allComponents = document.Components?.ToList() ?? new List<GhJsonComponent>();
             var skip = page * pageSize;
+            var totalComponents = allComponents.Count;
+            var totalPages = (int)Math.Ceiling((double)totalComponents / pageSize);
+            var oneBasedPage = page + 1;
 
             if (skip >= allComponents.Count)
             {
                 return new GhJsonDocument(
                     document.Schema,
-                    CopyMetadata(document.Metadata, 0, 0, 0),
+                    CopyMetadata(document.Metadata, totalComponents, 0, 0, oneBasedPage, pageSize, totalPages),
                     Array.Empty<GhJsonComponent>(),
                     null,
                     null);
@@ -70,7 +74,28 @@ namespace GhJSON.Core
             if (document.Connections != null)
             {
                 pageConnections = document.Connections
-                    .Where(c => pageIds.Contains(c.From.Id) && pageIds.Contains(c.To.Id))
+                    .Where(c => pageIds.Contains(c.From.Id) || pageIds.Contains(c.To.Id))
+                    .Select(c =>
+                    {
+                        var fromOnPage = pageIds.Contains(c.From.Id);
+                        var toOnPage = pageIds.Contains(c.To.Id);
+                        return new GhJsonConnection
+                        {
+                            From = new GhJsonConnectionEndpoint
+                            {
+                                Id = c.From.Id,
+                                ParamName = c.From.ParamName,
+                                ParamIndex = c.From.ParamIndex,
+                            },
+                            To = new GhJsonConnectionEndpoint
+                            {
+                                Id = c.To.Id,
+                                ParamName = c.To.ParamName,
+                                ParamIndex = c.To.ParamIndex,
+                            },
+                            Boundary = fromOnPage && toOnPage ? null : (bool?)true,
+                        };
+                    })
                     .ToList();
             }
 
@@ -84,9 +109,12 @@ namespace GhJSON.Core
 
             var metadata = CopyMetadata(
                 document.Metadata,
-                pageComponents.Count,
+                totalComponents,
                 pageConnections?.Count ?? 0,
-                pageGroups?.Count ?? 0);
+                pageGroups?.Count ?? 0,
+                oneBasedPage,
+                pageSize,
+                totalPages);
 
             return new GhJsonDocument(
                 document.Schema,
@@ -97,13 +125,38 @@ namespace GhJSON.Core
         }
 
         /// <summary>
-        /// Creates a shallow copy of metadata with updated counts.
+        /// Creates a shallow copy of metadata with updated counts and optional pagination info.
+        /// Pagination is omitted when the document fits in a single page.
         /// </summary>
-        private static GhJsonMetadata? CopyMetadata(GhJsonMetadata? source, int componentCount, int connectionCount, int groupCount)
+        private static GhJsonMetadata? CopyMetadata(
+            GhJsonMetadata? source,
+            int componentCount,
+            int connectionCount,
+            int groupCount,
+            int page,
+            int pageSize,
+            int totalPages)
         {
+            GhJsonPagination? pagination = null;
+            if (totalPages > 1)
+            {
+                pagination = new GhJsonPagination
+                {
+                    Page = page,
+                    PageSize = pageSize,
+                    TotalPages = totalPages,
+                };
+            }
+
             if (source == null)
             {
-                return null;
+                return new GhJsonMetadata
+                {
+                    ComponentCount = componentCount,
+                    ConnectionCount = connectionCount,
+                    GroupCount = groupCount,
+                    Pagination = pagination,
+                };
             }
 
             return new GhJsonMetadata
@@ -123,6 +176,7 @@ namespace GhJSON.Core
                 ComponentCount = componentCount,
                 ConnectionCount = connectionCount,
                 GroupCount = groupCount,
+                Pagination = pagination,
             };
         }
     }

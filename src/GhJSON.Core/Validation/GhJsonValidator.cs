@@ -587,9 +587,17 @@ namespace GhJSON.Core.Validation
             {
                 var connection = document.Connections[i];
                 var path = $"connections[{i}]";
+                var isBoundary = connection.Boundary == true;
+
+                if (isBoundary)
+                {
+                    result.Info.Add(new ValidationMessage(
+                        $"Boundary connection references component(s) outside the current page: from {connection.From.Id}, to {connection.To.Id}",
+                        path));
+                }
 
                 // Validate from endpoint
-                if (!validIds.Contains(connection.From.Id))
+                if (!isBoundary && !validIds.Contains(connection.From.Id))
                 {
                     result.Errors.Add(new ValidationMessage(
                         $"Connection 'from' references non-existent component ID: {connection.From.Id}",
@@ -604,7 +612,7 @@ namespace GhJSON.Core.Validation
                 }
 
                 // Validate to endpoint
-                if (!validIds.Contains(connection.To.Id))
+                if (!isBoundary && !validIds.Contains(connection.To.Id))
                 {
                     result.Errors.Add(new ValidationMessage(
                         $"Connection 'to' references non-existent component ID: {connection.To.Id}",

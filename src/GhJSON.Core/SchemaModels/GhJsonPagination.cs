@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -20,28 +20,26 @@ using Newtonsoft.Json;
 namespace GhJSON.Core.SchemaModels
 {
     /// <summary>
-    /// Represents a connection (wire) between two component parameters.
-    /// Maps to the connectionData definition in the schema.
+    /// Pagination information for a GhJSON document that contains only a subset of components.
     /// </summary>
-    public sealed class GhJsonConnection
+    public sealed class GhJsonPagination
     {
         /// <summary>
-        /// Gets or sets the source endpoint (output parameter).
+        /// Gets or sets the one-based page index.
         /// </summary>
-        [JsonProperty("from")]
-        public GhJsonConnectionEndpoint From { get; set; } = new GhJsonConnectionEndpoint();
+        [JsonProperty("page", NullValueHandling = NullValueHandling.Ignore)]
+        public int? Page { get; set; }
 
         /// <summary>
-        /// Gets or sets the target endpoint (input parameter).
+        /// Gets or sets the number of components per page.
         /// </summary>
-        [JsonProperty("to")]
-        public GhJsonConnectionEndpoint To { get; set; } = new GhJsonConnectionEndpoint();
+        [JsonProperty("pageSize", NullValueHandling = NullValueHandling.Ignore)]
+        public int? PageSize { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether this connection crosses a page boundary.
-        /// When true, one or both endpoints reference components that are not present in the document.
+        /// Gets or sets the total number of pages available.
         /// </summary>
-        [JsonProperty("boundary", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? Boundary { get; set; }
+        [JsonProperty("totalPages", NullValueHandling = NullValueHandling.Ignore)]
+        public int? TotalPages { get; set; }
     }
 }

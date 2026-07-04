@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.DeleteOperations;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.GetOperations;
 using GhJSON.Grasshopper.PutOperations;
@@ -58,6 +59,8 @@ namespace GhJSON.Grasshopper
                 IncludeRuntimeMessages = options.IncludeRuntimeMessages,
                 IncludeSelectedState = options.IncludeSelectedState,
                 IncludeMetadata = options.IncludeMetadata,
+                Page = options.Page,
+                PageSize = options.PageSize,
                 MetadataTitle = options.MetadataTitle,
                 MetadataDescription = options.MetadataDescription,
                 MetadataVersion = options.MetadataVersion,
@@ -196,6 +199,33 @@ namespace GhJSON.Grasshopper
 
         #endregion
 
+        #region Delete (remove from canvas)
+
+        /// <summary>
+        /// Deletes objects from the canvas by their GUIDs.
+        /// </summary>
+        /// <param name="guids">The GUIDs of objects to delete.</param>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted and failed GUIDs.</returns>
+        public static DeleteResult Delete(
+            IEnumerable<Guid> guids,
+            DeleteOptions? options = null)
+        {
+            return CanvasDeleter.DeleteByGuids(guids, options);
+        }
+
+        /// <summary>
+        /// Clears all objects from the canvas.
+        /// </summary>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted and failed GUIDs.</returns>
+        public static DeleteResult Clear(DeleteOptions? options = null)
+        {
+            return CanvasDeleter.Clear(options);
+        }
+
+        #endregion
+
         #region Data Type Extensibility
 
         /// <summary>
@@ -224,34 +254,6 @@ namespace GhJSON.Grasshopper
         public static IEnumerable<IDataTypeSerializer> GetRegisteredDataTypeSerializers()
         {
             return DataTypeRegistry.GetAll();
-        }
-
-        #endregion
-
-        #region Delete (remove from canvas)
-
-        /// <summary>
-        /// Deletes objects from the canvas by their GUIDs.
-        /// </summary>
-        /// <param name="guids">The GUIDs of objects to delete.</param>
-        /// <param name="options">Optional delete options.</param>
-        /// <returns>The delete result containing deleted/failed/skipped GUIDs.</returns>
-        public static DeleteOperations.DeleteResult Delete(
-            IEnumerable<Guid> guids,
-            DeleteOperations.DeleteOptions? options = null)
-        {
-            return DeleteOperations.CanvasDeleter.DeleteByGuids(guids, options);
-        }
-
-        /// <summary>
-        /// Clears all objects from the canvas.
-        /// </summary>
-        /// <param name="options">Optional delete options.</param>
-        /// <returns>The delete result containing deleted/skipped GUIDs.</returns>
-        public static DeleteOperations.DeleteResult Clear(
-            DeleteOperations.DeleteOptions? options = null)
-        {
-            return DeleteOperations.CanvasDeleter.Clear(options);
         }
 
         #endregion

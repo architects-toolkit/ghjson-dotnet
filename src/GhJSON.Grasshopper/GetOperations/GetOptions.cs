@@ -35,6 +35,18 @@ namespace GhJSON.Grasshopper.GetOperations
         public bool SelectedOnly { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets the one-based page index when paginating the result.
+        /// When null, no pagination is applied.
+        /// </summary>
+        public int? Page { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of components per page.
+        /// When null, no pagination is applied.
+        /// </summary>
+        public int? PageSize { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether to include connections.
         /// </summary>
         public bool IncludeConnections { get; set; } = true;

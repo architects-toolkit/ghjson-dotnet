@@ -197,7 +197,19 @@ namespace GhJSON.Grasshopper.GetOperations
                     options));
             }
 
-            return builder.Build();
+            var fullDocument = builder.Build();
+
+            // Apply pagination after the full document has been serialized.
+            // This keeps IDs stable and ensures the caller receives only the requested page.
+            // GetOptions uses one-based pages; SegmentDocument expects zero-based.
+            if (options.PageSize.HasValue && options.PageSize.Value > 0)
+            {
+                var oneBasedPage = options.Page ?? 1;
+                var zeroBasedPage = Math.Max(0, oneBasedPage - 1);
+                return GhJSON.Core.GhJson.SegmentDocument(fullDocument, zeroBasedPage, options.PageSize.Value);
+            }
+
+            return fullDocument;
         }
 
         private static List<GhJsonConnection> ExtractConnections(

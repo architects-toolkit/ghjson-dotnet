@@ -27,6 +27,7 @@ namespace GhJSON.Core.Tests.Validation
     /// provided, HasErrors/HasWarnings reflect list contents, and factory helpers
     /// produce the expected IsValid value.
     /// </summary>
+    [Collection("SchemaRegistry")]
     public class ValidationMessageTests
     {
         [Fact]

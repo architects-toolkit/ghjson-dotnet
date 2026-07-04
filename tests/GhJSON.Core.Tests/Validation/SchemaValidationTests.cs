@@ -21,6 +21,7 @@ using Xunit;
 
 namespace GhJSON.Core.Tests.Validation
 {
+    [Collection("SchemaRegistry")]
     public class SchemaValidationTests
     {
         [Fact]

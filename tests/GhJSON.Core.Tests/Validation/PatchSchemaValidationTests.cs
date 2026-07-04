@@ -25,6 +25,7 @@ namespace GhJSON.Core.Tests.Validation
     /// Tests patch validation against the GhPatch JSON Schema using raw JSON strings.
     /// These bypass the typed models to test the validator itself.
     /// </summary>
+    [Collection("SchemaRegistry")]
     public class PatchSchemaValidationTests
     {
         [Fact]

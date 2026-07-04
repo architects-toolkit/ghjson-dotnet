@@ -25,6 +25,7 @@ namespace GhJSON.Core.Tests.SpecCompliance
     /// are enforced (correct shape passes, unexpected fields/types fail) and that
     /// unknown extension keys are accepted (forward-compatibility).
     /// </summary>
+    [Collection("SchemaRegistry")]
     public class ExtensionSchemaTests
     {
         private static string Wrap(string extensionsJson) =>

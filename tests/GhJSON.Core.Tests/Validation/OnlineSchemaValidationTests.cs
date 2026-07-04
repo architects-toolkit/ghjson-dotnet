@@ -22,6 +22,7 @@ using Xunit;
 
 namespace GhJSON.Core.Tests.Validation
 {
+    [Collection("SchemaRegistry")]
     public class OnlineSchemaValidationTests
     {
         private const string ValidJson = "{\"components\":[{\"name\":\"Addition\",\"id\":1}]}";

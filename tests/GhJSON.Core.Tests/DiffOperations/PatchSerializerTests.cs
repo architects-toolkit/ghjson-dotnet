@@ -99,7 +99,7 @@ namespace GhJSON.Core.Tests.DiffOperations
                     {
                         Add = new List<GhJsonComponent>
                         {
-                            new GhJsonComponent { Name = "A", Id = 1, Pivot = new GhJsonPivot { X = 100.5, Y = 200.5 } }
+                            new GhJsonComponent { Name = "A", Id = 1, Pivot = new GhJsonPivot { X = 100, Y = 200 } }
                         }
                     }
                 }
@@ -109,8 +109,8 @@ namespace GhJSON.Core.Tests.DiffOperations
             var reparsed = PatchSerializer.Deserialize(json);
 
             Assert.NotNull(reparsed.Patch.Components!.Add![0].Pivot);
-            Assert.Equal(100.5, reparsed.Patch.Components.Add[0].Pivot.X);
-            Assert.Equal(200.5, reparsed.Patch.Components.Add[0].Pivot.Y);
+            Assert.Equal(100, reparsed.Patch.Components.Add[0].Pivot.X);
+            Assert.Equal(200, reparsed.Patch.Components.Add[0].Pivot.Y);
         }
 
         [Fact]

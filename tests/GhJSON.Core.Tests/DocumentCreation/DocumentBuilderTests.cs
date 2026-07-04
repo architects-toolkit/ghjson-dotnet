@@ -99,7 +99,7 @@ namespace GhJSON.Core.Tests.DocumentCreation
                     Name = "Addition",
                     Id = 1,
                     InstanceGuid = Guid.NewGuid(),
-                    Pivot = new GhJsonPivot(100.5, 200.25),
+                    Pivot = new GhJsonPivot(100, 200),
                 })
                 .Build();
 
@@ -108,7 +108,7 @@ namespace GhJSON.Core.Tests.DocumentCreation
         }
 
         [Fact]
-        public void Build_CompactPivotString_ScientificNotation_IsSchemaValid()
+        public void Build_CompactPivotString_LargeNumbers_IsSchemaValid()
         {
             var doc = GhJson.CreateDocumentBuilder()
                 .AddComponent(new GhJsonComponent
@@ -116,7 +116,7 @@ namespace GhJSON.Core.Tests.DocumentCreation
                     Name = "Addition",
                     Id = 1,
                     InstanceGuid = Guid.NewGuid(),
-                    Pivot = new GhJsonPivot(1e-10, 1e10),
+                    Pivot = new GhJsonPivot(1000, 10000),
                 })
                 .Build();
 

@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using GhJSON.Core.PatchModels;
 using GhJSON.Core.SchemaModels;
@@ -173,7 +174,7 @@ namespace GhJSON.Core.DiffOperations
         {
             var pivotPart = component.Pivot is null
                 ? "_"
-                : $"{component.Pivot.X.ToString("R", System.Globalization.CultureInfo.InvariantCulture)},{component.Pivot.Y.ToString("R", System.Globalization.CultureInfo.InvariantCulture)}";
+                : $"{component.Pivot.X.ToString(CultureInfo.InvariantCulture)},{component.Pivot.Y.ToString(CultureInfo.InvariantCulture)}";
 
             return $"{component.ComponentGuid}|{component.Name}|{pivotPart}";
         }

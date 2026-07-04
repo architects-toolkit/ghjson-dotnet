@@ -228,7 +228,7 @@ namespace GhJSON.Core.Tests.Validation
         [Fact]
         public void Validate_CompactStringPivot_ReturnsSuccess()
         {
-            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":""100.5,200.25""}]}";
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":""100,200""}]}";
 
             var result = GhJson.Validate(json);
 
@@ -257,7 +257,7 @@ namespace GhJSON.Core.Tests.Validation
                 {
                     Name = "Addition",
                     Id = i,
-                    Pivot = new GhJsonPivot(i * 10.5, i * 20.25),
+                    Pivot = new GhJsonPivot(i * 10, i * 20),
                 });
             }
 
@@ -288,7 +288,7 @@ namespace GhJSON.Core.Tests.Validation
                 {
                     Name = i % 33 == 0 ? "Scribble" : "Addition",
                     Id = i,
-                    Pivot = new GhJsonPivot(i * 10.5, i * 20.25),
+                    Pivot = new GhJsonPivot(i * 10, i * 20),
                 };
 
                 if (i % 33 == 0)

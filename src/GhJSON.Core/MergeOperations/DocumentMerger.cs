@@ -152,12 +152,12 @@ namespace GhJSON.Core.MergeOperations
                 Remarks = original.Remarks?.ToList()
             };
 
-            // Apply position offset
+            // Apply position offset, rounding the merged position to the nearest integer.
             if (original.Pivot != null)
             {
                 clone.Pivot = new GhJsonPivot(
-                    original.Pivot.X + options.OffsetX,
-                    original.Pivot.Y + options.OffsetY);
+                    (int)Math.Round(original.Pivot.X + options.OffsetX, MidpointRounding.AwayFromZero),
+                    (int)Math.Round(original.Pivot.Y + options.OffsetY, MidpointRounding.AwayFromZero));
             }
 
             // Clone input/output settings

@@ -50,9 +50,15 @@ namespace GhJSON.Core.Serialization
             if (reader.TokenType == JsonToken.StartObject)
             {
                 var obj = JObject.Load(reader);
-                var x = obj["x"]?.Value<double>() ?? 0;
-                var y = obj["y"]?.Value<double>() ?? 0;
-                return new GhJsonPivot(x, y);
+                var xToken = obj["x"];
+                var yToken = obj["y"];
+                if (xToken?.Type != JTokenType.Integer || yToken?.Type != JTokenType.Integer)
+                {
+                    throw new JsonSerializationException(
+                        "Pivot object properties x and y must be integers.");
+                }
+
+                return new GhJsonPivot(xToken.Value<int>(), yToken.Value<int>());
             }
 
             throw new JsonSerializationException(

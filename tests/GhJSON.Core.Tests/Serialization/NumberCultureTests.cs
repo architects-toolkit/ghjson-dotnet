@@ -40,12 +40,12 @@ namespace GhJSON.Core.Tests.Serialization
 
                 const string json =
                     @"{""schema"":""1.0"",""components"":[" +
-                    @"{""name"":""X"",""id"":1,""pivot"":{""x"":1.5,""y"":-2.25}}]}";
+                    @"{""name"":""X"",""id"":1,""pivot"":{""x"":1,""y"":-2}}]}";
 
                 var doc = GhJson.FromJson(json);
 
-                Assert.Equal(1.5, doc.Components[0].Pivot!.X);
-                Assert.Equal(-2.25, doc.Components[0].Pivot!.Y);
+                Assert.Equal(1, doc.Components[0].Pivot!.X);
+                Assert.Equal(-2, doc.Components[0].Pivot!.Y);
             }
             finally
             {
@@ -66,15 +66,15 @@ namespace GhJSON.Core.Tests.Serialization
                     {
                         Name = "X",
                         Id = 1,
-                        Pivot = new GhJsonPivot(3.14, -0.5),
+                        Pivot = new GhJsonPivot(3, -1),
                     })
                     .Build();
 
                 var json = GhJson.ToJson(doc);
                 var reloaded = GhJson.FromJson(json);
 
-                Assert.Equal(3.14, reloaded.Components[0].Pivot!.X);
-                Assert.Equal(-0.5, reloaded.Components[0].Pivot!.Y);
+                Assert.Equal(3, reloaded.Components[0].Pivot!.X);
+                Assert.Equal(-1, reloaded.Components[0].Pivot!.Y);
             }
             finally
             {

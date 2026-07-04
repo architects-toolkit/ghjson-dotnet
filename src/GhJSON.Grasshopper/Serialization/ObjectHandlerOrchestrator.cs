@@ -118,8 +118,7 @@ namespace GhJSON.Grasshopper.Serialization
                     failedComponent.InstanceGuid = obj?.InstanceGuid;
                     if (obj?.Attributes?.Pivot != null)
                     {
-                        var pivot = obj.Attributes.Pivot;
-                        failedComponent.Pivot = new GhJsonPivot(pivot.X, pivot.Y);
+                        failedComponent.Pivot = GhJsonPivot.FromPointF(obj.Attributes.Pivot);
                     }
                 }
                 catch

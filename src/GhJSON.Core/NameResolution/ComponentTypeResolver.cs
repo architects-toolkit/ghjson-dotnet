@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace GhJSON.Core.NameResolution
 {
@@ -41,15 +42,43 @@ namespace GhJSON.Core.NameResolution
         };
 
         /// <summary>
-        /// Calculates a priority score for a component type name based on pattern matching.
-        /// Matching patterns have their scores summed. Default score is 0.
+        /// Calculates a priority score for a component type. Matching type-name patterns
+        /// and obsolete/deprecated markers have their scores summed. Default score is 0.
+        /// Obsolete components receive a large penalty so current implementations win
+        /// when multiple components share the same display name.
+        /// </summary>
+        /// <param name="type">The component type to score.</param>
+        /// <returns>The calculated priority score.</returns>
+        public static int CalculateTypePriorityScore(Type? type)
+        {
+            if (type == null)
+            {
+                return 0;
+            }
+
+            int score = CalculateTypePriorityScore(type.Name);
+
+            if (IsObsoleteType(type))
+            {
+                score -= 100;
+            }
+
+            return score;
+        }
+
+        /// <summary>
+        /// Calculates the pattern-matching portion of the priority score for a type name.
+        /// This overload does not perform obsolete/deprecated detection because it has no
+        /// access to the component type metadata.
         /// </summary>
         /// <param name="typeName">The component type name to score.</param>
-        /// <returns>The calculated priority score.</returns>
+        /// <returns>The calculated pattern-based priority score.</returns>
         public static int CalculateTypePriorityScore(string typeName)
         {
             if (string.IsNullOrEmpty(typeName))
+            {
                 return 0;
+            }
 
             int score = 0;
             foreach (var (pattern, patternScore) in TypePriorityPatterns)
@@ -59,7 +88,59 @@ namespace GhJSON.Core.NameResolution
                     score += patternScore;
                 }
             }
+
             return score;
+        }
+
+        /// <summary>
+        /// Detects legacy component types by checking for the standard
+        /// <see cref="ObsoleteAttribute"/>, obsolete/deprecated naming conventions, or
+        /// a public boolean <c>Obsolete</c> property on an instantiated instance.
+        /// </summary>
+        /// <param name="type">The type to inspect.</param>
+        /// <returns><c>true</c> if the type appears to be obsolete/deprecated.</returns>
+        private static bool IsObsoleteType(Type type)
+        {
+            if (type.GetCustomAttribute<ObsoleteAttribute>(inherit: false) != null)
+            {
+                return true;
+            }
+
+            var name = type.Name;
+            if (name.Contains("OBSOLETE", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("DEPRECATED", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("LEGACY", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Fallback: instantiate the type and query a public bool Obsolete property.
+            // This is required because Grasshopper's GH_DocumentObject.Obsolete property
+            // is virtual and may be overridden without using the ObsoleteAttribute.
+            try
+            {
+                var obsoleteProperty = type.GetProperty(
+                    "Obsolete",
+                    BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    typeof(bool),
+                    Type.EmptyTypes,
+                    null);
+
+                if (obsoleteProperty != null &&
+                    obsoleteProperty.CanRead &&
+                    Activator.CreateInstance(type) is object instance)
+                {
+                    return obsoleteProperty.GetValue(instance) is true;
+                }
+            }
+            catch
+            {
+                // Instantiation may fail for types without a parameterless constructor
+                // or that require a document context. In that case, treat as non-obsolete.
+            }
+
+            return false;
         }
 
         /// <summary>

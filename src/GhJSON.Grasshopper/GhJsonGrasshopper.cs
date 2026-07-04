@@ -184,6 +184,30 @@ namespace GhJSON.Grasshopper
 
         #endregion
 
+        #region Canvas Access (raw document and object lookup)
+
+        /// <summary>
+        /// Gets the active Grasshopper document, swallowing any access exceptions.
+        /// </summary>
+        /// <returns>The active document, or null if none is available.</returns>
+        public static GH_Document? GetActiveDocument()
+        {
+            return CanvasReader.GetActiveDocument();
+        }
+
+        /// <summary>
+        /// Finds a canvas object by its instance GUID.
+        /// </summary>
+        /// <param name="doc">The Grasshopper document to search.</param>
+        /// <param name="guid">The instance GUID to match.</param>
+        /// <returns>The matching object, or null if not found.</returns>
+        public static IGH_DocumentObject? FindObject(GH_Document doc, Guid guid)
+        {
+            return CanvasReader.FindObject(doc, guid);
+        }
+
+        #endregion
+
         #region Put (place on canvas)
 
         /// <summary>

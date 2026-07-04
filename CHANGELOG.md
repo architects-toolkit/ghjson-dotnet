@@ -18,11 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pagination metadata** added to `GhJsonMetadata` via `GhJsonPagination`
   - `page`, `pageSize`, `totalPages` fields
   - Automatically populated by `GhJson.SegmentDocument()` when the document spans multiple pages
+  - Pagination is always emitted for multi-page documents, even when `IncludeMetadata` is disabled
+  - Pagination is omitted for single-page documents, even when `IncludeMetadata` is enabled
 - **Page joining** via `GhJson.JoinPages()` reuses `DocumentMerger` to reassemble paginated documents
   - Deduplicates overlapping components by ID and instance GUID
   - Resolves boundary connections when both endpoints are present
   - Merges group members across pages and removes empty groups
   - Strips pagination metadata and recomputes counts
+
+### Changed
+
+- **Paginated output respects `IncludeMetadata`**
+  - When `IncludeMetadata` is `false`, the metadata block is suppressed unless pagination is required (multi-page documents)
+  - When pagination is required, only the `pagination` object is emitted; title, counts, generator, and version fields are omitted
+  - Single-page documents never include `pagination`, even when `IncludeMetadata` is `true`
 
 ## [1.1.0] - 2026-06-19
 

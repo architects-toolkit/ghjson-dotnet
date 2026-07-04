@@ -94,6 +94,28 @@ var doc = GhJsonGrasshopper.Get(options);
 }
 ```
 
+## Pagination Metadata
+
+When pagination is enabled (`Page` / `PageSize`), the `metadata.pagination` block is included automatically:
+
+```json
+{
+  "schema": "1.0",
+  "metadata": {
+    "pagination": {
+      "page": 2,
+      "pageSize": 50,
+      "totalPages": 4
+    }
+  }
+}
+```
+
+The pagination block follows these rules:
+
+- **Always included for multi-page documents** — even when `IncludeMetadata` is `false`, the caller needs pagination information to fetch the remaining pages.
+- **Never included for single-page documents** — even when `IncludeMetadata` is `true`, pagination is omitted when the entire result fits on one page.
+
 ## Metadata Schema Reference
 
 All metadata properties are optional. The full schema is defined in the [GhJSON specification](https://github.com/architects-toolkit/ghjson-spec).

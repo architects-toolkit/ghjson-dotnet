@@ -33,8 +33,17 @@ namespace GhJSON.Core
         /// <param name="document">The full document to segment.</param>
         /// <param name="page">Zero-based page index.</param>
         /// <param name="pageSize">Number of components per page. Must be greater than zero.</param>
+        /// <param name="includeMetadata">
+        /// When <c>true</c>, the full metadata block (title, counts, generator, versions, etc.) is included.
+        /// Pagination metadata is always included when the document spans multiple pages,
+        /// even if this flag is <c>false</c>.
+        /// </param>
         /// <returns>A new <see cref="GhJsonDocument"/> containing only the requested page.</returns>
-        public static GhJsonDocument SegmentDocument(GhJsonDocument document, int page, int pageSize)
+        public static GhJsonDocument SegmentDocument(
+            GhJsonDocument document,
+            int page,
+            int pageSize,
+            bool includeMetadata = true)
         {
             if (document == null)
             {
@@ -61,7 +70,7 @@ namespace GhJSON.Core
             {
                 return new GhJsonDocument(
                     document.Schema,
-                    CopyMetadata(document.Metadata, totalComponents, 0, 0, oneBasedPage, pageSize, totalPages),
+                    CopyMetadata(document.Metadata, totalComponents, 0, 0, oneBasedPage, pageSize, totalPages, includeMetadata),
                     Array.Empty<GhJsonComponent>(),
                     null,
                     null);
@@ -114,7 +123,8 @@ namespace GhJSON.Core
                 pageGroups?.Count ?? 0,
                 oneBasedPage,
                 pageSize,
-                totalPages);
+                totalPages,
+                includeMetadata);
 
             return new GhJsonDocument(
                 document.Schema,
@@ -127,6 +137,7 @@ namespace GhJSON.Core
         /// <summary>
         /// Creates a shallow copy of metadata with updated counts and optional pagination info.
         /// Pagination is omitted when the document fits in a single page.
+        /// When metadata is disabled, pagination is still emitted for multi-page documents.
         /// </summary>
         private static GhJsonMetadata? CopyMetadata(
             GhJsonMetadata? source,
@@ -135,7 +146,8 @@ namespace GhJSON.Core
             int groupCount,
             int page,
             int pageSize,
-            int totalPages)
+            int totalPages,
+            bool includeMetadata)
         {
             GhJsonPagination? pagination = null;
             if (totalPages > 1)
@@ -146,6 +158,12 @@ namespace GhJSON.Core
                     PageSize = pageSize,
                     TotalPages = totalPages,
                 };
+            }
+
+            if (!includeMetadata)
+            {
+                // Metadata is disabled, but pagination is required for multi-page documents.
+                return pagination == null ? null : new GhJsonMetadata { Pagination = pagination };
             }
 
             if (source == null)

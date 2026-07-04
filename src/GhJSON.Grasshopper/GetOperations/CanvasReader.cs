@@ -206,7 +206,11 @@ namespace GhJSON.Grasshopper.GetOperations
             {
                 var oneBasedPage = options.Page ?? 1;
                 var zeroBasedPage = Math.Max(0, oneBasedPage - 1);
-                return GhJSON.Core.GhJson.SegmentDocument(fullDocument, zeroBasedPage, options.PageSize.Value);
+                return GhJSON.Core.GhJson.SegmentDocument(
+                    fullDocument,
+                    zeroBasedPage,
+                    options.PageSize.Value,
+                    options.IncludeMetadata);
             }
 
             return fullDocument;

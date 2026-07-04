@@ -256,6 +256,60 @@ namespace GhJSON.Core.Tests
             Assert.Contains(result.Info, m => m.Message.Contains("boundary", StringComparison.OrdinalIgnoreCase));
         }
 
+        [Fact]
+        public void SegmentDocument_IncludeMetadataFalse_SinglePage_ReturnsNullMetadata()
+        {
+            var components = Enumerable.Range(1, 5)
+                .Select(i => new GhJsonComponent { Name = $"C{i}", Id = i })
+                .ToList();
+
+            var doc = new GhJsonDocument("1.0", null, components, null, null);
+            var paged = GhJson.SegmentDocument(doc, 0, 10, includeMetadata: false);
+
+            Assert.Null(paged.Metadata);
+        }
+
+        [Fact]
+        public void SegmentDocument_IncludeMetadataFalse_MultiPage_ReturnsPaginationOnly()
+        {
+            var components = Enumerable.Range(1, 10)
+                .Select(i => new GhJsonComponent { Name = $"C{i}", Id = i })
+                .ToList();
+
+            var doc = new GhJsonDocument("1.0", null, components, null, null);
+            var paged = GhJson.SegmentDocument(doc, 1, 3, includeMetadata: false);
+
+            Assert.NotNull(paged.Metadata);
+            Assert.NotNull(paged.Metadata!.Pagination);
+            Assert.Null(paged.Metadata.ComponentCount);
+            Assert.Null(paged.Metadata.ConnectionCount);
+            Assert.Null(paged.Metadata.GroupCount);
+        }
+
+        [Fact]
+        public void SegmentDocument_IncludeMetadataTrue_MultiPage_PreservesSourceMetadata()
+        {
+            var components = Enumerable.Range(1, 10)
+                .Select(i => new GhJsonComponent { Name = $"C{i}", Id = i })
+                .ToList();
+
+            var metadata = new GhJsonMetadata
+            {
+                Title = "Test",
+                ComponentCount = 10,
+                ConnectionCount = 0,
+                GroupCount = 0,
+            };
+
+            var doc = new GhJsonDocument("1.0", metadata, components, null, null);
+            var paged = GhJson.SegmentDocument(doc, 1, 3, includeMetadata: true);
+
+            Assert.NotNull(paged.Metadata);
+            Assert.Equal("Test", paged.Metadata!.Title);
+            Assert.NotNull(paged.Metadata.Pagination);
+            Assert.Equal(10, paged.Metadata.ComponentCount);
+        }
+
         private static GhJsonDocument CreateDocument(int componentCount)
         {
             var components = Enumerable.Range(1, componentCount)

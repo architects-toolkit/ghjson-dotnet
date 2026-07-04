@@ -82,6 +82,17 @@ namespace GhJSON.Core.Tests.SchemaModels
         }
 
         [Fact]
+        public void ToCompact_DoesNotUseScientificNotation()
+        {
+            var pivot = new GhJsonPivot(1e-4, 1e3);
+            var compact = pivot.ToCompact();
+
+            Assert.DoesNotContain('E', compact);
+            Assert.DoesNotContain('e', compact);
+            Assert.Equal("0.0001,1000", compact);
+        }
+
+        [Fact]
         public void PointFConversion_IsBidirectional()
         {
             var pivot = new GhJsonPivot(10, 20);

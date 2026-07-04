@@ -91,6 +91,40 @@ namespace GhJSON.Core.Tests.DocumentCreation
         }
 
         [Fact]
+        public void Build_CompactPivotString_IsSchemaValid()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    InstanceGuid = Guid.NewGuid(),
+                    Pivot = new GhJsonPivot(100.5, 200.25),
+                })
+                .Build();
+
+            Assert.NotNull(doc);
+            Assert.Single(doc.Components);
+        }
+
+        [Fact]
+        public void Build_CompactPivotString_ScientificNotation_IsSchemaValid()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    InstanceGuid = Guid.NewGuid(),
+                    Pivot = new GhJsonPivot(1e-10, 1e10),
+                })
+                .Build();
+
+            Assert.NotNull(doc);
+            Assert.Single(doc.Components);
+        }
+
+        [Fact]
         public void WithMetadata_SetsMetadata()
         {
             var metadata = new GhJsonMetadata { Title = "Test" };

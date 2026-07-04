@@ -86,15 +86,19 @@ namespace GhJSON.Core.SchemaModels
 
         /// <summary>
         /// Converts this pivot to compact string format "X,Y".
+        /// Uses a fixed-point format that avoids scientific notation so the output always
+        /// conforms to the GhJSON schema pattern for compact pivots.
         /// </summary>
         /// <returns>The compact string representation.</returns>
         public string ToCompact()
         {
+            // Fixed-point, 4-decimal precision: no scientific notation, no trailing zeros,
+            // and adequate precision for Grasshopper canvas coordinates.
             return string.Format(
                 CultureInfo.InvariantCulture,
                 "{0},{1}",
-                this.X,
-                this.Y);
+                this.X.ToString("0.####", CultureInfo.InvariantCulture),
+                this.Y.ToString("0.####", CultureInfo.InvariantCulture));
         }
 
         /// <inheritdoc/>

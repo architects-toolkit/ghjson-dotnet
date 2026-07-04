@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Integer-only pivot coordinates**
+  - `GhJsonPivot.X` and `GhJsonPivot.Y` are now `int` and the v1.0 schema only accepts integer coordinates
+  - Compact `"X,Y"` and object `{x,y}` formats no longer allow decimal values
+  - Fractional Grasshopper canvas coordinates are rounded to the nearest integer when serialized
+  - `PivotConverter` now emits the object `{x,y}` form by default so schema validation is unambiguous and no longer depends on a regex pattern over the compact string
 - **Paginated output respects `IncludeMetadata`**
   - When `IncludeMetadata` is `false`, the metadata block is suppressed unless pagination is required (multi-page documents)
   - When pagination is required, only the `pagination` object is emitted; title, counts, generator, and version fields are omitted

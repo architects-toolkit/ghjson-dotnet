@@ -239,7 +239,7 @@ namespace GhJSON.Core.Tests.Validation
         public void Validate_DocumentBuilderWithCompactPivot_ReturnsSuccess()
         {
             var doc = GhJson.CreateDocumentBuilder()
-                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1, Pivot = new GhJsonPivot(100.5, 200.25) })
+                .AddComponent(new GhJsonComponent { Name = "Addition", Id = 1, Pivot = new GhJsonPivot(100, 200) })
                 .Build();
 
             var result = GhJson.Validate(doc);
@@ -371,6 +371,137 @@ namespace GhJSON.Core.Tests.Validation
             var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1}]}";
 
             Assert.True(GhJson.IsValid(json));
+        }
+
+        [Fact]
+        public void Validate_RuntimeData_ReturnsSuccess()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    Pivot = new GhJsonPivot(100, 200),
+                    OutputSettings = new List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings
+                        {
+                            ParameterName = "Result",
+                            RuntimeData = new Dictionary<string, Dictionary<string, string>>
+                            {
+                                ["{0}"] = new Dictionary<string, string>
+                                {
+                                    ["{0}(0)"] = "int:7",
+                                },
+                            },
+                        },
+                    },
+                })
+                .Build();
+
+            var result = GhJson.Validate(doc);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
+        }
+
+        [Fact]
+        public void Validate_FullComponentWithRuntimeData_ReturnsSuccess()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    ComponentGuid = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    InstanceGuid = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                    Pivot = new GhJsonPivot(100, 200),
+                    InputSettings = new List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings { ParameterName = "A" },
+                        new GhJsonParameterSettings { ParameterName = "B" },
+                    },
+                    OutputSettings = new List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings
+                        {
+                            ParameterName = "Result",
+                            RuntimeData = new Dictionary<string, Dictionary<string, string>>
+                            {
+                                ["{0}"] = new Dictionary<string, string>
+                                {
+                                    ["{0}(0)"] = "int:7",
+                                },
+                            },
+                        },
+                    },
+                })
+                .Build();
+
+            var result = GhJson.Validate(doc);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
+        }
+
+        [Fact]
+        public void Serialize_RuntimeData_PivotIsObject()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    Pivot = new GhJsonPivot(100, 200),
+                    OutputSettings = new List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings
+                        {
+                            ParameterName = "Result",
+                            RuntimeData = new Dictionary<string, Dictionary<string, string>>
+                            {
+                                ["{0}"] = new Dictionary<string, string>
+                                {
+                                    ["{0}(0)"] = "integer:7",
+                                },
+                            },
+                        },
+                    },
+                })
+                .Build();
+
+            var json = GhJson.ToJson(doc, new GhJSON.Core.Serialization.WriteOptions { Indented = false });
+
+            Assert.Contains("\"pivot\":{\"x\":100,\"y\":200}", json);
+            Assert.Contains("\"runtimeData\"", json);
+        }
+
+        [Fact]
+        public void Validate_RuntimeDataOnInputSettings_ReturnsSuccess()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Addition",
+                    Id = 1,
+                    InputSettings = new List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings
+                        {
+                            ParameterName = "A",
+                            RuntimeData = new Dictionary<string, Dictionary<string, string>>
+                            {
+                                ["{0}"] = new Dictionary<string, string>
+                                {
+                                    ["{0}(0)"] = "int:7",
+                                },
+                            },
+                        },
+                    },
+                })
+                .Build();
+
+            var result = GhJson.Validate(doc);
+
+            Assert.True(result.IsValid, string.Join("; ", result.Errors.Select(e => e.ToString())));
         }
     }
 }

@@ -26,7 +26,7 @@ namespace GhJSON.Core.Serialization
     /// JSON converter for <see cref="GhJsonPivot"/> that supports both compact string format
     /// and object format as defined in the schema.
     /// </summary>
-    internal sealed class PivotConverter : JsonConverter<GhJsonPivot>
+    public sealed class PivotConverter : JsonConverter<GhJsonPivot>
     {
         /// <inheritdoc/>
         public override GhJsonPivot? ReadJson(
@@ -77,8 +77,15 @@ namespace GhJSON.Core.Serialization
                 return;
             }
 
-            // Always write in compact format for optimization
-            writer.WriteValue(value.ToCompact());
+            // Write as an object so the schema validation is unambiguous and does not depend
+            // on a regex pattern that can fail for certain serialized forms. The object format
+            // is explicitly allowed by the GhJSON schema and keeps integer coordinates visible.
+            writer.WriteStartObject();
+            writer.WritePropertyName("x");
+            writer.WriteValue(value.X);
+            writer.WritePropertyName("y");
+            writer.WriteValue(value.Y);
+            writer.WriteEndObject();
         }
     }
 }

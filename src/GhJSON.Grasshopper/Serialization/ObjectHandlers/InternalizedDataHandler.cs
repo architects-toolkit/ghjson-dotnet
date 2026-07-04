@@ -30,7 +30,7 @@ using Grasshopper.Kernel.Types;
 namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     /// <summary>
-    /// Handler for internalized (persistent) data in parameters.
+    /// Handler for internalized (persistent) and runtime (volatile) data in parameters.
     /// </summary>
     internal sealed class InternalizedDataHandler : IObjectHandler
     {
@@ -56,13 +56,17 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         public void Serialize(IGH_DocumentObject obj, GhJsonComponent component)
         {
 #if DEBUG
-            Debug.WriteLine($"[InternalizedDataHandler.Serialize] Serializing internalized data for: {obj?.Name}, ObjType: {obj?.GetType().Name}");
+            Debug.WriteLine($"[InternalizedDataHandler.Serialize] Serializing data for: {obj?.Name}, ObjType: {obj?.GetType().Name}");
 #endif
 
-            if (ObjectHandlerOrchestrator.CurrentOptions?.IncludeInternalizedData == false)
+            var options = ObjectHandlerOrchestrator.CurrentOptions;
+            bool includeInternalized = options?.IncludeInternalizedData ?? true;
+            bool includeRuntime = options?.IncludeRuntimeData ?? false;
+
+            if (!includeInternalized && !includeRuntime)
             {
 #if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.Serialize] SKIPPED {obj?.Name}: IncludeInternalizedData is false");
+                Debug.WriteLine($"[InternalizedDataHandler.Serialize] SKIPPED {obj?.Name}: both IncludeInternalizedData and IncludeRuntimeData are false");
 #endif
                 return;
             }
@@ -70,9 +74,17 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             if (obj is IGH_Component comp)
             {
 #if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.Serialize] Object is IGH_Component, InputCount: {comp.Params.Input.Count}, InputSettingsCount: {component.InputSettings?.Count}");
+                Debug.WriteLine($"[InternalizedDataHandler.Serialize] Object is IGH_Component, InputCount: {comp.Params.Input.Count}, OutputCount: {comp.Params.Output.Count}, InputSettingsCount: {component.InputSettings?.Count}, OutputSettingsCount: {component.OutputSettings?.Count}");
 #endif
-                SerializeInternalizedData(comp.Params.Input, component.InputSettings);
+                if (includeInternalized)
+                {
+                    SerializeInternalizedData(comp.Params.Input, component.InputSettings);
+                }
+
+                if (includeRuntime)
+                {
+                    SerializeRuntimeData(comp.Params.Output, component.OutputSettings);
+                }
             }
             else if (obj is IGH_Param param)
             {
@@ -88,7 +100,15 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     component.OutputSettings.Add(settings);
                 }
 
-                SerializeParamData(param, settings);
+                if (includeInternalized)
+                {
+                    SerializeParamData(param, settings);
+                }
+
+                if (includeRuntime)
+                {
+                    SerializeParamRuntimeData(param, settings);
+                }
             }
             else
             {
@@ -238,70 +258,87 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             var openParen = itemKey.LastIndexOf('(');
             var closeParen = itemKey.LastIndexOf(')');
-
-            if (openParen < 0 || closeParen <= openParen)
+            if (openParen >= 0 && closeParen > openParen)
             {
-                return int.MaxValue;
+                var indexStr = itemKey.Substring(openParen + 1, closeParen - openParen - 1);
+                if (int.TryParse(indexStr, out var index))
+                {
+                    return index;
+                }
             }
 
-            var indexStr = itemKey.Substring(openParen + 1, closeParen - openParen - 1);
-            return int.TryParse(indexStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx)
-                ? idx
-                : int.MaxValue;
+            return int.MaxValue;
         }
 
-        private static GH_Path ParsePath(string path)
+        private static GH_Path ParsePath(string pathString)
         {
-            if (string.IsNullOrWhiteSpace(path))
+            if (string.IsNullOrWhiteSpace(pathString))
             {
                 return new GH_Path(0);
             }
 
-            var trimmed = path.Trim();
-
-            if (trimmed.StartsWith("{", StringComparison.Ordinal) && trimmed.EndsWith("}", StringComparison.Ordinal))
-            {
-                trimmed = trimmed.Substring(1, trimmed.Length - 2);
-            }
-
-            if (string.IsNullOrWhiteSpace(trimmed))
+            // Strip parentheses if present: "{0;1}" -> "0;1"
+            var clean = pathString.Trim('{', '}', ' ', '\t');
+            if (string.IsNullOrWhiteSpace(clean))
             {
                 return new GH_Path(0);
             }
 
-            var parts = trimmed.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
-            var indices = parts
-                .Select(p => int.Parse(p.Trim(), CultureInfo.InvariantCulture))
-                .ToArray();
+            var parts = clean.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            var indices = new List<int>();
+            foreach (var part in parts)
+            {
+                if (int.TryParse(part.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+                {
+                    indices.Add(index);
+                }
+            }
 
-            return new GH_Path(indices);
+            return indices.Count > 0 ? new GH_Path(indices.ToArray()) : new GH_Path(0);
         }
 
-        private static object CreateGoo(Type gooType, object? value)
+        private static object? CreateGoo(Type gooType, object? value)
         {
-            if (typeof(IGH_Goo).IsAssignableFrom(gooType) && value != null && gooType.IsInstanceOfType(value))
-            {
-                return value;
-            }
-
-            var gooObj = Activator.CreateInstance(gooType);
-            if (gooObj is not IGH_Goo goo)
-            {
-                throw new InvalidOperationException($"Failed to create IGH_Goo instance of type {gooType.FullName}");
-            }
-
             if (value == null)
             {
-                return goo;
+                return null;
             }
 
-            var castOk = goo.CastFrom(value);
-            if (!castOk)
+            try
             {
-                throw new InvalidOperationException($"Failed to cast value '{value}' ({value.GetType().FullName}) to goo type {gooType.FullName}");
+                // Try the (object) constructor first
+                var constructor = gooType.GetConstructor(new[] { value.GetType() });
+                if (constructor != null)
+                {
+                    return constructor.Invoke(new[] { value });
+                }
+
+                // Try a string constructor for text values
+                if (value is string strValue)
+                {
+                    constructor = gooType.GetConstructor(new[] { typeof(string) });
+                    if (constructor != null)
+                    {
+                        return constructor.Invoke(new object?[] { strValue });
+                    }
+                }
+
+                // Try parameterless constructor and set Value property
+                constructor = gooType.GetConstructor(Type.EmptyTypes);
+                if (constructor != null)
+                {
+                    var goo = constructor.Invoke(Array.Empty<object>());
+                    var valueProperty = gooType.GetProperty("Value");
+                    valueProperty?.SetValue(goo, value);
+                    return goo;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[InternalizedDataHandler.CreateGoo] Error creating {gooType.Name}: {ex.Message}");
             }
 
-            return goo;
+            return null;
         }
 
         private static void SerializeInternalizedData(
@@ -322,6 +359,22 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
         }
 
+        private static void SerializeRuntimeData(
+            IList<IGH_Param> parameters,
+            List<GhJsonParameterSettings> settings)
+        {
+            if (parameters == null || settings == null)
+            {
+                return;
+            }
+
+            int count = Math.Min(parameters.Count, settings.Count);
+            for (int i = 0; i < count; i++)
+            {
+                SerializeParamRuntimeData(parameters[i], settings[i]);
+            }
+        }
+
         private static void SerializeParamData(IGH_Param param, GhJsonParameterSettings settings)
         {
 #if DEBUG
@@ -336,47 +389,95 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 return; // No persistent data
             }
 
+            var persistentData = GetPersistentDataStructure(param);
+            if (persistentData == null)
+            {
+                return;
+            }
+
+            var dataTree = SerializeStructureData(persistentData);
+            if (dataTree.Count > 0)
+            {
+                settings.InternalizedData = dataTree;
+#if DEBUG
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SUCCESS: Serialized {dataTree.Count} paths for {param.Name}");
+#endif
+            }
+        }
+
+        private static void SerializeParamRuntimeData(IGH_Param param, GhJsonParameterSettings settings)
+        {
+#if DEBUG
+            Debug.WriteLine($"[InternalizedDataHandler.SerializeParamRuntimeData] Checking param: {param.Name}");
+#endif
+
+            try
+            {
+                var volatileData = param.VolatileData as IGH_Structure;
+                if (volatileData == null || volatileData.IsEmpty)
+                {
+#if DEBUG
+                    Debug.WriteLine($"[InternalizedDataHandler.SerializeParamRuntimeData] SKIPPED {param.Name}: volatile data is null or empty");
+#endif
+                    return;
+                }
+
+                var dataTree = SerializeStructureData(volatileData);
+                if (dataTree.Count > 0)
+                {
+                    settings.RuntimeData = dataTree;
+#if DEBUG
+                    Debug.WriteLine($"[InternalizedDataHandler.SerializeParamRuntimeData] SUCCESS: Serialized {dataTree.Count} paths for {param.Name}");
+#endif
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamRuntimeData] Error reading volatile data for {param.Name}: {ex.Message}");
+            }
+        }
+
+        private static IGH_Structure? GetPersistentDataStructure(IGH_Param param)
+        {
             // Access PersistentData via reflection (it's on GH_PersistentParam<T>, not IGH_Param)
             var persistentDataProperty = ReflectionCache.GetProperty(param.GetType(), "PersistentData");
             if (persistentDataProperty == null)
             {
 #if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: PersistentData property not found on {param.GetType().FullName}");
+                Debug.WriteLine($"[InternalizedDataHandler.GetPersistentDataStructure] SKIPPED {param.Name}: PersistentData property not found on {param.GetType().FullName}");
 #endif
-                return;
+                return null;
             }
 
             var persistentData = persistentDataProperty.GetValue(param) as IGH_Structure;
             if (persistentData == null)
             {
 #if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: persistentData is null");
+                Debug.WriteLine($"[InternalizedDataHandler.GetPersistentDataStructure] SKIPPED {param.Name}: persistentData is null");
 #endif
-                return;
+                return null;
             }
 
             if (persistentData.IsEmpty)
             {
 #if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPED {param.Name}: persistentData is empty");
+                Debug.WriteLine($"[InternalizedDataHandler.GetPersistentDataStructure] SKIPPED {param.Name}: persistentData is empty");
 #endif
-                return;
+                return null;
             }
 
-#if DEBUG
-            Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Serializing {persistentData.Paths.Count} paths for param: {param.Name}");
-#endif
+            return persistentData;
+        }
 
+        private static Dictionary<string, Dictionary<string, string>> SerializeStructureData(IGH_Structure structure)
+        {
             var dataTree = new Dictionary<string, Dictionary<string, string>>();
 
-            foreach (var path in persistentData.Paths)
+            foreach (var path in structure.Paths)
             {
-                var branch = persistentData.get_Branch(path);
+                var branch = structure.get_Branch(path);
                 if (branch == null || branch.Count == 0)
                 {
-#if DEBUG
-                    Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Path {path} has empty or null branch");
-#endif
                     continue;
                 }
 
@@ -388,9 +489,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     var goo = branch[i] as IGH_Goo;
                     if (goo == null)
                     {
-#if DEBUG
-                        Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Item at {path}[{i}] is null or not IGH_Goo");
-#endif
                         continue;
                     }
 
@@ -398,19 +496,12 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     var scriptVar = goo.ScriptVariable();
                     var serialized = DataTypeRegistry.Serialize(scriptVar);
 
-#if DEBUG
-                    Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Item {path}[{i}]: GooType={goo.TypeName}, ScriptVarType={scriptVar?.GetType().Name}, Serialized='{serialized}'");
-#endif
-
                     if (!string.IsNullOrEmpty(serialized))
                     {
                         // Skip empty text values (e.g., "text:" with no content)
                         if (serialized.StartsWith("text:", StringComparison.OrdinalIgnoreCase) &&
                             serialized.Length == "text:".Length)
                         {
-#if DEBUG
-                            Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SKIPPING empty text value at {path}[{i}]");
-#endif
                             continue;
                         }
 
@@ -420,10 +511,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                     {
                         // Fallback to string representation
                         var fallback = $"text:{goo}";
-#if DEBUG
-                        Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] Serialization failed, using fallback: '{fallback}'");
-#endif
-                        // Only add fallback if it has actual content (not just "text:")
                         if (fallback.Length > "text:".Length)
                         {
                             branchData[itemKey] = fallback;
@@ -437,19 +524,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 }
             }
 
-            if (dataTree.Count > 0)
-            {
-                settings.InternalizedData = dataTree;
-#if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] SUCCESS: Serialized {dataTree.Count} paths with data for {param.Name}");
-#endif
-            }
-            else
-            {
-#if DEBUG
-                Debug.WriteLine($"[InternalizedDataHandler.SerializeParamData] WARNING: No data serialized for {param.Name}");
-#endif
-            }
+            return dataTree;
         }
     }
 }

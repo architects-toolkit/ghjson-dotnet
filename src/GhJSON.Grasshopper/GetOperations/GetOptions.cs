@@ -62,6 +62,11 @@ namespace GhJSON.Grasshopper.GetOperations
         public bool IncludeInternalizedData { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a value indicating whether to include runtime (volatile) data.
+        /// </summary>
+        public bool IncludeRuntimeData { get; set; } = false;
+
+        /// <summary>
         /// Gets or sets a value indicating whether to include runtime messages.
         /// </summary>
         public bool IncludeRuntimeMessages { get; set; } = false;

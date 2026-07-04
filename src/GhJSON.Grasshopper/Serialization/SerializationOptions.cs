@@ -35,6 +35,11 @@ namespace GhJSON.Grasshopper.Serialization
         public bool IncludeInternalizedData { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a value indicating whether to include runtime (volatile) data.
+        /// </summary>
+        public bool IncludeRuntimeData { get; set; } = false;
+
+        /// <summary>
         /// Gets or sets the one-based page index when paginating the result.
         /// When null, no pagination is applied.
         /// </summary>

@@ -125,5 +125,12 @@ namespace GhJSON.Core.SchemaModels
         /// </summary>
         [JsonProperty("internalizedData", NullValueHandling = NullValueHandling.Ignore)]
         public Dictionary<string, Dictionary<string, string>>? InternalizedData { get; set; }
+
+        /// <summary>
+        /// Gets or sets the runtime (volatile) data for the parameter.
+        /// Uses the same data-tree format as <see cref="InternalizedData"/>.
+        /// </summary>
+        [JsonProperty("runtimeData", NullValueHandling = NullValueHandling.Ignore)]
+        public Dictionary<string, Dictionary<string, string>>? RuntimeData { get; set; }
     }
 }

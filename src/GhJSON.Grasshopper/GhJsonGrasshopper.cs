@@ -56,6 +56,7 @@ namespace GhJSON.Grasshopper
                 IncludeConnections = options.IncludeConnections,
                 IncludeGroups = options.IncludeGroups,
                 IncludeInternalizedData = options.IncludeInternalizedData,
+                IncludeRuntimeData = options.IncludeRuntimeData,
                 IncludeRuntimeMessages = options.IncludeRuntimeMessages,
                 IncludeSelectedState = options.IncludeSelectedState,
                 IncludeMetadata = options.IncludeMetadata,

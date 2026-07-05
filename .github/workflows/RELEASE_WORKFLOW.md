@@ -56,7 +56,7 @@ The release workflow allows you to:
 1. Close the milestone associated with the release
 2. This triggers:
    - **📝 Normalize Headers** — Creates a PR to normalize license headers
-   - **Create Release Draft** — Creates a draft GitHub release
+   - **Create Release Draft** — Creates a draft GitHub release with an AI-generated developer-oriented description of new features, breaking changes, and deprecations derived from the changelog
 
 ### Step 6: Publish Release
 
@@ -116,6 +116,8 @@ Follows [Semantic Versioning](https://semver.org/):
 | `actions/versioning/update-version` | Update version in Directory.Build.props |
 | `actions/documentation/update-badges` | Update README version/status badges |
 | `actions/documentation/update-changelog` | Create release sections or add lines to changelog |
+| `actions/ai/mistral-chat` | Generic Mistral AI Chat Completions API wrapper |
+| `actions/documentation/generate-release-notes` | Generate AI-powered developer-oriented release notes from CHANGELOG.md |
 
 ## Troubleshooting
 

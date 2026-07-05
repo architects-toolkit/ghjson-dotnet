@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `patch.components.add` and `patch.groups.add` entries must not specify `instanceGuid`; the updated GhPatch schema prohibits it and `PatchValidator` reports a clear error with the JSON path.
   - `PatchApplier` no longer checks for `instanceGuid` collisions on add; the `PatchConflictKind.InstanceGuidCollision` kind has been replaced by `PatchConflictKind.IdCollision` for id collisions when `RenumberCollidingAddedIds` is disabled.
   - `SchemaLoader` now loads the main GhJSON schema when loading the patch schema so that the patch schema can reference `ghjson.schema.json` definitions.
+- **AI-generated release descriptions**
+  - `milestone-release-draft.yml` now uses the Mistral AI Chat API to generate a developer-oriented release description of new features, breaking changes, and deprecations from the relevant changelog section.
 
 ### Fixed
 

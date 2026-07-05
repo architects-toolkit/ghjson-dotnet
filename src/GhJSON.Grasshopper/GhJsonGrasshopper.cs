@@ -256,6 +256,8 @@ namespace GhJSON.Grasshopper
 
         /// <summary>
         /// Connects two parameters on the active canvas by component GUID and parameter name.
+        /// Executes on the UI thread and records a single undo event. Callers are responsible
+        /// for triggering a canvas redraw or solution recompute after batch operations.
         /// </summary>
         /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
         /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
@@ -268,34 +270,38 @@ namespace GhJSON.Grasshopper
             string? sourceParamName = null,
             string? targetParamName = null)
         {
-            var doc = CanvasReader.GetActiveDocument();
-            if (doc == null)
-            {
-                return false;
-            }
+            return CanvasConnector.Connect(sourceGuid, targetGuid, sourceParamName, targetParamName);
+        }
 
-            var sourceObj = doc.FindObject(sourceGuid, true);
-            var targetObj = doc.FindObject(targetGuid, true);
-            if (sourceObj == null || targetObj == null)
-            {
-                return false;
-            }
+        /// <summary>
+        /// Disconnects two parameters on the active canvas by component GUID and parameter name.
+        /// Executes on the UI thread and records a single undo event. Callers are responsible
+        /// for triggering a canvas redraw or solution recompute after batch operations.
+        /// </summary>
+        /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
+        /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
+        /// <param name="sourceParamName">NickName or Name of the source output parameter. If null or empty, the first output is used.</param>
+        /// <param name="targetParamName">NickName or Name of the target input parameter. If null or empty, the first input is used.</param>
+        /// <returns><c>true</c> if the connection did not exist or was removed.</returns>
+        public static bool Disconnect(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName = null,
+            string? targetParamName = null)
+        {
+            return CanvasConnector.Disconnect(sourceGuid, targetGuid, sourceParamName, targetParamName);
+        }
 
-            var sourceParam = ConnectionHelper.ResolveOutput(sourceObj, sourceParamName);
-            var targetParam = ConnectionHelper.ResolveInput(targetObj, targetParamName);
-
-            if (sourceParam == null || targetParam == null)
-            {
-                return false;
-            }
-
-            if (targetParam.Sources.Contains(sourceParam))
-            {
-                return true;
-            }
-
-            targetParam.AddSource(sourceParam);
-            return true;
+        /// <summary>
+        /// Captures all wires that connect the given objects to objects outside the set.
+        /// This is useful when replacing components: external connections can be restored
+        /// after the new objects are placed.
+        /// </summary>
+        /// <param name="guids">Instance GUIDs of the objects whose external connections should be captured.</param>
+        /// <returns>A list of external connections, each from source to target.</returns>
+        public static IReadOnlyList<ConnectionInfo> CaptureExternalConnections(IEnumerable<Guid> guids)
+        {
+            return CanvasConnector.CaptureExternalConnections(guids);
         }
 
         #endregion

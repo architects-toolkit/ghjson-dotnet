@@ -141,5 +141,28 @@ namespace GhJSON.Grasshopper.ConnectionOperations
 
             return null;
         }
+
+        /// <summary>
+        /// Finds the document object that owns a parameter.
+        /// Stand-alone parameters are returned as themselves; parameters owned by a
+        /// component return that component.
+        /// </summary>
+        /// <param name="param">The parameter whose owner is required.</param>
+        /// <param name="objects">The document objects to search.</param>
+        /// <returns>The owning document object, or null if not found.</returns>
+        public static IGH_DocumentObject? FindOwner(IGH_Param param, IEnumerable<IGH_DocumentObject> objects)
+        {
+            if (param == null)
+            {
+                return null;
+            }
+
+            var owner = objects.FirstOrDefault(o => ReferenceEquals(o, param));
+            owner ??= objects
+                .OfType<IGH_Component>()
+                .FirstOrDefault(comp => comp.Params.Input.Contains(param) || comp.Params.Output.Contains(param));
+
+            return owner;
+        }
     }
 }

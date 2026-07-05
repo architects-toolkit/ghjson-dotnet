@@ -36,8 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Thread-Safe Canvas Operations
 
 - **Thread-safe connection helper** (`GhJSON.Grasshopper.ConnectionOperations.CanvasConnector`)
-  - `GhJsonGrasshopper.Connect()` now marshals canvas access to the Rhino UI thread and blocks until completion, matching the deletion helper pattern
-  - Prevents "Cross-thread operation not valid" errors when connecting components from non-UI threads (e.g., MCP/AI tool calls)
+  - `GhJsonGrasshopper.Connect()` now delegates to `CanvasConnector`, marshaling canvas access to the Rhino UI thread, recording a single undo event, and blocking until completion, matching the deletion helper pattern
+  - Added `GhJsonGrasshopper.Disconnect()` to remove wires between components with the same UI-thread safety and undo support
+  - Added `GhJsonGrasshopper.CaptureExternalConnections()` to capture all wires that connect a set of components to components outside the set, enabling replacement workflows to preserve external wiring
+  - Prevents "Cross-thread operation not valid" errors when connecting or disconnecting components from non-UI threads (e.g., MCP/AI tool calls)
 
 ### Changed
 

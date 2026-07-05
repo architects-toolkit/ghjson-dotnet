@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.Json.Nodes;
 using GhJSON.Core.PatchModels;
 using GhJSON.Core.Validation;
@@ -143,29 +144,79 @@ namespace GhJSON.Core.DiffOperations
             }
         }
 
-        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root, bool skipDescendants = false)
+        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root)
         {
-            yield return root;
+            var orderedNodes = new List<EvaluationResults>();
+            var seenNodes = new HashSet<EvaluationResults>();
+            CollectNodes(root, orderedNodes, seenNodes);
 
-            if (skipDescendants || root.Details == null)
-            {
-                yield break;
-            }
+            // In List output format, anyOf/oneOf branches may appear as siblings. If at least
+            // one branch is valid, the failing siblings are not useful because the schema is
+            // satisfied by another branch; suppress them to avoid misleading errors.
+            var suppressedNodes = new HashSet<EvaluationResults>();
+            var branchesByParent = orderedNodes
+                .Where(IsAnyOfOrOneOfBranch)
+                .GroupBy(GetAnyOfOrOneOfParentPath)
+                .ToList();
 
-            bool shouldSkipDescendants = root.IsValid && IsAnyOfOrOneOfKeyword(root);
-            foreach (var child in root.Details)
+            foreach (var group in branchesByParent)
             {
-                foreach (var node in FlattenDetails(child, shouldSkipDescendants))
+                if (group.Any(b => b.IsValid))
                 {
-                    yield return node;
+                    foreach (var branch in group)
+                    {
+                        suppressedNodes.Add(branch);
+                    }
                 }
             }
+
+            foreach (var node in orderedNodes)
+            {
+                if (suppressedNodes.Contains(node))
+                {
+                    continue;
+                }
+
+                yield return node;
+            }
         }
 
-        private static bool IsAnyOfOrOneOfKeyword(EvaluationResults result)
+        private static void CollectNodes(EvaluationResults node, List<EvaluationResults> orderedNodes, HashSet<EvaluationResults> seenNodes)
+        {
+            if (!seenNodes.Add(node))
+            {
+                return;
+            }
+
+            orderedNodes.Add(node);
+
+            if (node.Details == null)
+            {
+                return;
+            }
+
+            foreach (var child in node.Details)
+            {
+                CollectNodes(child, orderedNodes, seenNodes);
+            }
+        }
+
+        private static bool IsAnyOfOrOneOfBranch(EvaluationResults result)
         {
             var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
-            return schemaPath.EndsWith("/anyOf") || schemaPath.EndsWith("/oneOf");
+            return AnyOfOrOneOfBranchPattern.IsMatch(schemaPath);
         }
+
+        private static string GetAnyOfOrOneOfParentPath(EvaluationResults result)
+        {
+            var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
+            var match = AnyOfOrOneOfBranchPattern.Match(schemaPath);
+            return match.Success ? schemaPath.Substring(0, match.Index) : schemaPath;
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex AnyOfOrOneOfBranchPattern =
+            new System.Text.RegularExpressions.Regex(
+                @"/(anyOf|oneOf)/\d+$",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
     }
 }

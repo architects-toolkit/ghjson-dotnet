@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Linq;
 using GhJSON.Core.Validation;
 using Xunit;
 
@@ -169,6 +170,40 @@ namespace GhJSON.Core.Tests.Validation
             var result = GhJson.ValidatePatch(json, preferOnline: true);
 
             Assert.True(result.IsValid, string.Join("; ", result.Errors.ConvertAll(e => e.Message)));
+        }
+
+        [Fact]
+        public void ValidatePatch_UnknownComponentMatchProperty_DoesNotEmitAnyOfBranchErrors()
+        {
+            // componentMatch uses anyOf for identity (instanceGuid, id, componentGuid) with
+            // additionalProperties:false. A match with id plus an unknown property should only
+            // report the unknown property, not misleading errors about missing instanceGuid
+            // or componentGuid from the failing anyOf branches.
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"components\":{\"remove\":[{\"id\":1,\"unknownField\":true}]}}}";
+
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.False(result.IsValid);
+            Assert.Contains("unknownField", messages);
+            Assert.DoesNotContain("instanceGuid", messages);
+            Assert.DoesNotContain("componentGuid", messages);
+        }
+
+        [Fact]
+        public void ValidatePatch_ComponentMatchAnyOfAllBranchesFail_EmitsBranchErrors()
+        {
+            // When no componentMatch identity branch is satisfied, the failing branch errors
+            // should still be surfaced so the caller can see why matching failed.
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"components\":{\"remove\":[{\"pivot\":\"100,200\"}]}}}";
+
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            System.Console.WriteLine("Errors: " + string.Join("\n", result.Errors.Select(e => e.ToString())));
+            var messages = string.Join("\n", result.Errors.Select(e => e.Message));
+            Assert.False(result.IsValid);
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("componentGuid", messages);
         }
     }
 }

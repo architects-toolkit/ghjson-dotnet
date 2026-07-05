@@ -495,30 +495,47 @@ namespace GhJSON.Core.Validation
             }
         }
 
-        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root, bool skipDescendants = false)
+        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root)
         {
             yield return root;
 
-            if (skipDescendants || root.Details == null)
+            if (root.Details == null)
             {
                 yield break;
             }
 
-            bool shouldSkipDescendants = root.IsValid && IsAnyOfOrOneOfKeyword(root);
+            // In List output format, anyOf/oneOf branches appear as direct children.
+            // If at least one branch is valid, the failing siblings are not useful because the
+            // schema is satisfied by another branch; suppress them to avoid misleading errors.
+            var anyOfOrOneOfBranches = root.Details
+                .Where(d => IsAnyOfOrOneOfBranch(d))
+                .ToList();
+            bool anyBranchValid = anyOfOrOneOfBranches.Any(b => b.IsValid);
+
             foreach (var child in root.Details)
             {
-                foreach (var node in FlattenDetails(child, shouldSkipDescendants))
+                if (anyBranchValid && IsAnyOfOrOneOfBranch(child))
+                {
+                    continue;
+                }
+
+                foreach (var node in FlattenDetails(child))
                 {
                     yield return node;
                 }
             }
         }
 
-        private static bool IsAnyOfOrOneOfKeyword(EvaluationResults result)
+        private static bool IsAnyOfOrOneOfBranch(EvaluationResults result)
         {
             var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
-            return schemaPath.EndsWith("/anyOf") || schemaPath.EndsWith("/oneOf");
+            return AnyOfOrOneOfBranchPattern.IsMatch(schemaPath);
         }
+
+        private static readonly System.Text.RegularExpressions.Regex AnyOfOrOneOfBranchPattern =
+            new System.Text.RegularExpressions.Regex(
+                @"/(anyOf|oneOf)/\d+$",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
 
         private static void ValidateComponents(GhJsonDocument document, ValidationResult result)
         {

@@ -177,6 +177,7 @@ namespace GhJSON.Grasshopper.Serialization
             // Extension handlers (priority 100) - component-specific, run after core
             Register(new NumberSliderHandler());
             Register(new PanelHandler());
+            Register(new FilePathHandler());
             Register(new ScribbleHandler());
             Register(new ValueListHandler());
             Register(new ButtonHandler());

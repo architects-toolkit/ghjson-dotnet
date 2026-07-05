@@ -91,5 +91,39 @@ namespace GhJSON.Core.Tests.Validation
             // Unknown property does not trigger schema error at Minimal level.
             Assert.True(result.IsValid);
         }
+
+        [Fact]
+        public void Validate_UnknownComponentProperty_DoesNotEmitAnyOfBranchErrors()
+        {
+            // The componentData schema uses anyOf for identity (name+id, name+instanceGuid,
+            // componentGuid+id, componentGuid+instanceGuid) with additionalProperties:false.
+            // A component with name+id plus an unknown property should only report the unknown
+            // property, not misleading errors about missing identity fields from the failing
+            // anyOf branches.
+            const string json = "{\"components\":[{\"name\":\"Addition\",\"id\":1,\"unknownField\":true}],\"connections\":[]}";
+
+            var result = GhJson.Validate(json, preferOnline: false);
+
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.False(result.IsValid);
+            Assert.Contains("unknownField", messages);
+            Assert.DoesNotContain("instanceGuid", messages);
+            Assert.DoesNotContain("componentGuid", messages);
+        }
+
+        [Fact]
+        public void Validate_IdentityAnyOfAllBranchesFail_EmitsBranchErrors()
+        {
+            // When no identity branch is satisfied, the errors from the failing branches
+            // should still be surfaced so the caller can see why identification failed.
+            const string json = "{\"components\":[{\"name\":\"Addition\"}],\"connections\":[]}";
+
+            var result = GhJson.Validate(json, preferOnline: false);
+
+            var messages = string.Join("\n", result.Errors.Select(e => e.Message));
+            Assert.False(result.IsValid);
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("componentGuid", messages);
+        }
     }
 }

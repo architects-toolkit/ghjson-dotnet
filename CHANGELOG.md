@@ -26,6 +26,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Merges group members across pages and removes empty groups
   - Strips pagination metadata and recomputes counts
 
+#### Component State Serialization
+
+- **File Path floating parameter support** (`GhJSON.Grasshopper.Serialization.ObjectHandlers.FilePathHandler`)
+  - Serializes the file filter and `ExpireOnFileEvent` flag via the new `gh.filepath` extension schema
+  - The actual file path is preserved through existing internalized data serialization
+  - Added `gh.filepath` schema to the official GhJSON v1.0 extension registry
+
+#### Thread-Safe Canvas Operations
+
+- **Thread-safe connection helper** (`GhJSON.Grasshopper.ConnectionOperations.CanvasConnector`)
+  - `GhJsonGrasshopper.Connect()` now marshals canvas access to the Rhino UI thread and blocks until completion, matching the deletion helper pattern
+  - Prevents "Cross-thread operation not valid" errors when connecting components from non-UI threads (e.g., MCP/AI tool calls)
+
 ### Changed
 
 - **Integer-only pivot coordinates**
@@ -37,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - When `IncludeMetadata` is `false`, the metadata block is suppressed unless pagination is required (multi-page documents)
   - When pagination is required, only the `pagination` object is emitted; title, counts, generator, and version fields are omitted
   - Single-page documents never include `pagination`, even when `IncludeMetadata` is `true`
+
+### Fixed
+
+- **Confusing GhJSON validator error messages** when schema validation uses `anyOf`/`oneOf` identity branches
+  - `GhJsonValidator.FlattenDetails` and `PatchValidator.FlattenDetails` now suppress errors from failing `anyOf`/`oneOf` branches when another branch is valid
+  - Previously, valid components could report misleading "missing instanceGuid/componentGuid" errors alongside the real issue (e.g., an unknown property)
+- `ComponentNameResolver` `"string"` and `"str"` aliases now resolve to `"Panel"` (Grasshopper Panel) instead of ambiguous `"Text"`, which could resolve to third-party components such as Mandrill Text
 
 ## [1.1.0] - 2026-06-19
 

@@ -32,6 +32,13 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// <summary>
     /// Handler for Number Slider component state.
     /// Serializes value, interval, and rounding settings.
+    /// <para>
+    /// The slider value is stored in <c>componentState.extensions["gh.numberslider"].value</c>
+    /// using the compact format <c>current&lt;min~max&gt;</c>. For example, a slider with
+    /// minimum 5, current value 10 and maximum 50 is encoded as <c>10&lt;5~50&gt;</c>.
+    /// After round-trip serialization trailing zeros are normalized, so <c>10&lt;5~50.00&gt;</c>
+    /// is reported back as <c>10&lt;5~50&gt;</c>.
+    /// </para>
     /// </summary>
     internal sealed class NumberSliderHandler : IObjectHandler
     {

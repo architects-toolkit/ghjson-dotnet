@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Number Slider value format documented**
+  - `componentState.extensions["gh.numberslider"].value` uses the compact format `current<min~max>` (e.g. `10<5~50>` for min=5, value=10, max=50)
+  - Trailing zeros are normalized on round-trip, so `10<5~50.00>` is reported back as `10<5~50>`
+  - Documented in the GhJSON.NET Usage Guide, `NumberSliderHandler` XML docstring, and the `gh_get`/`gh_put` MCP tool descriptions
+
 - **Integer-only pivot coordinates**
   - `GhJsonPivot.X` and `GhJsonPivot.Y` are now `int` and the v1.0 schema only accepts integer coordinates
   - Compact `"X,Y"` and object `{x,y}` formats no longer allow decimal values

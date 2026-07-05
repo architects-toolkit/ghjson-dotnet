@@ -221,6 +221,29 @@ var doc = GhJson.CreateDocumentBuilder()
     .Build();
 ```
 
+## Component-Specific State
+
+Some Grasshopper components store custom state in `componentState.extensions`. Each extension is keyed by an identifier and consumed by the matching object handler during deserialization.
+
+### Number Slider
+
+Number Slider values are stored under the `gh.numberslider` extension using the compact format `current<min~max>` (note the trailing `>`):
+
+```json
+{
+  "name": "Number Slider",
+  "componentState": {
+    "extensions": {
+      "gh.numberslider": {
+        "value": "10<5~50>"
+      }
+    }
+  }
+}
+```
+
+The example above represents a slider with minimum `5`, current value `10`, and maximum `50`. After round-trip serialization, trailing zeros are normalized, so `10<5~50.00>` is reported back as `10<5~50>`.
+
 ## Fix Operations
 
 ```csharp

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -243,7 +243,7 @@ namespace GhJSON.Grasshopper.Deserialization
                 var scored = matches.Select(m => new
                 {
                     Proxy = m,
-                    Score = ComponentTypeResolver.CalculateTypePriorityScore(m.Type?.Name),
+                    Score = ComponentTypeResolver.CalculateTypePriorityScore(m.Type),
                     TypeName = m.Type?.Name ?? "unknown"
                 }).OrderByDescending(x => x.Score).ToList();
 
@@ -255,7 +255,7 @@ namespace GhJSON.Grasshopper.Deserialization
 #endif
 
                 return matches
-                    .OrderByDescending(m => ComponentTypeResolver.CalculateTypePriorityScore(m.Type?.Name))
+                    .OrderByDescending(m => ComponentTypeResolver.CalculateTypePriorityScore(m.Type))
                     .First();
             }
             catch (Exception ex)

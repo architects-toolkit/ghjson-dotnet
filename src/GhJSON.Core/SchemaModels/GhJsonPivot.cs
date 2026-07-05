@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+using System;
 using System.Drawing;
 using System.Globalization;
 using Newtonsoft.Json;
@@ -22,7 +23,7 @@ using Newtonsoft.Json;
 namespace GhJSON.Core.SchemaModels
 {
     /// <summary>
-    /// Represents the position of a component on the Grasshopper canvas.
+    /// Represents the integer position of a component on the Grasshopper canvas.
     /// Supports both compact string format "X,Y" and object format with x/y properties.
     /// </summary>
     public sealed class GhJsonPivot
@@ -31,13 +32,13 @@ namespace GhJSON.Core.SchemaModels
         /// Gets or sets the X coordinate on the canvas.
         /// </summary>
         [JsonProperty("x")]
-        public double X { get; set; }
+        public int X { get; set; }
 
         /// <summary>
         /// Gets or sets the Y coordinate on the canvas.
         /// </summary>
         [JsonProperty("y")]
-        public double Y { get; set; }
+        public int Y { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="GhJsonPivot"/> class.
@@ -51,7 +52,7 @@ namespace GhJSON.Core.SchemaModels
         /// </summary>
         /// <param name="x">The X coordinate.</param>
         /// <param name="y">The Y coordinate.</param>
-        public GhJsonPivot(double x, double y)
+        public GhJsonPivot(int x, int y)
         {
             this.X = x;
             this.Y = y;
@@ -75,8 +76,8 @@ namespace GhJSON.Core.SchemaModels
                 return null;
             }
 
-            if (double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) &&
-                double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y))
+            if (int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var x) &&
+                int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var y))
             {
                 return new GhJsonPivot(x, y);
             }
@@ -86,6 +87,8 @@ namespace GhJSON.Core.SchemaModels
 
         /// <summary>
         /// Converts this pivot to compact string format "X,Y".
+        /// Uses an integer format so the output always conforms to the GhJSON schema
+        /// pattern for compact pivots.
         /// </summary>
         /// <returns>The compact string representation.</returns>
         public string ToCompact()
@@ -93,8 +96,8 @@ namespace GhJSON.Core.SchemaModels
             return string.Format(
                 CultureInfo.InvariantCulture,
                 "{0},{1}",
-                this.X,
-                this.Y);
+                this.X.ToString(CultureInfo.InvariantCulture),
+                this.Y.ToString(CultureInfo.InvariantCulture));
         }
 
         /// <inheritdoc/>
@@ -109,12 +112,22 @@ namespace GhJSON.Core.SchemaModels
         /// <returns>A new PointF instance.</returns>
         public PointF ToPointF()
         {
-            return new PointF((float)this.X, (float)this.Y);
+            return new PointF(this.X, this.Y);
         }
 
+        /// <summary>
+        /// Creates a pivot from a PointF, rounding fractional coordinates to the nearest integer.
+        /// </summary>
+        /// <param name="point">The point to convert.</param>
+        /// <returns>A new pivot instance.</returns>
         public static GhJsonPivot FromPointF(PointF point)
         {
-            return new GhJsonPivot(point.X, point.Y);
+            return new GhJsonPivot(Round(point.X), Round(point.Y));
+        }
+
+        private static int Round(float value)
+        {
+            return (int)Math.Round(value, MidpointRounding.AwayFromZero);
         }
     }
 }

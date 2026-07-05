@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using GhJSON.Grasshopper.GetOperations;
 using Grasshopper;
 using Grasshopper.Kernel;
 
@@ -49,7 +50,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var document = Instances.ActiveCanvas?.Document;
+            var document = CanvasReader.GetActiveDocument();
             if (document == null)
             {
                 Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document; skipping.");

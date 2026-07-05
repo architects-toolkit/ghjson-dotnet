@@ -107,6 +107,12 @@ namespace GhJSON.Core.SchemaModels
         public int? GroupCount { get; set; }
 
         /// <summary>
+        /// Gets or sets pagination information when the document contains only a subset of components.
+        /// </summary>
+        [JsonProperty("pagination", NullValueHandling = NullValueHandling.Ignore)]
+        public GhJsonPagination? Pagination { get; set; }
+
+        /// <summary>
         /// Gets or sets name of the tool that generated this GhJSON file.
         /// </summary>
         [JsonProperty("generatorName", NullValueHandling = NullValueHandling.Ignore)]

@@ -82,8 +82,11 @@ namespace GhJSON.Core.NameResolution
             { "int", "Integer" },
             { "boolean", "Boolean" },
             { "bool", "Boolean" },
-            { "str", "Text" },
-            { "string", "Text" },
+            { "str", "Panel" },
+            { "string", "Panel" },
+            { "filepath", "File Path" },
+            { "file path", "File Path" },
+            { "file", "File Path" },
             { "toggle", "Boolean Toggle" },
             { "booleantoggle", "Boolean Toggle" },
 

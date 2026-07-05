@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -224,6 +224,11 @@ namespace GhJSON.Core.Validation
         /// <summary>
         /// Loads the schema bundle from embedded resources.
         /// </summary>
+        /// <remarks>
+        /// Schemas are loaded in alphabetical order so that dependency references resolve
+        /// correctly: extension schemas first, then the main GhJSON schema, then the patch
+        /// schema which references the main schema definitions.
+        /// </remarks>
         private static Bundle LoadEmbedded(string version)
         {
             var prefix = GetEmbeddedResourcePrefix(version);
@@ -231,6 +236,8 @@ namespace GhJSON.Core.Validation
             var resourceNames = assembly.GetManifestResourceNames()
                 .Where(n => n.StartsWith(prefix, StringComparison.Ordinal)
                             && n.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(n => GetResourceLoadOrder(n))
+                .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             if (resourceNames.Count == 0)
@@ -278,6 +285,10 @@ namespace GhJSON.Core.Validation
 
         private static JsonSchema LoadPatchSchemaEmbedded(string version)
         {
+            // Ensure the main GhJSON schema is registered so that the patch schema can
+            // reference definitions in ghjson.schema.json (e.g. componentData, groupData).
+            LoadEmbedded(version);
+
             var prefix = GetEmbeddedResourcePrefix(version);
             var resourceName = prefix + PatchSchemaFileName;
             var assembly = typeof(SchemaLoader).Assembly;
@@ -291,6 +302,27 @@ namespace GhJSON.Core.Validation
             var baseUrl = "https://architects-toolkit.github.io/ghjson-spec/schema/".TrimEnd('/');
             var versionUrl = $"{baseUrl}/v{version}/";
             var httpClient = LazyHttpClient.Value;
+
+            // Load the main GhJSON schema first so that the patch schema can resolve
+            // references such as ghjson.schema.json#/$defs/componentData.
+            var mainUrl = versionUrl + MainSchemaFileName;
+            try
+            {
+                using var response = await httpClient.GetAsync(mainUrl, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                var mainText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var mainSchema = JsonSchema.FromText(mainText);
+                var id = mainSchema.GetId();
+                if (id != null)
+                {
+                    SchemaRegistry.Global.Register(id, mainSchema);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Failed to download main schema from {mainUrl}: {ex.Message}");
+                throw;
+            }
 
             var patchUrl = versionUrl + PatchSchemaFileName;
             try
@@ -440,6 +472,35 @@ namespace GhJSON.Core.Validation
             }
 
             return refs;
+        }
+
+        /// <summary>
+        /// Returns the load-priority category for an embedded schema resource.
+        /// </summary>
+        /// <remarks>
+        /// JsonSchema.Net resolves references during the <see cref="JsonSchema.FromText"/> build
+        /// phase, so referenced schemas must be loaded before the schemas that reference them.
+        /// Order: individual extension schemas first, then the extension registry, then the main
+        /// GhJSON schema, then the patch schema which references the main schema definitions.
+        /// </remarks>
+        private static int GetResourceLoadOrder(string resourceName)
+        {
+            if (resourceName.EndsWith("ghpatch.schema.json", StringComparison.OrdinalIgnoreCase))
+            {
+                return 3;
+            }
+
+            if (resourceName.EndsWith("ghjson.schema.json", StringComparison.OrdinalIgnoreCase))
+            {
+                return 2;
+            }
+
+            if (resourceName.EndsWith("extensions.schema.json", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1;
+            }
+
+            return 0;
         }
 
         private static string ReadResource(Assembly assembly, string resourceName)

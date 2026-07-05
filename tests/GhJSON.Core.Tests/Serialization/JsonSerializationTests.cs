@@ -146,23 +146,23 @@ namespace GhJSON.Core.Tests.Serialization
         [Fact]
         public void PivotConverter_HandlesStringFormat()
         {
-            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":""100.5,200.5""}]}";
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":""100,200""}]}";
             var doc = GhJson.FromJson(json);
 
             Assert.NotNull(doc.Components[0].Pivot);
-            Assert.Equal(100.5, doc.Components[0].Pivot.X);
-            Assert.Equal(200.5, doc.Components[0].Pivot.Y);
+            Assert.Equal(100, doc.Components[0].Pivot.X);
+            Assert.Equal(200, doc.Components[0].Pivot.Y);
         }
 
         [Fact]
         public void PivotConverter_HandlesObjectFormat()
         {
-            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":{""x"":100.5,""y"":200.5}}]}";
+            var json = @"{""schema"":""1.0"",""components"":[{""name"":""Addition"",""id"":1,""pivot"":{""x"":100,""y"":200}}]}";
             var doc = GhJson.FromJson(json);
 
             Assert.NotNull(doc.Components[0].Pivot);
-            Assert.Equal(100.5, doc.Components[0].Pivot.X);
-            Assert.Equal(200.5, doc.Components[0].Pivot.Y);
+            Assert.Equal(100, doc.Components[0].Pivot.X);
+            Assert.Equal(200, doc.Components[0].Pivot.Y);
         }
     }
 }

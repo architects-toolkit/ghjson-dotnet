@@ -115,7 +115,7 @@ namespace GhJSON.Grasshopper.ConnectionOperations
         }
 
         /// <summary>
-        /// Finds a parameter by index first, then by name/nickname.
+        /// Finds a parameter by name/nickname first, then by index.
         /// This matches the priority used by GhJSON connection placement.
         /// </summary>
         /// <param name="parameters">The list of parameters to search.</param>
@@ -129,14 +129,18 @@ namespace GhJSON.Grasshopper.ConnectionOperations
                 return null;
             }
 
+            if (!string.IsNullOrWhiteSpace(paramName))
+            {
+                var namedMatch = FindParamByNickNameOrName(parameters, paramName);
+                if (namedMatch != null)
+                {
+                    return namedMatch;
+                }
+            }
+
             if (paramIndex.HasValue && paramIndex.Value >= 0 && paramIndex.Value < parameters.Count)
             {
                 return parameters[paramIndex.Value];
-            }
-
-            if (!string.IsNullOrWhiteSpace(paramName))
-            {
-                return FindParamByNickNameOrName(parameters, paramName);
             }
 
             return null;

@@ -59,7 +59,7 @@ namespace GhJSON.Grasshopper.Serialization
         /// <summary>
         /// Gets or sets a value indicating whether to include selected state.
         /// </summary>
-        public bool IncludeSelectedState { get; set; } = false;
+        public bool IncludeSelectedState { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to include connections.

@@ -58,6 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - When pagination is required, only the `pagination` object is emitted; title, counts, generator, and version fields are omitted
   - Single-page documents never include `pagination`, even when `IncludeMetadata` is `true`
 
+- **GhPatch add operations no longer accept `instanceGuid`**
+  - `patch.components.add` and `patch.groups.add` entries must not specify `instanceGuid`; the updated GhPatch schema prohibits it and `PatchValidator` reports a clear error with the JSON path.
+  - `PatchApplier` no longer checks for `instanceGuid` collisions on add; the `PatchConflictKind.InstanceGuidCollision` kind has been replaced by `PatchConflictKind.IdCollision` for id collisions when `RenumberCollidingAddedIds` is disabled.
+  - `SchemaLoader` now loads the main GhJSON schema when loading the patch schema so that the patch schema can reference `ghjson.schema.json` definitions.
+
 ### Fixed
 
 - **Confusing GhJSON validator error messages** when schema validation uses `anyOf`/`oneOf` identity branches

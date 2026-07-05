@@ -811,35 +811,7 @@ namespace GhJSON.Core.Tests.DiffOperations
             var apply = GhJson.ApplyPatch(doc, patch, options);
 
             Assert.True(apply.HasConflicts);
-            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.MatchAmbiguous || c.Message.Contains("already exists"));
-        }
-
-        [Fact]
-        public void ApplyPatch_ComponentAdd_WithGuidCollision_ReturnsConflict()
-        {
-            var guid = Guid.NewGuid();
-            var doc = GhJson.CreateDocumentBuilder()
-                .AddComponent(new GhJsonComponent { Name = "A", Id = 1, InstanceGuid = guid })
-                .Build();
-
-            var patch = new GhPatchDocument
-            {
-                Patch = new GhPatchBody
-                {
-                    Components = new GhPatchComponentsOp
-                    {
-                        Add = new List<GhJsonComponent>
-                        {
-                            new GhJsonComponent { Name = "B", Id = 2, InstanceGuid = guid }
-                        }
-                    }
-                }
-            };
-
-            var apply = GhJson.ApplyPatch(doc, patch);
-
-            Assert.True(apply.HasConflicts);
-            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.InstanceGuidCollision);
+            Assert.Contains(apply.Conflicts, c => c.Kind == PatchConflictKind.IdCollision && c.Message.Contains("already exists"));
         }
 
         [Fact]

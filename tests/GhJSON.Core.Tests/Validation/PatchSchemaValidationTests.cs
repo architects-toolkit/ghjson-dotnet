@@ -173,6 +173,30 @@ namespace GhJSON.Core.Tests.Validation
         }
 
         [Fact]
+        public void ValidatePatch_ComponentAddWithInstanceGuid_ReturnsError()
+        {
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"components\":{\"add\":[{\"name\":\"Panel\",\"id\":1,\"instanceGuid\":\"33333333-3333-3333-3333-333333333333\"}]}}}";
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            Assert.False(result.IsValid);
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("patch.components.add[0]", messages);
+        }
+
+        [Fact]
+        public void ValidatePatch_GroupAddWithInstanceGuid_ReturnsError()
+        {
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"groups\":{\"add\":[{\"id\":1,\"members\":[2],\"instanceGuid\":\"44444444-4444-4444-4444-444444444444\"}]}}}";
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            Assert.False(result.IsValid);
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("patch.groups.add[0]", messages);
+        }
+
+        [Fact]
         public void ValidatePatch_UnknownComponentMatchProperty_DoesNotEmitAnyOfBranchErrors()
         {
             // componentMatch uses anyOf for identity (instanceGuid, id, componentGuid) with

@@ -89,6 +89,7 @@ namespace GhJSON.Core.DiffOperations
             }
 
             EvaluateSchema(schema, instance, result);
+            ValidateNoInstanceGuidInAdds(instance, result);
             result.IsValid = !result.HasErrors;
             return result;
         }
@@ -212,6 +213,48 @@ namespace GhJSON.Core.DiffOperations
             var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
             var match = AnyOfOrOneOfBranchPattern.Match(schemaPath);
             return match.Success ? schemaPath.Substring(0, match.Index) : schemaPath;
+        }
+
+        private static void ValidateNoInstanceGuidInAdds(JsonNode? instance, ValidationResult result)
+        {
+            if (instance is not JsonObject root ||
+                !root.TryGetPropertyValue("patch", out var patchNode) ||
+                patchNode is not JsonObject patch)
+            {
+                return;
+            }
+
+            if (patch.TryGetPropertyValue("components", out var componentsNode) &&
+                componentsNode is JsonObject components &&
+                components.TryGetPropertyValue("add", out var componentsAddNode) &&
+                componentsAddNode is JsonArray componentsAdd)
+            {
+                for (int i = 0; i < componentsAdd.Count; i++)
+                {
+                    if (componentsAdd[i] is JsonObject obj && obj.ContainsKey("instanceGuid"))
+                    {
+                        result.Errors.Add(new ValidationMessage(
+                            "New components in 'patch.components.add' must not specify 'instanceGuid'; it is generated when the component is placed on the canvas.",
+                            $"patch.components.add[{i}]"));
+                    }
+                }
+            }
+
+            if (patch.TryGetPropertyValue("groups", out var groupsNode) &&
+                groupsNode is JsonObject groups &&
+                groups.TryGetPropertyValue("add", out var groupsAddNode) &&
+                groupsAddNode is JsonArray groupsAdd)
+            {
+                for (int i = 0; i < groupsAdd.Count; i++)
+                {
+                    if (groupsAdd[i] is JsonObject obj && obj.ContainsKey("instanceGuid"))
+                    {
+                        result.Errors.Add(new ValidationMessage(
+                            "New groups in 'patch.groups.add' must not specify 'instanceGuid'; it is generated when the group is placed on the canvas.",
+                            $"patch.groups.add[{i}]"));
+                    }
+                }
+            }
         }
 
         private static readonly System.Text.RegularExpressions.Regex AnyOfOrOneOfBranchPattern =

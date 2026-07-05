@@ -278,6 +278,10 @@ namespace GhJSON.Core.Validation
 
         private static JsonSchema LoadPatchSchemaEmbedded(string version)
         {
+            // Ensure the main GhJSON schema is registered so that the patch schema can
+            // reference definitions in ghjson.schema.json (e.g. componentData, groupData).
+            LoadEmbedded(version);
+
             var prefix = GetEmbeddedResourcePrefix(version);
             var resourceName = prefix + PatchSchemaFileName;
             var assembly = typeof(SchemaLoader).Assembly;
@@ -291,6 +295,27 @@ namespace GhJSON.Core.Validation
             var baseUrl = "https://architects-toolkit.github.io/ghjson-spec/schema/".TrimEnd('/');
             var versionUrl = $"{baseUrl}/v{version}/";
             var httpClient = LazyHttpClient.Value;
+
+            // Load the main GhJSON schema first so that the patch schema can resolve
+            // references such as ghjson.schema.json#/$defs/componentData.
+            var mainUrl = versionUrl + MainSchemaFileName;
+            try
+            {
+                using var response = await httpClient.GetAsync(mainUrl, cancellationToken).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                var mainText = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                var mainSchema = JsonSchema.FromText(mainText);
+                var id = mainSchema.GetId();
+                if (id != null)
+                {
+                    SchemaRegistry.Global.Register(id, mainSchema);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[SchemaLoader] Failed to download main schema from {mainUrl}: {ex.Message}");
+                throw;
+            }
 
             var patchUrl = versionUrl + PatchSchemaFileName;
             try

@@ -350,7 +350,7 @@
     },
     "groupMatch": {
       "type": "object",
-      "description": "Identifies a single group. Identity precedence is instanceGuid > id.",</invoke>
+      "description": "Identifies a single group. Identity precedence is instanceGuid > id.",
       "anyOf": [
         { "required": ["instanceGuid"] },
         { "required": ["id"] }

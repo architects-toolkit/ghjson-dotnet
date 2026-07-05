@@ -56,8 +56,8 @@ namespace GhJSON.Core.Tests.NameResolution
         [InlineData("ghpython", "Python 3 Script")]
         [InlineData("csharp", "C# Script")]
         [InlineData("c#", "C# Script")]
-        [InlineData("str", "Text")]
-        [InlineData("string", "Text")]
+        [InlineData("str", "Panel")]
+        [InlineData("string", "Panel")]
         [InlineData("filter", "Stream Filter")]
         [InlineData("streamfilter", "Stream Filter")]
         public void ResolveAlias_KnownAliases_ReturnsCanonicalName(string input, string expected)

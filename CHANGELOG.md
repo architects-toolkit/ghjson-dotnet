@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `GhJsonGrasshopper.CaptureExternalConnections()` to capture all wires that connect a set of components to components outside the set, enabling replacement workflows to preserve external wiring
   - Prevents "Cross-thread operation not valid" errors when connecting or disconnecting components from non-UI threads (e.g., MCP/AI tool calls)
 
+#### Topology Classification Facade
+
+- **`GhJsonGrasshopper.ClassifyTopology()`** facade method exposes the topological classification (start/end/middle/isolated nodes) of a set of canvas objects, delegating to the internal `ConnectionWalker.Classify`
+  - Made `TopologyClassification` public as the DTO returned by the facade
+  - `ConnectionWalker` remains `internal`
+
 ### Changed
 
 - **Number Slider value format documented**

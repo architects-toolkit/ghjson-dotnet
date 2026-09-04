@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `SchemaLoader` now loads the main GhJSON schema when loading the patch schema so that the patch schema can reference `ghjson.schema.json` definitions.
 - **AI-generated release descriptions**
   - `milestone-release-draft.yml` now uses the Mistral AI Chat API to generate a developer-oriented release description of new features, breaking changes, and deprecations from the relevant changelog section.
+- Updated GitHub Actions workflow and reusable action references to Node 24-compatible versions.
 
 ### Fixed
 

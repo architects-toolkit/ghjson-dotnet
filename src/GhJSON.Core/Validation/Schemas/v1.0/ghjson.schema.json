@@ -363,10 +363,6 @@
               "additionalProperties": false
             }
           ]
-        },
-        "runtimeData": {
-          "$ref": "#/$defs/internalizedDataTree",
-          "description": "Runtime (volatile) data for the parameter."
         }
       },
       "additionalProperties": false

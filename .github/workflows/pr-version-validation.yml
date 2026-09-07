@@ -1,0 +1,274 @@
+name: PR Version Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/**'
+      - 'hotfix/**'
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number (informational)
+        required: false
+        type: string
+      base_ref:
+        description: Pull request base branch
+        required: false
+        type: string
+      pr_title:
+        description: Pull request title (informational)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Get PR Version
+        id: pr_version
+        uses: ./.github/actions/versioning/get-version
+        continue-on-error: true
+
+      - name: Get target branch version
+        id: get-target
+        shell: bash
+        run: |
+          # Read event-payload fields via jq so the same step works across
+          # pull_request, merge_group, and workflow_dispatch events.
+          MERGE_GROUP_BASE_REF=$(jq -r '.merge_group.base_ref // empty' "$GITHUB_EVENT_PATH")
+          INPUT_BASE_REF=$(jq -r '.inputs.base_ref // empty' "$GITHUB_EVENT_PATH")
+
+          if [ -n "${MERGE_GROUP_BASE_REF:-}" ]; then
+            TARGET_BRANCH="$MERGE_GROUP_BASE_REF"
+          elif [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            TARGET_BRANCH="${GITHUB_REF_NAME#gh-readonly-queue/}"
+            TARGET_BRANCH="${TARGET_BRANCH%/*}"
+          elif [ -n "${INPUT_BASE_REF:-}" ]; then
+            TARGET_BRANCH="$INPUT_BASE_REF"
+          elif [ -n "${GITHUB_BASE_REF:-}" ]; then
+            TARGET_BRANCH="$GITHUB_BASE_REF"
+          else
+            TARGET_BRANCH="main"
+          fi
+          TARGET_BRANCH="${TARGET_BRANCH#refs/heads/}"
+          echo "Target branch: $TARGET_BRANCH"
+          git fetch origin "$TARGET_BRANCH"
+          git checkout "origin/$TARGET_BRANCH" -- Directory.Build.props
+
+      - name: Get Target Branch Version
+        id: target_version
+        uses: ./.github/actions/versioning/get-version
+        continue-on-error: true
+
+      - name: Check if Target Version Extracted
+        id: check_target
+        shell: bash
+        run: |
+          if [ -z "${{ steps.target_version.outputs.version }}" ]; then
+            echo "##[warning] Could not extract version from target branch, skipping comparison"
+            echo "SKIP_COMPARISON=true" >> $GITHUB_OUTPUT
+          else
+            echo "Target Version: ${{ steps.target_version.outputs.version }}"
+            echo "SKIP_COMPARISON=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Reject released version reuse
+        shell: bash
+        env:
+          PR_VERSION: ${{ steps.pr_version.outputs.version }}
+          TARGET_VERSION: ${{ steps.target_version.outputs.version }}
+          SKIP_COMPARISON: ${{ steps.check_target.outputs.SKIP_COMPARISON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$PR_VERSION" ]]; then
+            echo "Could not read the PR version; skipping released-version reuse check."
+            exit 0
+          fi
+          if [[ "$SKIP_COMPARISON" == true || -z "$TARGET_VERSION" ]]; then
+            echo "::warning::Could not read the target branch version; skipping released-version reuse check."
+            exit 0
+          fi
+          if [[ "$PR_VERSION" == "$TARGET_VERSION" ]]; then
+            echo "Version '$PR_VERSION' is inherited from the target branch; skipping released-version reuse check."
+            exit 0
+          fi
+          git fetch --tags origin
+          # A legacy v-prefixed tag counts as an existing release too.
+          for CANDIDATE in "$PR_VERSION" "v$PR_VERSION"; do
+            if git rev-parse --verify "refs/tags/$CANDIDATE^{commit}" >/dev/null 2>&1; then
+              echo "::error::Version '$PR_VERSION' has already been released as tag '$CANDIDATE'. Move the version forward (date, sequence, stage, patch, minor, or major) instead of reusing a released version." >&2
+              exit 1
+            fi
+          done
+
+      - name: Compare Versions
+        id: compare
+        shell: pwsh
+        run: |
+          $prVersion = "${{ steps.pr_version.outputs.version }}"
+          $targetVersion = "${{ steps.target_version.outputs.version }}"
+          $skipComparison = "${{ steps.check_target.outputs.SKIP_COMPARISON }}"
+
+          if ($skipComparison -eq "true") {
+            Write-Host "##[warning] Skipping version comparison"
+            echo "RESULT=skipped" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          Write-Host "Comparing versions:"
+          Write-Host "  PR Version:     $prVersion"
+          Write-Host "  Target Version: $targetVersion"
+
+          # Validate version format
+          function Validate-VersionFormat {
+            param([string]$versionString)
+
+            # Remove leading 'v' if present
+            $versionString = $versionString -replace '^v', ''
+
+            # Check if version matches semantic versioning pattern (with optional prerelease)
+            if ($versionString -notmatch '^\d+\.\d+(\.\d+)?(-[a-zA-Z0-9.]+)?$') {
+              throw "Invalid version format: '$versionString'. Expected format: X.Y[.Z][-prerelease]"
+            }
+
+            return $versionString
+          }
+
+          # Parse versions (handles formats like 1.2.3 or 1.2.3-alpha.123)
+          function Parse-Version {
+            param([string]$versionString)
+
+            try {
+              $versionString = Validate-VersionFormat $versionString
+            } catch {
+              Write-Host "##[error] $_"
+              exit 1
+            }
+
+            # Split on dash to separate base version from prerelease
+            $parts = $versionString -split '-', 2
+            $baseVersion = $parts[0]
+            $prerelease = if ($parts.Length -gt 1) { $parts[1] } else { "" }
+
+            # Parse base version numbers with error handling
+            $numbers = $baseVersion -split '\.'
+            try {
+              $major = [int]($numbers[0])
+              $minor = if ($numbers.Length -gt 1) { [int]($numbers[1]) } else { 0 }
+              $patch = if ($numbers.Length -gt 2) { [int]($numbers[2]) } else { 0 }
+            } catch {
+              Write-Host "##[error] Failed to parse version numbers: $_"
+              exit 1
+            }
+
+            return @{
+              Major = $major
+              Minor = $minor
+              Patch = $patch
+              Prerelease = $prerelease
+              Original = $versionString
+            }
+          }
+
+          $prVer = Parse-Version $prVersion
+          $targetVer = Parse-Version $targetVersion
+
+          # Compare versions
+          $isDowngrade = $false
+          $isSame = $false
+          $reason = ""
+
+          if ($prVer.Major -lt $targetVer.Major) {
+            $isDowngrade = $true
+            $reason = "Major version downgrade ($($prVer.Major) < $($targetVer.Major))"
+          } elseif ($prVer.Major -eq $targetVer.Major) {
+            if ($prVer.Minor -lt $targetVer.Minor) {
+              $isDowngrade = $true
+              $reason = "Minor version downgrade ($($prVer.Minor) < $($targetVer.Minor))"
+            } elseif ($prVer.Minor -eq $targetVer.Minor) {
+              if ($prVer.Patch -lt $targetVer.Patch) {
+                $isDowngrade = $true
+                $reason = "Patch version downgrade ($($prVer.Patch) < $($targetVer.Patch))"
+              } elseif ($prVer.Patch -eq $targetVer.Patch) {
+                # Same base version - check prerelease
+                if ($prVer.Prerelease -eq $targetVer.Prerelease) {
+                  $isSame = $true
+                  $reason = "Versions are identical"
+                } else {
+                  # Prerelease comparison is complex, just note it
+                  $reason = "Same base version with different prerelease tags"
+                }
+              }
+            }
+          }
+
+          Write-Host ""
+          if ($isDowngrade) {
+            Write-Host "##[error] ❌ VERSION DOWNGRADE DETECTED!"
+            Write-Host "##[error] $reason"
+            echo "RESULT=downgrade" >> $env:GITHUB_OUTPUT
+            echo "REASON=$reason" >> $env:GITHUB_OUTPUT
+            exit 1
+          } elseif ($isSame) {
+            Write-Host "##[warning] ⚠️  Versions are identical"
+            Write-Host "##[warning] Consider incrementing the version if this PR contains changes"
+            echo "RESULT=same" >> $env:GITHUB_OUTPUT
+            echo "REASON=$reason" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "##[notice] ✅ Version increment detected"
+            Write-Host "##[notice] $prVersion > $targetVersion"
+            echo "RESULT=upgrade" >> $env:GITHUB_OUTPUT
+            echo "REASON=Version properly incremented" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Validation Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $version = "${{ steps.pr_version.outputs.version }}"
+          $targetVersion = "${{ steps.target_version.outputs.version }}"
+          $result = "${{ steps.compare.outputs.RESULT }}"
+          $reason = "${{ steps.compare.outputs.REASON }}"
+
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "VERSION VALIDATION SUMMARY"
+          Write-Host "=========================================="
+          Write-Host "PR Version:     $version"
+          Write-Host "Target Version: $targetVersion"
+          Write-Host "Result:         $result"
+          Write-Host "Reason:         $reason"
+          Write-Host ""
+
+  required-check:
+    name: 🔍 PR Version Validation
+    needs: validate-version
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Verify required workflow jobs
+      shell: bash
+      run: |
+        if [[ "${{ needs.validate-version.result }}" != "success" ]]; then
+          echo "::error::Version validation finished with ${{ needs.validate-version.result }}"
+          exit 1
+        fi

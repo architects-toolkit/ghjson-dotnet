@@ -95,7 +95,14 @@ runs:
           echo "unreleased-content=$ESCAPED_CONTENT" >> $GITHUB_OUTPUT
 
           # Create new release section
-          sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$VERSION] - $DATE/" "$CHANGELOG_PATH"
+          if [[ "$VERSION" == "Unreleased" ]]; then
+            # Special case: Re-create the Unreleased section
+            sed -i '/## \[Unreleased\]/,/## \[/d' "$CHANGELOG_PATH"
+            sed -i "s/# Changelog/# Changelog\n\n## [Unreleased]\n\n/" "$CHANGELOG_PATH"
+          else
+            # Normal case: Create a new version section
+            sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$VERSION] - $DATE/" "$CHANGELOG_PATH"
+          fi
 
           echo "Release section created for version $VERSION"
           echo "updated=true" >> $GITHUB_OUTPUT

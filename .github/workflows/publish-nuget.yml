@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to publish (e.g., v1.0.0). Leave empty to use latest release.'
+        description: 'Release tag to publish (e.g., 1.1.1; legacy v-prefixed tags also work). Leave empty to use latest release.'
         required: false
         type: string
       dry_run:

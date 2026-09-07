@@ -1,0 +1,244 @@
+name: Release 1 - Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump to apply
+        required: true
+        type: choice
+        options:
+          - none
+          - patch
+          - minor
+          - major
+        default: none
+      stage:
+        description: Release stage
+        required: true
+        type: choice
+        options:
+          - dev
+          - stable
+          - alpha
+          - beta
+          - rc
+        default: stable
+      target-branch:
+        description: Branch to prepare the release on
+        required: true
+        type: string
+        default: main
+      milestone-title:
+        description: Optional milestone title
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  # Required to dispatch the protected-branch checks for the PR created below.
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-prepare-${{ inputs.target-branch }}
+  cancel-in-progress: false
+
+jobs:
+  release-preparation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.target-branch }}
+          fetch-depth: 0
+
+      # The release content is taken from the target branch, but the composite
+      # actions used below must match THIS workflow definition, which runs from
+      # the dispatched ref. When CI tooling has been refactored on main after a
+      # stabilization branch was cut, the checked-out target branch would not
+      # contain the referenced local action, breaking the run.
+      # Sync `.github/actions` from the workflow ref so `uses: ./...` always
+      # resolves the expected versions. These files are CI-only and are never
+      # staged by the commit step below, so release content is unaffected.
+      - name: Check out CI tooling from workflow ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: .ci-tooling
+          fetch-depth: 1
+      - name: Sync composite actions from workflow ref
+        run: |
+          rm -rf .github/actions
+          cp -R .ci-tooling/.github/actions .github/actions
+          rm -rf .ci-tooling
+
+      - name: Get current version
+        id: current-version
+        uses: ./.github/actions/versioning/get-version
+
+      - name: Calculate release version
+        id: next-version
+        uses: ./.github/actions/versioning/next-version
+        with:
+          current-version: ${{ steps.current-version.outputs.version }}
+          bump: ${{ inputs.bump }}
+          stage: ${{ inputs.stage }}
+
+      - name: Set version and refresh badges
+        uses: ./.github/actions/versioning/version-manager
+        with:
+          mode: set-version
+          new-version: ${{ steps.next-version.outputs.new-version }}
+
+      - name: Include missing issues in changelog
+        uses: ./.github/actions/documentation/update-changelog-issues
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          days-lookback: 90
+
+      - name: Review and simplify changelog
+        uses: ./.github/actions/documentation/changelog-review
+        with:
+          mistral-api-key: ${{ secrets.MISTRAL_API_KEY }}
+          commit: false
+
+      - name: Move unreleased changelog content to release
+        uses: ./.github/actions/documentation/update-changelog
+        with:
+          action: create-release
+          version: ${{ steps.next-version.outputs.new-version }}
+
+      - name: Create or get release milestone
+        uses: ./.github/actions/milestone/create-or-get
+        with:
+          title: ${{ inputs.milestone-title || steps.next-version.outputs.new-version }}
+          description: "Release milestone for ${{ steps.next-version.outputs.new-version }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release preparation branch
+        shell: bash
+        env:
+          VERSION: ${{ steps.next-version.outputs.new-version }}
+        run: |
+          set -euo pipefail
+          git checkout -b "release-prep/$VERSION"
+          git config user.name "${{ vars.GHJSON_BOT_NAME || 'github-actions' }}"
+          git config user.email "${{ vars.GHJSON_BOT_EMAIL || 'github-actions@users.noreply.github.com' }}"
+
+      - name: Commit and push release preparation
+        shell: bash
+        env:
+          VERSION: ${{ steps.next-version.outputs.new-version }}
+        run: |
+          set -euo pipefail
+          # The composite-action sync above intentionally replaces
+          # .github/actions with the workflow ref's copies; that churn is
+          # expected on release lines cut before a CI tooling refactor and is
+          # never staged, so it must not trip the guard.
+          unexpected=$(git status --porcelain | awk '{print $2}' \
+            | grep -vE '^(Directory\.Build\.props|README\.md|CHANGELOG\.md)$' \
+            | grep -v '^\.github/actions/' || true)
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::Unexpected files changed by release preparation:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          git add Directory.Build.props README.md CHANGELOG.md
+          git commit -m "release: $VERSION"
+          git push origin "release-prep/$VERSION"
+
+      - name: Open release preparation pull request
+        id: create-pr
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+          VERSION: ${{ steps.next-version.outputs.new-version }}
+        run: |
+          set -euo pipefail
+          CHANGELOG_URL="https://github.com/${{ github.repository }}/blob/release-prep/$VERSION/CHANGELOG.md"
+          PR_BODY=$(cat <<EOF
+          ## Release preparation
+
+          - Version: \`$VERSION\`
+          - Target branch: \`$TARGET_BRANCH\`
+          - Changelog: $CHANGELOG_URL
+
+          When merged:
+          - [ ] Create the annotated \`$VERSION\` tag
+          - [ ] Create a draft GitHub Release
+          - [ ] Open and auto-merge the post-release development bump PR
+          EOF
+          )
+          PR_OUTPUT=$(gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "release-prep/$VERSION" \
+            --title "release: $VERSION" \
+            --body "$PR_BODY" 2>&1 || true)
+
+          PR_URL=$(printf '%s\n' "$PR_OUTPUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n 1 || true)
+          if [[ -z "$PR_URL" ]]; then
+            PR_URL=$(gh pr list --base "$TARGET_BRANCH" --head "release-prep/$VERSION" \
+              --state open --json url --jq '.[0].url // empty')
+          fi
+          PR_NUMBER=$(gh pr view "$PR_URL" --json number --jq '.number' 2>/dev/null || true)
+          if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Failed to create or resolve release preparation PR." >&2
+            printf '%s\n' "$PR_OUTPUT" >&2
+            exit 1
+          fi
+          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "pr-url=$PR_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Assign release PR to milestone
+        if: steps.create-pr.outputs.pr-number != ''
+        uses: ./.github/actions/milestone/assign-pr
+        with:
+          pr-number: ${{ steps.create-pr.outputs.pr-number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dispatch required PR checks
+        if: steps.create-pr.outputs.pr-number != ''
+        uses: ./.github/actions/dispatch-required-pr-checks
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: release-prep/${{ steps.next-version.outputs.new-version }}
+          pr-number: ${{ steps.create-pr.outputs.pr-number }}
+          base-ref: ${{ inputs.target-branch }}
+          pr-title: "release: ${{ steps.next-version.outputs.new-version }}"
+
+  notify-on-failure:
+    needs: [release-preparation]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Create failure issue
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const inputVersion = context.payload.inputs?.['milestone-title'] || 'calculated version';
+            const title = `🔴 release-1 (Prepare Release) failed for ${inputVersion} (run #${context.runNumber})`;
+            const body = [
+              'The **Release 1 - Prepare Release** workflow failed.',
+              '',
+              `**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              `**Target branch:** \`${context.payload.inputs?.['target-branch'] || 'main'}\``,
+              `**Triggered by:** ${context.actor}`,
+              '',
+              'This is a critical release pipeline failure. Please investigate immediately.',
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['automated', 'status: needs attention'],
+            });

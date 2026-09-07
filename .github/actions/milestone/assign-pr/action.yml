@@ -1,0 +1,132 @@
+name: 'Assign PR to Milestone'
+description: 'Reads version from Directory.Build.props, normalizes it to the milestone version, and assigns a PR to the appropriate milestone and version: label, creating them if necessary.'
+
+inputs:
+  pr-number:
+    description: 'PR number to assign to milestone'
+    required: true
+  token:
+    description: 'GitHub token with issues:write and pull-requests:write permissions'
+    required: true
+  version:
+    description: 'Version to use for milestone assignment (if not provided, reads from Directory.Build.props)'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Directory containing Directory.Build.props (defaults to repository root)'
+    required: false
+    default: '.'
+  comment-on-pr:
+    description: 'Whether to add a comment on the PR about milestone assignment'
+    required: false
+    default: 'true'
+
+outputs:
+  milestone-number:
+    description: 'The assigned milestone number'
+    value: ${{ steps.create-or-get.outputs.milestone-number }}
+  milestone-title:
+    description: 'The assigned milestone title'
+    value: ${{ steps.create-or-get.outputs.milestone-title }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read version from Directory.Build.props
+      id: read-version
+      uses: actions/github-script@v9
+      with:
+        github-token: ${{ inputs.token }}
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          let fullVersion = '${{ inputs.version }}';
+
+          // If version not provided as input, read from Directory.Build.props
+          if (!fullVersion) {
+            const workingDir = '${{ inputs.working-directory }}';
+            const propsPath = path.join(workingDir, 'Directory.Build.props');
+
+            if (!fs.existsSync(propsPath)) {
+              console.log('Directory.Build.props file not found at:', propsPath);
+              return;
+            }
+
+            const content = fs.readFileSync(propsPath, 'utf8');
+
+            // Extract version from Directory.Build.props
+            const versionMatch = content.match(/<Version>(.*?)<\/Version>/);
+            if (!versionMatch) {
+              console.log('Could not find <Version> in Directory.Build.props');
+              return;
+            }
+
+            fullVersion = versionMatch[1];
+            console.log('Found full version from Directory.Build.props:', fullVersion);
+          } else {
+            console.log('Using provided version:', fullVersion);
+          }
+
+          console.log('Raw version for milestone:', fullVersion);
+          core.setOutput('raw-version', fullVersion);
+
+    - name: Normalize version
+      id: normalize-version
+      if: steps.read-version.outputs.raw-version != ''
+      uses: ./.github/actions/versioning/normalize-version
+      with:
+        version: ${{ steps.read-version.outputs.raw-version }}
+
+    - name: Create or get milestone
+      id: create-or-get
+      if: steps.normalize-version.outputs.normalized-version != ''
+      uses: ./.github/actions/milestone/create-or-get
+      with:
+        title: ${{ steps.normalize-version.outputs.normalized-version }}
+        description: 'Milestone for version ${{ steps.normalize-version.outputs.normalized-version }}'
+        state: 'open'
+        token: ${{ inputs.token }}
+
+    - name: Assign PR to milestone
+      if: steps.create-or-get.outputs.milestone-number != ''
+      uses: actions/github-script@v9
+      with:
+        github-token: ${{ inputs.token }}
+        script: |
+          const prNumber = parseInt('${{ inputs.pr-number }}', 10);
+          const milestoneNumber = parseInt('${{ steps.create-or-get.outputs.milestone-number }}', 10);
+          const milestoneTitle = '${{ steps.create-or-get.outputs.milestone-title }}';
+
+          try {
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              milestone: milestoneNumber
+            });
+
+            console.log(`Successfully assigned PR #${prNumber} to milestone "${milestoneTitle}"`);
+
+            // Add a comment to the PR if requested
+            if ('${{ inputs.comment-on-pr }}' === 'true') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `🏷️ This PR has been automatically assigned to milestone **${milestoneTitle}** and labeled \`version: ${milestoneTitle}\` based on the version in \`Directory.Build.props\`.`
+              });
+            }
+
+          } catch (error) {
+            console.error('Error assigning PR to milestone:', error);
+            core.setFailed(`Failed to assign PR to milestone: ${error.message}`);
+          }
+
+    - name: Apply version label to PR
+      if: steps.create-or-get.outputs.milestone-title != ''
+      uses: ./.github/actions/versioning/apply-version-label
+      with:
+        issue-number: ${{ inputs.pr-number }}
+        version: ${{ steps.read-version.outputs.raw-version }}
+        token: ${{ inputs.token }}

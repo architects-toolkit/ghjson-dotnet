@@ -4,17 +4,21 @@ This document describes how to publish GhJSON.NET packages to NuGet.
 
 ## Automated Release Workflow
 
-The project uses a 3-stage automated release workflow:
+The project uses a tag-based release pipeline. See
+[Branching and Release Workflow](./RELEASE_WORKFLOW.md) for the full model.
 
-### Stage 1: Milestone Close → Release Draft
+### Stage 1: Release Preparation → Tag → Release Draft
 
-When a milestone is closed, a GitHub Action automatically creates a release draft:
+1. A maintainer runs **Release 1 - Prepare Release** (`release-1-prepare.yml`)
+   with a bump, stage, and target branch (`main` or `release/X.Y`).
+2. The workflow opens a `release-prep/<version>` PR containing only release
+   metadata (`Directory.Build.props`, `README.md`, `CHANGELOG.md`).
+3. When that PR merges, **Release 2 - Tag on Merge**
+   (`release-2-tag-on-merge.yml`) creates the annotated bare tag
+   (`<X.Y.Z>`, no `v` prefix), drafts a GitHub Release, and opens the
+   post-release development-version bump PR on `main`.
 
-- **Trigger**: Closing a milestone (e.g., "v1.0.0")
-- **Action**: Creates a draft release with the milestone title as version
-- **Output**: Draft release with placeholder release notes
-
-**Workflow file**: `.github/workflows/milestone-release-draft.yml`
+**Workflow files**: `.github/workflows/release-1-prepare.yml`, `.github/workflows/release-2-tag-on-merge.yml`
 
 ### Stage 2: Release Published → Build & Attach Assets
 
@@ -29,7 +33,7 @@ When the release draft is published, a GitHub Action builds the packages:
   5. Create NuGet packages
   6. Attach `.nupkg` and `.snupkg` files to the release
 
-**Workflow file**: `.github/workflows/release-build.yml`
+**Workflow file**: `.github/workflows/release-3-build.yml`
 
 ### Stage 3: Manual Trigger → Publish to NuGet (Trusted Publishing)
 

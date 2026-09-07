@@ -149,6 +149,8 @@ var result = GhJsonGrasshopper.Put(doc, new PutOptions
 });
 ```
 
+A successful `Put` records all placed components and groups as one Grasshopper add-object undo event.
+
 ### Querying the Canvas
 
 ```csharp

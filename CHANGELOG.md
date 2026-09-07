@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `GhJsonGrasshopper.Put()` now records placed components and groups as one Grasshopper add-object undo event, so users can remove the placed network with Ctrl+Z.
 - **Confusing GhJSON validator error messages** when schema validation uses `anyOf`/`oneOf` identity branches
   - `GhJsonValidator.FlattenDetails` and `PatchValidator.FlattenDetails` now suppress errors from failing `anyOf`/`oneOf` branches when another branch is valid
   - Previously, valid components could report misleading "missing instanceGuid/componentGuid" errors alongside the real issue (e.g., an unknown property)

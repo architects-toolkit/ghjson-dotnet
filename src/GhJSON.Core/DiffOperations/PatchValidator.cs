@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Text.Json.Nodes;
 using GhJSON.Core.PatchModels;
 using GhJSON.Core.Validation;
@@ -88,6 +89,7 @@ namespace GhJSON.Core.DiffOperations
             }
 
             EvaluateSchema(bundle, instance, result);
+            ValidateNoInstanceGuidInAdds(instance, result);
             result.IsValid = !result.HasErrors;
             return result;
         }
@@ -151,29 +153,121 @@ namespace GhJSON.Core.DiffOperations
             }
         }
 
-        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root, bool skipDescendants = false)
+        private static IEnumerable<EvaluationResults> FlattenDetails(EvaluationResults root)
         {
-            yield return root;
+            var orderedNodes = new List<EvaluationResults>();
+            var seenNodes = new HashSet<EvaluationResults>();
+            CollectNodes(root, orderedNodes, seenNodes);
 
-            if (skipDescendants || root.Details == null)
+            // In List output format, anyOf/oneOf branches may appear as siblings. If at least
+            // one branch is valid, the failing siblings are not useful because the schema is
+            // satisfied by another branch; suppress them to avoid misleading errors.
+            var suppressedNodes = new HashSet<EvaluationResults>();
+            var branchesByParent = orderedNodes
+                .Where(IsAnyOfOrOneOfBranch)
+                .GroupBy(GetAnyOfOrOneOfParentPath)
+                .ToList();
+
+            foreach (var group in branchesByParent)
             {
-                yield break;
+                if (group.Any(b => b.IsValid))
+                {
+                    foreach (var branch in group)
+                    {
+                        suppressedNodes.Add(branch);
+                    }
+                }
             }
 
-            bool shouldSkipDescendants = root.IsValid && IsAnyOfOrOneOfKeyword(root);
-            foreach (var child in root.Details)
+            foreach (var node in orderedNodes)
             {
-                foreach (var node in FlattenDetails(child, shouldSkipDescendants))
+                if (suppressedNodes.Contains(node))
                 {
-                    yield return node;
+                    continue;
+                }
+
+                yield return node;
+            }
+        }
+
+        private static void CollectNodes(EvaluationResults node, List<EvaluationResults> orderedNodes, HashSet<EvaluationResults> seenNodes)
+        {
+            if (!seenNodes.Add(node))
+            {
+                return;
+            }
+
+            orderedNodes.Add(node);
+
+            if (node.Details == null)
+            {
+                return;
+            }
+
+            foreach (var child in node.Details)
+            {
+                CollectNodes(child, orderedNodes, seenNodes);
+            }
+        }
+
+        private static bool IsAnyOfOrOneOfBranch(EvaluationResults result)
+        {
+            var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
+            return AnyOfOrOneOfBranchPattern.IsMatch(schemaPath);
+        }
+
+        private static string GetAnyOfOrOneOfParentPath(EvaluationResults result)
+        {
+            var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
+            var match = AnyOfOrOneOfBranchPattern.Match(schemaPath);
+            return match.Success ? schemaPath.Substring(0, match.Index) : schemaPath;
+        }
+
+        private static void ValidateNoInstanceGuidInAdds(JsonNode? instance, ValidationResult result)
+        {
+            if (instance is not JsonObject root ||
+                !root.TryGetPropertyValue("patch", out var patchNode) ||
+                patchNode is not JsonObject patch)
+            {
+                return;
+            }
+
+            if (patch.TryGetPropertyValue("components", out var componentsNode) &&
+                componentsNode is JsonObject components &&
+                components.TryGetPropertyValue("add", out var componentsAddNode) &&
+                componentsAddNode is JsonArray componentsAdd)
+            {
+                for (int i = 0; i < componentsAdd.Count; i++)
+                {
+                    if (componentsAdd[i] is JsonObject obj && obj.ContainsKey("instanceGuid"))
+                    {
+                        result.Errors.Add(new ValidationMessage(
+                            "New components in 'patch.components.add' must not specify 'instanceGuid'; it is generated when the component is placed on the canvas.",
+                            $"patch.components.add[{i}]"));
+                    }
+                }
+            }
+
+            if (patch.TryGetPropertyValue("groups", out var groupsNode) &&
+                groupsNode is JsonObject groups &&
+                groups.TryGetPropertyValue("add", out var groupsAddNode) &&
+                groupsAddNode is JsonArray groupsAdd)
+            {
+                for (int i = 0; i < groupsAdd.Count; i++)
+                {
+                    if (groupsAdd[i] is JsonObject obj && obj.ContainsKey("instanceGuid"))
+                    {
+                        result.Errors.Add(new ValidationMessage(
+                            "New groups in 'patch.groups.add' must not specify 'instanceGuid'; it is generated when the group is placed on the canvas.",
+                            $"patch.groups.add[{i}]"));
+                    }
                 }
             }
         }
 
-        private static bool IsAnyOfOrOneOfKeyword(EvaluationResults result)
-        {
-            var schemaPath = result.SchemaLocation?.ToString() ?? string.Empty;
-            return schemaPath.EndsWith("/anyOf") || schemaPath.EndsWith("/oneOf");
-        }
+        private static readonly System.Text.RegularExpressions.Regex AnyOfOrOneOfBranchPattern =
+            new System.Text.RegularExpressions.Regex(
+                @"/(anyOf|oneOf)/\d+$",
+                System.Text.RegularExpressions.RegexOptions.Compiled);
     }
 }

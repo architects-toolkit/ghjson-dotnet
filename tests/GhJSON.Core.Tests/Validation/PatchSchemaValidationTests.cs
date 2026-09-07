@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -16,6 +16,7 @@
  */
 
 using System;
+using System.Linq;
 using GhJSON.Core.Validation;
 using Xunit;
 
@@ -25,6 +26,7 @@ namespace GhJSON.Core.Tests.Validation
     /// Tests patch validation against the GhPatch JSON Schema using raw JSON strings.
     /// These bypass the typed models to test the validator itself.
     /// </summary>
+    [Collection("SchemaRegistry")]
     public class PatchSchemaValidationTests
     {
         [Fact]
@@ -168,6 +170,64 @@ namespace GhJSON.Core.Tests.Validation
             var result = GhJson.ValidatePatch(json, preferOnline: true);
 
             Assert.True(result.IsValid, string.Join("; ", result.Errors.ConvertAll(e => e.Message)));
+        }
+
+        [Fact]
+        public void ValidatePatch_ComponentAddWithInstanceGuid_ReturnsError()
+        {
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"components\":{\"add\":[{\"name\":\"Panel\",\"id\":1,\"instanceGuid\":\"33333333-3333-3333-3333-333333333333\"}]}}}";
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            Assert.False(result.IsValid);
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("patch.components.add[0]", messages);
+        }
+
+        [Fact]
+        public void ValidatePatch_GroupAddWithInstanceGuid_ReturnsError()
+        {
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"groups\":{\"add\":[{\"id\":1,\"members\":[2],\"instanceGuid\":\"44444444-4444-4444-4444-444444444444\"}]}}}";
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            Assert.False(result.IsValid);
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("patch.groups.add[0]", messages);
+        }
+
+        [Fact]
+        public void ValidatePatch_UnknownComponentMatchProperty_DoesNotEmitAnyOfBranchErrors()
+        {
+            // componentMatch uses anyOf for identity (instanceGuid, id, componentGuid) with
+            // additionalProperties:false. A match with id plus an unknown property should only
+            // report the unknown property, not misleading errors about missing instanceGuid
+            // or componentGuid from the failing anyOf branches.
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"components\":{\"remove\":[{\"id\":1,\"unknownField\":true}]}}}";
+
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            var messages = string.Join("\n", result.Errors.Select(e => e.ToString()));
+            Assert.False(result.IsValid);
+            Assert.Contains("unknownField", messages);
+            Assert.DoesNotContain("instanceGuid", messages);
+            Assert.DoesNotContain("componentGuid", messages);
+        }
+
+        [Fact]
+        public void ValidatePatch_ComponentMatchAnyOfAllBranchesFail_EmitsBranchErrors()
+        {
+            // When no componentMatch identity branch is satisfied, the failing branch errors
+            // should still be surfaced so the caller can see why matching failed.
+            const string json = "{\"kind\":\"ghpatch\",\"patch\":{\"components\":{\"remove\":[{\"pivot\":\"100,200\"}]}}}";
+
+            var result = GhJson.ValidatePatch(json, preferOnline: false);
+
+            System.Console.WriteLine("Errors: " + string.Join("\n", result.Errors.Select(e => e.ToString())));
+            var messages = string.Join("\n", result.Errors.Select(e => e.Message));
+            Assert.False(result.IsValid);
+            Assert.Contains("instanceGuid", messages);
+            Assert.Contains("componentGuid", messages);
         }
     }
 }

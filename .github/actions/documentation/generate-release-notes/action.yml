@@ -1,0 +1,102 @@
+# Generate developer-oriented release notes for GhJSON.NET from CHANGELOG.md
+# using the Mistral AI Chat Completions API.
+
+name: 'Generate Release Notes'
+description: 'Generate developer-oriented release notes for GhJSON.NET from CHANGELOG.md'
+
+inputs:
+  version:
+    description: 'Version string (e.g., 1.1.1)'
+    required: true
+  mistral-api-key:
+    description: 'Mistral AI API key'
+    required: true
+  model:
+    description: 'Mistral model name'
+    required: false
+    default: 'mistral-medium-latest'
+  changelog-path:
+    description: 'Path to CHANGELOG.md'
+    required: false
+    default: 'CHANGELOG.md'
+
+outputs:
+  body:
+    description: 'Generated release notes body in markdown'
+    value: ${{ steps.parse_response.outputs.body }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Extract changelog section
+      id: extract_changelog
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        CHANGELOG_PATH: ${{ inputs.changelog-path }}
+      run: |
+        SECTION=$(sed -n "/^## \[$VERSION\]/,/^## \[/p" "$CHANGELOG_PATH" | sed '$d')
+
+        if [ -z "$SECTION" ]; then
+          echo "::warning::No changelog section for version $VERSION; falling back to [Unreleased]"
+          SECTION=$(sed -n '/^## \[Unreleased\]/,/^## \[/p' "$CHANGELOG_PATH" | sed '$d')
+        fi
+
+        {
+          echo "section<<EOF_CHANGELOG"
+          echo "$SECTION"
+          echo "EOF_CHANGELOG"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Generate release notes with Mistral AI
+      id: ai_call
+      uses: ./.github/actions/ai/mistral-chat
+      with:
+        api-key: ${{ inputs.mistral-api-key }}
+        model: ${{ inputs.model }}
+        temperature: '0.3'
+        max-tokens: '4096'
+        system-prompt: |
+          You are a technical writer for GhJSON.NET, a set of NuGet packages for Grasshopper/Rhino JSON serialization and canvas operations.
+
+          Given a changelog section for a specific release, produce a concise, developer-oriented release description. The audience is .NET developers who consume the `GhJSON.Core` and `GhJSON.Grasshopper` NuGet packages.
+
+          Cover the following in this order:
+          1. **New Features** — new public APIs, components, serialization support, validation, or canvas operations.
+          2. **Breaking Changes** — any change that may require consumers to update their code, documents, or workflows. Include migration guidance when relevant.
+          3. **Deprecations** — features or APIs marked obsolete or scheduled for removal.
+          4. **Additional notes** — any other relevant information that doesn't fit into the above categories.
+
+          Guidelines:
+          - Focus on changes that affect consumers of the NuGet packages. Omit internal refactors, CI/tooling changes, license/header normalization, and documentation-only updates unless they have a direct API impact.
+          - Use markdown with clear headings (`### New Features`, `### Breaking Changes`, `### Deprecations`). Use bullet points.
+          - Preserve links to GitHub issues or PRs from the changelog.
+          - Be factual and concise. Avoid marketing language, emojis, and exclamation marks.
+          - If a section has no relevant entries, omit it entirely rather than writing "None".
+        user-prompt: |
+          Generate a developer-oriented release description for GhJSON.NET ${{ inputs.version }} from this changelog section:
+
+          ${{ steps.extract_changelog.outputs.section }}
+
+    - name: Parse response
+      id: parse_response
+      shell: bash
+      env:
+        AI_RESPONSE: ${{ steps.ai_call.outputs.response }}
+        AI_SUCCESS: ${{ steps.ai_call.outputs.success }}
+        CHANGELOG_SECTION: ${{ steps.extract_changelog.outputs.section }}
+      run: |
+        if [ "$AI_SUCCESS" = "true" ] && [ -n "$AI_RESPONSE" ]; then
+          {
+            echo "body<<EOF_BODY"
+            echo "$AI_RESPONSE"
+            echo "EOF_BODY"
+          } >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::AI release notes generation failed; using raw changelog section"
+          {
+            echo "body<<EOF_BODY"
+            echo "$CHANGELOG_SECTION"
+            echo "EOF_BODY"
+          } >> "$GITHUB_OUTPUT"
+        fi

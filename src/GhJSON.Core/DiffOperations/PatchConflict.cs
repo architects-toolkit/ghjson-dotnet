@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -28,8 +28,8 @@ namespace GhJSON.Core.DiffOperations
         /// <summary>The match descriptor resolved to more than one entity.</summary>
         MatchAmbiguous,
 
-        /// <summary>Adding a component whose <c>instanceGuid</c> already exists on the base.</summary>
-        InstanceGuidCollision,
+        /// <summary>Adding a component whose <c>id</c> already exists on the base and id renumbering is disabled.</summary>
+        IdCollision,
 
         /// <summary>Adding a connection that already exists.</summary>
         ConnectionAlreadyPresent,

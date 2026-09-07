@@ -29,10 +29,10 @@ jobs:
     outputs:
       version_changed: ${{ steps.filter.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - id: filter
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             version:
@@ -44,7 +44,7 @@ jobs:
       startsWith(github.ref, 'refs/heads/release/') ||
       needs.paths-check.outputs.version_changed == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ github.ref }}

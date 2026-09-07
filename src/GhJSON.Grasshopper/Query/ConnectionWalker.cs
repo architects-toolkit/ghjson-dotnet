@@ -203,7 +203,7 @@ namespace GhJSON.Grasshopper.Query
     /// <summary>
     /// Holds the topological classification of a set of document objects.
     /// </summary>
-    internal sealed class TopologyClassification
+    public sealed class TopologyClassification
     {
         /// <summary>
         /// Gets objects with outgoing but no incoming connections (data sources).

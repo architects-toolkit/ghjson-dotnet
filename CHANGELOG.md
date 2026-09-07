@@ -9,6 +9,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New Features
 
+#### Paginated GhJSON Documents
+
+- **Boundary connections** preserved across pages instead of silently dropped
+  - `GhJsonConnection.Boundary` flag marks connections that reference components outside the current page
+  - `GhJson.SegmentDocument()` now keeps any connection that touches the requested page and marks cross-page ones as boundary
+  - `GhJsonValidator` allows boundary connections and reports them as informational messages instead of errors
+- **Pagination metadata** added to `GhJsonMetadata` via `GhJsonPagination`
+  - `page`, `pageSize`, `totalPages` fields
+  - Automatically populated by `GhJson.SegmentDocument()` when the document spans multiple pages
+  - Pagination is always emitted for multi-page documents, even when `IncludeMetadata` is disabled
+  - Pagination is omitted for single-page documents, even when `IncludeMetadata` is enabled
+- **Page joining** via `GhJson.JoinPages()` reuses `DocumentMerger` to reassemble paginated documents
+  - Deduplicates overlapping components by ID and instance GUID
+  - Resolves boundary connections when both endpoints are present
+  - Merges group members across pages and removes empty groups
+  - Strips pagination metadata and recomputes counts
+
+#### Component State Serialization
+
+- **File Path floating parameter support** (`GhJSON.Grasshopper.Serialization.ObjectHandlers.FilePathHandler`)
+  - Serializes the file filter and `ExpireOnFileEvent` flag via the new `gh.filepath` extension schema
+  - The actual file path is preserved through existing internalized data serialization
+  - Added `gh.filepath` schema to the official GhJSON v1.0 extension registry
+
+#### Thread-Safe Canvas Operations
+
+- **Thread-safe connection helper** (`GhJSON.Grasshopper.ConnectionOperations.CanvasConnector`)
+  - `GhJsonGrasshopper.Connect()` now delegates to `CanvasConnector`, marshaling canvas access to the Rhino UI thread, recording a single undo event, and blocking until completion, matching the deletion helper pattern
+  - Added `GhJsonGrasshopper.Disconnect()` to remove wires between components with the same UI-thread safety and undo support
+  - Added `GhJsonGrasshopper.CaptureExternalConnections()` to capture all wires that connect a set of components to components outside the set, enabling replacement workflows to preserve external wiring
+  - Prevents "Cross-thread operation not valid" errors when connecting or disconnecting components from non-UI threads (e.g., MCP/AI tool calls)
+
+#### Topology Classification Facade
+
+- **`GhJsonGrasshopper.ClassifyTopology()`** facade method exposes the topological classification (start/end/middle/isolated nodes) of a set of canvas objects, delegating to the internal `ConnectionWalker.Classify`
+  - Made `TopologyClassification` public as the DTO returned by the facade
+  - `ConnectionWalker` remains `internal`
+
+### Changed
+
+- **Number Slider value format documented**
+  - `componentState.extensions["gh.numberslider"].value` uses the compact format `current<min~max>` (e.g. `10<5~50>` for min=5, value=10, max=50)
+  - Trailing zeros are normalized on round-trip, so `10<5~50.00>` is reported back as `10<5~50>`
+  - Documented in the GhJSON.NET Usage Guide, `NumberSliderHandler` XML docstring, and the `gh_get`/`gh_put` MCP tool descriptions
+
+- **Integer-only pivot coordinates**
+  - `GhJsonPivot.X` and `GhJsonPivot.Y` are now `int` and the v1.0 schema only accepts integer coordinates
+  - Compact `"X,Y"` and object `{x,y}` formats no longer allow decimal values
+  - Fractional Grasshopper canvas coordinates are rounded to the nearest integer when serialized
+  - `PivotConverter` is now `public` so it can be instantiated from any consuming assembly
+- **Paginated output respects `IncludeMetadata`**
+  - When `IncludeMetadata` is `false`, the metadata block is suppressed unless pagination is required (multi-page documents)
+  - When pagination is required, only the `pagination` object is emitted; title, counts, generator, and version fields are omitted
+  - Single-page documents never include `pagination`, even when `IncludeMetadata` is `true`
+
+- **GhPatch add operations no longer accept `instanceGuid`**
+  - `patch.components.add` and `patch.groups.add` entries must not specify `instanceGuid`; the updated GhPatch schema prohibits it and `PatchValidator` reports a clear error with the JSON path.
+  - `PatchApplier` no longer checks for `instanceGuid` collisions on add; the `PatchConflictKind.InstanceGuidCollision` kind has been replaced by `PatchConflictKind.IdCollision` for id collisions when `RenumberCollidingAddedIds` is disabled.
+  - `SchemaLoader` now loads the main GhJSON schema when loading the patch schema so that the patch schema can reference `ghjson.schema.json` definitions.
+- **AI-generated release descriptions**
+  - `milestone-release-draft.yml` now uses the Mistral AI Chat API to generate a developer-oriented release description of new features, breaking changes, and deprecations from the relevant changelog section.
+- Updated GitHub Actions workflow and reusable action references to Node 24-compatible versions.
+
+### Fixed
+
+- **Confusing GhJSON validator error messages** when schema validation uses `anyOf`/`oneOf` identity branches
+  - `GhJsonValidator.FlattenDetails` and `PatchValidator.FlattenDetails` now suppress errors from failing `anyOf`/`oneOf` branches when another branch is valid
+  - Previously, valid components could report misleading "missing instanceGuid/componentGuid" errors alongside the real issue (e.g., an unknown property)
+- `ComponentNameResolver` `"string"` and `"str"` aliases now resolve to `"Panel"` (Grasshopper Panel) instead of ambiguous `"Text"`, which could resolve to third-party components such as Mandrill Text
+- **Runtime data schema sync**
+  - The v1.0 GhJSON schema now allows `runtimeData` on `inputSettings`/`outputSettings` entries.
+  - This matches the `RuntimeData` property on `GhJsonParameterSettings` and the `IncludeRuntimeData` option; documents and patches that contain volatile data validate again.
+  - `runtimeData` is also documented as a volatile field to drop during GhPatch checksum normalization.
+
+## [1.1.0] - 2026-06-19
+
+### New Features
+
 #### Automatic Component Layout
 
 - **Dependency Graph Layout Engine**: New algorithm-based layout system with Sugiyama implementation

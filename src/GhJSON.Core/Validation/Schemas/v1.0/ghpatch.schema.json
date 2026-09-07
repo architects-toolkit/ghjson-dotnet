@@ -94,9 +94,9 @@
       "properties": {
         "add": {
           "type": "array",
-          "description": "Components to add. Each entry is a full component object as defined in ghjson.schema.json#/$defs/componentData.",
+          "description": "Components to add. Each entry is a full component object as defined in ghjson.schema.json#/$defs/componentData, but must not specify instanceGuid (it is generated on placement).",
           "items": {
-            "type": "object"
+            "$ref": "#/$defs/componentAdd"
           }
         },
         "remove": {
@@ -115,6 +115,14 @@
         }
       },
       "additionalProperties": false
+    },
+    "componentAdd": {
+      "type": "object",
+      "description": "A component to add to a GhPatch document. Must not specify instanceGuid; it is generated when the component is placed on the canvas.",
+      "allOf": [
+        { "$ref": "ghjson.schema.json#/$defs/componentData" },
+        { "not": { "required": ["instanceGuid"] } }
+      ]
     },
     "componentMatch": {
       "type": "object",
@@ -146,10 +154,30 @@
           "type": "string"
         },
         "pivot": {
-          "description": "Optional fingerprint hint when matching by componentGuid + name.",
+          "description": "Optional fingerprint hint when matching by componentGuid + name. Integer canvas coordinates.",
           "anyOf": [
-            { "type": "string" },
-            { "type": "object" }
+            {
+              "type": "string",
+              "description": "Compact format: 'X,Y' where X and Y are integers.",
+              "pattern": "^-?\\d+,-?\\d+$",
+              "examples": ["100,200", "-50,300"]
+            },
+            {
+              "type": "object",
+              "description": "Object format with explicit x and y integer properties.",
+              "required": ["x", "y"],
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "description": "The X coordinate on the canvas."
+                },
+                "y": {
+                  "type": "integer",
+                  "description": "The Y coordinate on the canvas."
+                }
+              },
+              "additionalProperties": false
+            }
           ]
         }
       },
@@ -298,7 +326,8 @@
       "properties": {
         "add": {
           "type": "array",
-          "items": { "type": "object" }
+          "description": "Groups to add. Each entry is a full group object as defined in ghjson.schema.json#/$defs/groupData, but must not specify instanceGuid (it is generated on placement).",
+          "items": { "$ref": "#/$defs/groupAdd" }
         },
         "remove": {
           "type": "array",
@@ -310,6 +339,14 @@
         }
       },
       "additionalProperties": false
+    },
+    "groupAdd": {
+      "type": "object",
+      "description": "A group to add to a GhPatch document. Must not specify instanceGuid; it is generated when the group is placed on the canvas.",
+      "allOf": [
+        { "$ref": "ghjson.schema.json#/$defs/groupData" },
+        { "not": { "required": ["instanceGuid"] } }
+      ]
     },
     "groupMatch": {
       "type": "object",

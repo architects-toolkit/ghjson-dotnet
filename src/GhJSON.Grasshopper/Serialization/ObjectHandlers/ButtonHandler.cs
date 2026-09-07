@@ -27,7 +27,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
     internal sealed class ButtonHandler : IObjectHandler
     {
-        private static readonly Guid ButtonGuid = new Guid("a8b97322-2d53-47cd-905e-e3a78807825d");
+        private static readonly Guid ButtonGuid = new Guid("a8b97322-2d53-47cd-905e-b932c3ccd74e");
 
         public int Priority => 100;
 

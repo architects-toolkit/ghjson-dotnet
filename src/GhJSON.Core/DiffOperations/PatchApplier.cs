@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -166,28 +166,10 @@ namespace GhJSON.Core.DiffOperations
             if (patch.Patch.Components?.Add != null)
             {
                 var existingIds = new HashSet<int>(componentsList.Where(c => c.Id.HasValue).Select(c => c.Id!.Value));
-                var existingGuids = new HashSet<Guid>(componentsList.Where(c => c.InstanceGuid.HasValue).Select(c => c.InstanceGuid!.Value));
                 var nextId = (existingIds.Count == 0 ? 0 : existingIds.Max()) + 1;
 
                 foreach (var component in patch.Patch.Components.Add)
                 {
-                    if (component.InstanceGuid.HasValue
-                        && component.InstanceGuid != Guid.Empty
-                        && existingGuids.Contains(component.InstanceGuid.Value))
-                    {
-                        result.Conflicts.Add(new PatchConflict(
-                            PatchConflictKind.InstanceGuidCollision,
-                            $"Component instanceGuid '{component.InstanceGuid}' already exists.",
-                            "components.add"));
-                        if (!options.ContinueOnConflict)
-                        {
-                            result.Success = false;
-                            return result;
-                        }
-
-                        continue;
-                    }
-
                     if (component.Id.HasValue && existingIds.Contains(component.Id.Value))
                     {
                         if (options.RenumberCollidingAddedIds)
@@ -203,7 +185,7 @@ namespace GhJSON.Core.DiffOperations
                         else
                         {
                             result.Conflicts.Add(new PatchConflict(
-                                PatchConflictKind.InstanceGuidCollision,
+                                PatchConflictKind.IdCollision,
                                 $"Component id '{component.Id}' already exists.",
                                 "components.add"));
                             if (!options.ContinueOnConflict)
@@ -220,11 +202,6 @@ namespace GhJSON.Core.DiffOperations
                     if (component.Id.HasValue)
                     {
                         existingIds.Add(component.Id.Value);
-                    }
-
-                    if (component.InstanceGuid.HasValue)
-                    {
-                        existingGuids.Add(component.InstanceGuid.Value);
                     }
 
                     result.ComponentsAdded++;

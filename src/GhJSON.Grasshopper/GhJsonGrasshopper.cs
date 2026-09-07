@@ -19,6 +19,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.ConnectionOperations;
+using GhJSON.Grasshopper.DeleteOperations;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.GetOperations;
 using GhJSON.Grasshopper.PutOperations;
@@ -55,9 +57,12 @@ namespace GhJSON.Grasshopper
                 IncludeConnections = options.IncludeConnections,
                 IncludeGroups = options.IncludeGroups,
                 IncludeInternalizedData = options.IncludeInternalizedData,
+                IncludeRuntimeData = options.IncludeRuntimeData,
                 IncludeRuntimeMessages = options.IncludeRuntimeMessages,
                 IncludeSelectedState = options.IncludeSelectedState,
                 IncludeMetadata = options.IncludeMetadata,
+                Page = options.Page,
+                PageSize = options.PageSize,
                 MetadataTitle = options.MetadataTitle,
                 MetadataDescription = options.MetadataDescription,
                 MetadataVersion = options.MetadataVersion,
@@ -179,6 +184,30 @@ namespace GhJSON.Grasshopper
 
         #endregion
 
+        #region Canvas Access (raw document and object lookup)
+
+        /// <summary>
+        /// Gets the active Grasshopper document, swallowing any access exceptions.
+        /// </summary>
+        /// <returns>The active document, or null if none is available.</returns>
+        public static GH_Document? GetActiveDocument()
+        {
+            return CanvasReader.GetActiveDocument();
+        }
+
+        /// <summary>
+        /// Finds a canvas object by its instance GUID.
+        /// </summary>
+        /// <param name="doc">The Grasshopper document to search.</param>
+        /// <param name="guid">The instance GUID to match.</param>
+        /// <returns>The matching object, or null if not found.</returns>
+        public static IGH_DocumentObject? FindObject(GH_Document doc, Guid guid)
+        {
+            return CanvasReader.FindObject(doc, guid);
+        }
+
+        #endregion
+
         #region Put (place on canvas)
 
         /// <summary>
@@ -192,6 +221,87 @@ namespace GhJSON.Grasshopper
             PutOptions? options = null)
         {
             return CanvasPlacer.Put(document, options);
+        }
+
+        #endregion
+
+        #region Delete (remove from canvas)
+
+        /// <summary>
+        /// Deletes objects from the canvas by their GUIDs.
+        /// </summary>
+        /// <param name="guids">The GUIDs of objects to delete.</param>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted and failed GUIDs.</returns>
+        public static DeleteResult Delete(
+            IEnumerable<Guid> guids,
+            DeleteOptions? options = null)
+        {
+            return CanvasDeleter.DeleteByGuids(guids, options);
+        }
+
+        /// <summary>
+        /// Clears all objects from the canvas.
+        /// </summary>
+        /// <param name="options">Optional delete options.</param>
+        /// <returns>The delete result containing deleted and failed GUIDs.</returns>
+        public static DeleteResult Clear(DeleteOptions? options = null)
+        {
+            return CanvasDeleter.Clear(options);
+        }
+
+        #endregion
+
+        #region Connect (wire components)
+
+        /// <summary>
+        /// Connects two parameters on the active canvas by component GUID and parameter name.
+        /// Executes on the UI thread and records a single undo event. Callers are responsible
+        /// for triggering a canvas redraw or solution recompute after batch operations.
+        /// </summary>
+        /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
+        /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
+        /// <param name="sourceParamName">NickName or Name of the source output parameter. If null or empty, the first output is used.</param>
+        /// <param name="targetParamName">NickName or Name of the target input parameter. If null or empty, the first input is used.</param>
+        /// <returns><c>true</c> if the connection was created or already existed.</returns>
+        public static bool Connect(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName = null,
+            string? targetParamName = null)
+        {
+            return CanvasConnector.Connect(sourceGuid, targetGuid, sourceParamName, targetParamName);
+        }
+
+        /// <summary>
+        /// Disconnects two parameters on the active canvas by component GUID and parameter name.
+        /// Executes on the UI thread and records a single undo event. Callers are responsible
+        /// for triggering a canvas redraw or solution recompute after batch operations.
+        /// </summary>
+        /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
+        /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
+        /// <param name="sourceParamName">NickName or Name of the source output parameter. If null or empty, the first output is used.</param>
+        /// <param name="targetParamName">NickName or Name of the target input parameter. If null or empty, the first input is used.</param>
+        /// <returns><c>true</c> if the connection did not exist or was removed.</returns>
+        public static bool Disconnect(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName = null,
+            string? targetParamName = null)
+        {
+            return CanvasConnector.Disconnect(sourceGuid, targetGuid, sourceParamName, targetParamName);
+        }
+
+        /// <summary>
+        /// Captures all wires that connect the given objects to objects outside the set.
+        /// This is useful when replacing components: external connections can be restored
+        /// after the new objects are placed.
+        /// </summary>
+        /// <param name="guids">Instance GUIDs of the objects whose external connections should be captured.</param>
+        /// <returns>A list of external connections, each from source to target.</returns>
+        public static IReadOnlyList<ConnectionInfo> CaptureExternalConnections(IEnumerable<Guid> guids)
+        {
+            return CanvasConnector.CaptureExternalConnections(guids);
         }
 
         #endregion
@@ -228,34 +338,6 @@ namespace GhJSON.Grasshopper
 
         #endregion
 
-        #region Delete (remove from canvas)
-
-        /// <summary>
-        /// Deletes objects from the canvas by their GUIDs.
-        /// </summary>
-        /// <param name="guids">The GUIDs of objects to delete.</param>
-        /// <param name="options">Optional delete options.</param>
-        /// <returns>The delete result containing deleted/failed/skipped GUIDs.</returns>
-        public static DeleteOperations.DeleteResult Delete(
-            IEnumerable<Guid> guids,
-            DeleteOperations.DeleteOptions? options = null)
-        {
-            return DeleteOperations.CanvasDeleter.DeleteByGuids(guids, options);
-        }
-
-        /// <summary>
-        /// Clears all objects from the canvas.
-        /// </summary>
-        /// <param name="options">Optional delete options.</param>
-        /// <returns>The delete result containing deleted/skipped GUIDs.</returns>
-        public static DeleteOperations.DeleteResult Clear(
-            DeleteOperations.DeleteOptions? options = null)
-        {
-            return DeleteOperations.CanvasDeleter.Clear(options);
-        }
-
-        #endregion
-
         #region Query (filter & select from canvas)
 
         /// <summary>
@@ -285,6 +367,18 @@ namespace GhJSON.Grasshopper
         public static Query.CanvasSelector Select(IEnumerable<IGH_DocumentObject> objects)
         {
             return Query.CanvasSelector.From(objects);
+        }
+
+        /// <summary>
+        /// Classifies a set of canvas objects into topological roles (start, end, middle, isolated)
+        /// based on their connections to each other. This walks the live Grasshopper connection graph
+        /// without serialization.
+        /// </summary>
+        /// <param name="objects">The objects to classify.</param>
+        /// <returns>A <see cref="Query.TopologyClassification"/> containing the GUIDs in each role.</returns>
+        public static Query.TopologyClassification ClassifyTopology(IEnumerable<IGH_DocumentObject> objects)
+        {
+            return Query.ConnectionWalker.Classify(objects);
         }
 
         #endregion

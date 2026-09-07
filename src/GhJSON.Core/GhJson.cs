@@ -429,6 +429,18 @@ namespace GhJSON.Core
             return DocumentMerger.Merge(baseDoc, incomingDoc, options);
         }
 
+        /// <summary>
+        /// Joins multiple paginated GhJSON documents into a single document.
+        /// Preserves IDs and instance GUIDs, deduplicates overlapping components,
+        /// resolves boundary connections, and strips pagination metadata.
+        /// </summary>
+        /// <param name="pages">The paginated documents to join.</param>
+        /// <returns>A page join result containing the joined document.</returns>
+        public static PageJoinResult JoinPages(IEnumerable<GhJsonDocument> pages)
+        {
+            return PageJoiner.JoinPages(pages);
+        }
+
         #endregion
 
         #region Schema Migration

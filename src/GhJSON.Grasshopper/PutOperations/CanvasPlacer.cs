@@ -23,7 +23,9 @@ using System.Linq;
 using GhJSON.Core.DependencyGraph;
 using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.ConnectionOperations;
 using GhJSON.Grasshopper.Deserialization;
+using GhJSON.Grasshopper.GetOperations;
 using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.Serialization;
 using GhJSON.Grasshopper.Serialization.ObjectHandlers;
@@ -49,7 +51,7 @@ namespace GhJSON.Grasshopper.PutOperations
             options ??= PutOptions.Default;
             var result = new PutResult { Success = true };
 
-            var ghDoc = Instances.ActiveCanvas?.Document;
+            var ghDoc = CanvasReader.GetActiveDocument();
             if (ghDoc == null)
             {
                 result.Success = false;
@@ -261,24 +263,16 @@ namespace GhJSON.Grasshopper.PutOperations
                 return null;
             }
 
-            // Try by index first
-            if (endpoint.ParamIndex.HasValue && endpoint.ParamIndex.Value < parameters.Count)
+            // Try index first, then name/nickname via shared helper
+            var matchedParam = ConnectionHelper.FindParamByIndexNameOrNickName(parameters, endpoint.ParamName, endpoint.ParamIndex);
+            if (matchedParam != null)
             {
-                return parameters[endpoint.ParamIndex.Value];
+                return matchedParam;
             }
 
-            // Fallback to name
+            // Fuzzy name resolution fallback
             if (!string.IsNullOrEmpty(endpoint.ParamName))
             {
-                // Exact match first
-                var exactMatch = parameters.FirstOrDefault(p =>
-                    p.Name.Equals(endpoint.ParamName, StringComparison.OrdinalIgnoreCase));
-                if (exactMatch != null)
-                {
-                    return exactMatch;
-                }
-
-                // Fuzzy name resolution fallback
                 var knownNames = parameters.Select(p => p.Name);
                 var resolvedName = ParameterNameResolver.Resolve(endpoint.ParamName, knownNames);
                 if (resolvedName != null)

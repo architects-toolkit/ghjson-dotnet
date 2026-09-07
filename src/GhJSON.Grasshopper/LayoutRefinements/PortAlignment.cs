@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -21,6 +21,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
+using GhJSON.Grasshopper.GetOperations;
 using Grasshopper;
 using Grasshopper.Kernel;
 
@@ -47,7 +48,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var ghDocument = Instances.ActiveCanvas?.Document;
+            var ghDocument = CanvasReader.GetActiveDocument();
             if (ghDocument == null)
             {
                 Debug.WriteLine("[PortAlignment.AlignToPorts] No active Grasshopper document; skipping.");
@@ -140,7 +141,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var ghDocument = Instances.ActiveCanvas?.Document;
+            var ghDocument = CanvasReader.GetActiveDocument();
             if (ghDocument == null)
             {
                 Debug.WriteLine("[PortAlignment.AlignParamsToInputPorts] No active Grasshopper document; skipping.");
@@ -227,7 +228,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var ghDocument = Instances.ActiveCanvas?.Document;
+            var ghDocument = CanvasReader.GetActiveDocument();
             if (ghDocument == null)
             {
                 Debug.WriteLine("[PortAlignment.AlignOneToOneConnections] No active Grasshopper document; skipping.");

@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -62,7 +62,6 @@ jobs:
         uses: ./.github/actions/documentation/update-badges
 
       - name: Create release section in changelog
-        if: steps.strip-date.outputs.new-version != steps.get-version.outputs.version
         id: update-changelog
         uses: ./.github/actions/documentation/update-changelog
         with:
@@ -70,14 +69,16 @@ jobs:
           version: ${{ steps.strip-date.outputs.new-version }}
 
       - name: Create Pull Request
-        if: github.event_name == 'pull_request' && steps.strip-date.outputs.new-version != steps.get-version.outputs.version
-        uses: peter-evans/create-pull-request@v6
+        if: github.event_name == 'pull_request' && (steps.strip-date.outputs.new-version != steps.get-version.outputs.version || steps.update-changelog.outputs.updated == 'true')
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: prepare release ${{ steps.strip-date.outputs.new-version }} for main"
           title: "chore: prepare release ${{ steps.strip-date.outputs.new-version }} for main"
           body: |
-            This PR prepares the release for version ${{ steps.strip-date.outputs.new-version }} by stripping the date suffix from the version and creating a release section in the changelog.
+            This PR prepares the release for version ${{ steps.strip-date.outputs.new-version }}.
+
+            It strips any date suffix from the version, updates badges, and replaces the `[Unreleased]` section in the changelog with a dated release section.
 
             This is an automated PR created by the Prepare Release for Main workflow.
           branch: "chore/prepare-release-${{ github.event.pull_request.head.ref }}"

@@ -36,5 +36,12 @@ namespace GhJSON.Core.SchemaModels
         /// </summary>
         [JsonProperty("to")]
         public GhJsonConnectionEndpoint To { get; set; } = new GhJsonConnectionEndpoint();
+
+        /// <summary>
+        /// Gets or sets a value indicating whether this connection crosses a page boundary.
+        /// When true, one or both endpoints reference components that are not present in the document.
+        /// </summary>
+        [JsonProperty("boundary", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Boundary { get; set; }
     }
 }

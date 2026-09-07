@@ -1,4 +1,4 @@
-/*
+﻿/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -33,11 +33,11 @@ namespace GhJSON.Core.Tests.SchemaModels
         [Fact]
         public void FromCompact_ValidString_ParsesCoordinates()
         {
-            var pivot = GhJsonPivot.FromCompact("100.5,-42.25");
+            var pivot = GhJsonPivot.FromCompact("100,-42");
 
             Assert.NotNull(pivot);
-            Assert.Equal(100.5, pivot!.X);
-            Assert.Equal(-42.25, pivot.Y);
+            Assert.Equal(100, pivot!.X);
+            Assert.Equal(-42, pivot.Y);
         }
 
         [Theory]
@@ -46,6 +46,7 @@ namespace GhJSON.Core.Tests.SchemaModels
         [InlineData("100")]
         [InlineData("100,200,300")]
         [InlineData("abc,def")]
+        [InlineData("100.5,200.5")]
         public void FromCompact_Invalid_ReturnsNull(string input)
         {
             Assert.Null(GhJsonPivot.FromCompact(input));
@@ -58,10 +59,10 @@ namespace GhJSON.Core.Tests.SchemaModels
             try
             {
                 Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE");
-                var pivot = new GhJsonPivot(1.5, 2.5);
+                var pivot = new GhJsonPivot(1, 2);
 
-                // Invariant culture → "." decimal separator, not "," as de-DE would use.
-                Assert.Equal("1.5,2.5", pivot.ToCompact());
+                // Invariant culture keeps the integer format; no decimal separator appears.
+                Assert.Equal("1,2", pivot.ToCompact());
             }
             finally
             {
@@ -72,13 +73,24 @@ namespace GhJSON.Core.Tests.SchemaModels
         [Fact]
         public void RoundTrip_CompactStringPreservesValue()
         {
-            var original = new GhJsonPivot(-123.456, 789.012);
+            var original = new GhJsonPivot(-123, 789);
 
             var roundTripped = GhJsonPivot.FromCompact(original.ToCompact());
 
             Assert.NotNull(roundTripped);
             Assert.Equal(original.X, roundTripped!.X);
             Assert.Equal(original.Y, roundTripped.Y);
+        }
+
+        [Fact]
+        public void ToCompact_DoesNotUseScientificNotation()
+        {
+            var pivot = new GhJsonPivot(1000000, 1000);
+            var compact = pivot.ToCompact();
+
+            Assert.DoesNotContain('E', compact);
+            Assert.DoesNotContain('e', compact);
+            Assert.Equal("1000000,1000", compact);
         }
 
         [Fact]
@@ -93,12 +105,12 @@ namespace GhJSON.Core.Tests.SchemaModels
         }
 
         [Fact]
-        public void FromPointF_PreservesCoordinates()
+        public void FromPointF_RoundsToNearestInteger()
         {
-            var pivot = GhJsonPivot.FromPointF(new PointF(3.25f, 4.5f));
+            var pivot = GhJsonPivot.FromPointF(new PointF(3.25f, 4.75f));
 
-            Assert.Equal(3.25, pivot.X);
-            Assert.Equal(4.5, pivot.Y);
+            Assert.Equal(3, pivot.X);
+            Assert.Equal(5, pivot.Y);
         }
     }
 }

@@ -181,5 +181,167 @@ namespace GhJSON.Core.Tests.MergeOperations
             Assert.True(result.Success);
             Assert.Single(result.Document.Components);
         }
+
+        [Fact]
+        public void Merge_WithOffset_AppliesOffsetToPivots()
+        {
+            var baseDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var incomingDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "B",
+                    Id = 1,
+                    Pivot = new GhJsonPivot { X = 100, Y = 200 }
+                })
+                .Build();
+
+            var options = new MergeOptions
+            {
+                OffsetX = 50,
+                OffsetY = 75
+            };
+            var result = GhJson.Merge(baseDoc, incomingDoc, options);
+
+            Assert.True(result.Success);
+            var mergedB = result.Document.Components.First(c => c.Name == "B");
+            Assert.Equal(150, mergedB.Pivot.X);
+            Assert.Equal(275, mergedB.Pivot.Y);
+        }
+
+        [Fact]
+        public void Merge_PreserveGroupsFalse_DoesNotIncludeIncomingGroups()
+        {
+            var baseDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var incomingDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "B", Id = 1 })
+                .AddGroup(new GhJsonGroup { Id = 1, Members = new System.Collections.Generic.List<int> { 1 } })
+                .Build();
+
+            var options = new MergeOptions { PreserveGroups = false };
+            var result = GhJson.Merge(baseDoc, incomingDoc, options);
+
+            Assert.True(result.Success);
+            Assert.Null(result.Document.Groups);
+        }
+
+        [Fact]
+        public void Merge_RegenerateIdsFalse_KeepsOriginalIds_AndMapsCorrectly()
+        {
+            var baseDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var incomingDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "B", Id = 1 })
+                .Build();
+
+            var options = new MergeOptions { RegenerateIds = false };
+            var result = GhJson.Merge(baseDoc, incomingDoc, options);
+
+            Assert.True(result.Success);
+            // Both components should have Id = 1 since we didn't regenerate
+            Assert.Equal(2, result.Document.Components.Count);
+            Assert.Contains(result.Document.Components, c => c.Id == 1 && c.Name == "A");
+            Assert.Contains(result.Document.Components, c => c.Id == 1 && c.Name == "B");
+        }
+
+        [Fact]
+        public void Merge_WithGroupMemberIdMapping_UpdatesMembersCorrectly()
+        {
+            var baseDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var incomingDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "B", Id = 1 })
+                .AddGroup(new GhJsonGroup
+                {
+                    Id = 1,
+                    Members = new System.Collections.Generic.List<int> { 1 }
+                })
+                .Build();
+
+            var result = GhJson.Merge(baseDoc, incomingDoc);
+
+            Assert.True(result.Success);
+            Assert.Single(result.Document.Groups);
+            // Incoming group member ID 1 should be remapped to 2
+            Assert.Equal(2, result.Document.Groups[0].Members[0]);
+        }
+
+        [Fact]
+        public void Merge_Cloning_PreservesComponentStateExtensions()
+        {
+            var baseDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var incomingDoc = new GhJsonDocument(
+                schema: GhJson.CurrentVersion,
+                metadata: null,
+                components: new[]
+                {
+                    new GhJsonComponent
+                    {
+                        Name = "B",
+                        Id = 1,
+                        ComponentState = new GhJsonComponentState
+                        {
+                            Locked = true,
+                            Extensions = new System.Collections.Generic.Dictionary<string, object>
+                            {
+                                ["key"] = new Newtonsoft.Json.Linq.JObject { ["value"] = "test" }
+                            }
+                        }
+                    }
+                },
+                connections: null,
+                groups: null);
+
+            var result = GhJson.Merge(baseDoc, incomingDoc);
+
+            Assert.True(result.Success);
+            var mergedB = result.Document.Components.First(c => c.Name == "B");
+            Assert.NotNull(mergedB.ComponentState);
+            Assert.True(mergedB.ComponentState.Locked);
+            Assert.NotNull(mergedB.ComponentState.Extensions);
+        }
+
+        [Fact]
+        public void Merge_Cloning_PreservesParameterSettings()
+        {
+            var baseDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var component = new GhJsonComponent { Name = "B", Id = 1 };
+            component.InputSettings = new System.Collections.Generic.List<GhJsonParameterSettings>
+            {
+                new GhJsonParameterSettings
+                {
+                    ParameterName = "X",
+                    DataMapping = "flatten",
+                    Expression = "x * 2"
+                }
+            };
+            var incomingDoc = GhJson.CreateDocumentBuilder()
+                .AddComponent(component)
+                .Build();
+
+            var result = GhJson.Merge(baseDoc, incomingDoc);
+
+            Assert.True(result.Success);
+            var mergedB = result.Document.Components.First(c => c.Name == "B");
+            Assert.NotNull(mergedB.InputSettings);
+            Assert.Single(mergedB.InputSettings);
+            Assert.Equal("flatten", mergedB.InputSettings[0].DataMapping);
+            Assert.Equal("x * 2", mergedB.InputSettings[0].Expression);
+        }
     }
 }

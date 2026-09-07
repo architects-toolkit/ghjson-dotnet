@@ -26,7 +26,7 @@ namespace GhJSON.Core.Serialization
     /// JSON converter for <see cref="GhJsonPivot"/> that supports both compact string format
     /// and object format as defined in the schema.
     /// </summary>
-    internal sealed class PivotConverter : JsonConverter<GhJsonPivot>
+    public sealed class PivotConverter : JsonConverter<GhJsonPivot>
     {
         /// <inheritdoc/>
         public override GhJsonPivot? ReadJson(
@@ -50,9 +50,15 @@ namespace GhJSON.Core.Serialization
             if (reader.TokenType == JsonToken.StartObject)
             {
                 var obj = JObject.Load(reader);
-                var x = obj["x"]?.Value<double>() ?? 0;
-                var y = obj["y"]?.Value<double>() ?? 0;
-                return new GhJsonPivot(x, y);
+                var xToken = obj["x"];
+                var yToken = obj["y"];
+                if (xToken?.Type != JTokenType.Integer || yToken?.Type != JTokenType.Integer)
+                {
+                    throw new JsonSerializationException(
+                        "Pivot object properties x and y must be integers.");
+                }
+
+                return new GhJsonPivot(xToken.Value<int>(), yToken.Value<int>());
             }
 
             throw new JsonSerializationException(
@@ -71,7 +77,8 @@ namespace GhJSON.Core.Serialization
                 return;
             }
 
-            // Always write in compact format for optimization
+            // Emit the compact integer string form. The v1.0 schema accepts both the compact
+            // "X,Y" format and the object {x,y} format as long as coordinates are integers.
             writer.WriteValue(value.ToCompact());
         }
     }

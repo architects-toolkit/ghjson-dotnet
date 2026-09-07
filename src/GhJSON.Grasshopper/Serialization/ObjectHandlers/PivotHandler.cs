@@ -49,8 +49,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             if (component.Pivot == null && obj.Attributes != null)
             {
-                var pivot = obj.Attributes.Pivot;
-                component.Pivot = new GhJsonPivot(pivot.X, pivot.Y);
+                component.Pivot = GhJsonPivot.FromPointF(obj.Attributes.Pivot);
             }
         }
 
@@ -59,9 +58,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             if (component.Pivot != null && obj.Attributes != null)
             {
-                obj.Attributes.Pivot = new PointF(
-                    (float)component.Pivot.X,
-                    (float)component.Pivot.Y);
+                obj.Attributes.Pivot = component.Pivot.ToPointF();
             }
         }
     }

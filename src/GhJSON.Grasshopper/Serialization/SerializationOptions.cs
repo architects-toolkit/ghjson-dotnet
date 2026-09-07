@@ -35,6 +35,23 @@ namespace GhJSON.Grasshopper.Serialization
         public bool IncludeInternalizedData { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a value indicating whether to include runtime (volatile) data.
+        /// </summary>
+        public bool IncludeRuntimeData { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the one-based page index when paginating the result.
+        /// When null, no pagination is applied.
+        /// </summary>
+        public int? Page { get; set; }
+
+        /// <summary>
+        /// Gets or sets the number of components per page.
+        /// When null, no pagination is applied.
+        /// </summary>
+        public int? PageSize { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether to include runtime messages.
         /// </summary>
         public bool IncludeRuntimeMessages { get; set; } = false;
@@ -42,7 +59,7 @@ namespace GhJSON.Grasshopper.Serialization
         /// <summary>
         /// Gets or sets a value indicating whether to include selected state.
         /// </summary>
-        public bool IncludeSelectedState { get; set; } = false;
+        public bool IncludeSelectedState { get; set; } = true;
 
         /// <summary>
         /// Gets or sets a value indicating whether to include connections.

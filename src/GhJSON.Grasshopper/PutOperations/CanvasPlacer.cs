@@ -93,6 +93,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
             // Place components
             var idToObject = new Dictionary<int, IGH_DocumentObject>();
+            var addedObjects = new List<IGH_DocumentObject>();
 
             // Calculate positions for components without pivots using dependency graph layout
             var layoutPositions = hasPivots
@@ -148,6 +149,7 @@ namespace GhJSON.Grasshopper.PutOperations
                 ObjectHandlerOrchestrator.PostPlacement(component, obj);
 
                 result.PlacedObjects.Add(obj);
+                addedObjects.Add(obj);
                 result.ComponentsPlaced++;
 
                 if (component.Id.HasValue)
@@ -197,8 +199,10 @@ namespace GhJSON.Grasshopper.PutOperations
             {
                 foreach (var group in document.Groups)
                 {
-                    if (CreateGroup(group, idToObject, ghDoc))
+                    var placedGroup = CreateGroup(group, idToObject, ghDoc);
+                    if (placedGroup != null)
                     {
+                        addedObjects.Add(placedGroup);
                         result.GroupsCreated++;
                     }
                     else
@@ -206,6 +210,11 @@ namespace GhJSON.Grasshopper.PutOperations
                         result.Warnings.Add($"Failed to create group: {group.Name}");
                     }
                 }
+            }
+
+            if (addedObjects.Count > 0)
+            {
+                ghDoc.UndoUtil.RecordAddObjectEvent($"[GhJSON] Place {addedObjects.Count} object(s)", addedObjects);
             }
 
             // Expire solution
@@ -288,7 +297,7 @@ namespace GhJSON.Grasshopper.PutOperations
             return null;
         }
 
-        private static bool CreateGroup(GhJsonGroup groupDef, Dictionary<int, IGH_DocumentObject> idToObject, GH_Document ghDoc)
+        private static GH_Group? CreateGroup(GhJsonGroup groupDef, Dictionary<int, IGH_DocumentObject> idToObject, GH_Document ghDoc)
         {
             var members = new List<Guid>();
 
@@ -302,7 +311,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
             if (members.Count == 0)
             {
-                return false;
+                return null;
             }
 
             var group = new GH_Group();
@@ -326,7 +335,7 @@ namespace GhJSON.Grasshopper.PutOperations
             }
 
             ghDoc.AddObject(group, false);
-            return true;
+            return group;
         }
 
         private static Color? ParseArgbColor(string colorString)

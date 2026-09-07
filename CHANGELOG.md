@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `GhJsonGrasshopper.CaptureExternalConnections()` to capture all wires that connect a set of components to components outside the set, enabling replacement workflows to preserve external wiring
   - Prevents "Cross-thread operation not valid" errors when connecting or disconnecting components from non-UI threads (e.g., MCP/AI tool calls)
 
+#### Topology Classification Facade
+
+- **`GhJsonGrasshopper.ClassifyTopology()`** facade method exposes the topological classification (start/end/middle/isolated nodes) of a set of canvas objects, delegating to the internal `ConnectionWalker.Classify`
+  - Made `TopologyClassification` public as the DTO returned by the facade
+  - `ConnectionWalker` remains `internal`
+
 ### Changed
 
 - **Number Slider value format documented**
@@ -62,13 +68,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `patch.components.add` and `patch.groups.add` entries must not specify `instanceGuid`; the updated GhPatch schema prohibits it and `PatchValidator` reports a clear error with the JSON path.
   - `PatchApplier` no longer checks for `instanceGuid` collisions on add; the `PatchConflictKind.InstanceGuidCollision` kind has been replaced by `PatchConflictKind.IdCollision` for id collisions when `RenumberCollidingAddedIds` is disabled.
   - `SchemaLoader` now loads the main GhJSON schema when loading the patch schema so that the patch schema can reference `ghjson.schema.json` definitions.
+- **AI-generated release descriptions**
+  - `milestone-release-draft.yml` now uses the Mistral AI Chat API to generate a developer-oriented release description of new features, breaking changes, and deprecations from the relevant changelog section.
+- Updated GitHub Actions workflow and reusable action references to Node 24-compatible versions.
 
 ### Fixed
 
+- `GhJsonGrasshopper.Put()` now records placed components and groups as one Grasshopper add-object undo event, so users can remove the placed network with Ctrl+Z.
 - **Confusing GhJSON validator error messages** when schema validation uses `anyOf`/`oneOf` identity branches
   - `GhJsonValidator.FlattenDetails` and `PatchValidator.FlattenDetails` now suppress errors from failing `anyOf`/`oneOf` branches when another branch is valid
   - Previously, valid components could report misleading "missing instanceGuid/componentGuid" errors alongside the real issue (e.g., an unknown property)
 - `ComponentNameResolver` `"string"` and `"str"` aliases now resolve to `"Panel"` (Grasshopper Panel) instead of ambiguous `"Text"`, which could resolve to third-party components such as Mandrill Text
+- **Runtime data schema sync**
+  - The v1.0 GhJSON schema now allows `runtimeData` on `inputSettings`/`outputSettings` entries.
+  - This matches the `RuntimeData` property on `GhJsonParameterSettings` and the `IncludeRuntimeData` option; documents and patches that contain volatile data validate again.
+  - `runtimeData` is also documented as a volatile field to drop during GhPatch checksum normalization.
 
 ## [1.1.0] - 2026-06-19
 
@@ -168,6 +182,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PatchValidator` now loads the patch schema as a bundle with the main GhJSON schema, registers all schemas in the per-evaluation `SchemaRegistry`, and uses the shared `SchemaEvaluationLock`; this resolves `ghjson.schema.json#/$defs/...` `$ref`s when `ValidatePatch` is called with `preferOnline: true`.
 - `ComponentNameResolver` Python aliases now resolve to `"Python 3 Script"` (Rhino 8 canonical name) instead of legacy `"Python Script"`
 - `ComponentNameResolver` IronPython alias now resolves to `"IronPython 2 Script"` (Rhino 8 canonical name) instead of legacy `"IronPython Script"`
 - `ComponentNameResolver` alias dictionary expanded with missing entries: `"python3"`, `"ghpython"`, `"python script"`, `"csharp script"`, `"c# component"`, `"number slider"` (with space), `"str"`, `"string"` (→ Text), `"streamfilter"`, `"filter"` (→ Stream Filter)

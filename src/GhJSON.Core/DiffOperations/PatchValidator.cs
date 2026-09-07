@@ -76,10 +76,10 @@ namespace GhJSON.Core.DiffOperations
                 return result;
             }
 
-            JsonSchema schema;
+            SchemaLoader.Bundle bundle;
             try
             {
-                schema = SchemaLoader.LoadPatchSchema(schemaVersion, preferOnline);
+                bundle = SchemaLoader.LoadPatchBundle(schemaVersion, preferOnline);
             }
             catch (Exception ex)
             {
@@ -88,13 +88,13 @@ namespace GhJSON.Core.DiffOperations
                 return result;
             }
 
-            EvaluateSchema(schema, instance, result);
+            EvaluateSchema(bundle, instance, result);
             ValidateNoInstanceGuidInAdds(instance, result);
             result.IsValid = !result.HasErrors;
             return result;
         }
 
-        private static void EvaluateSchema(JsonSchema schema, JsonNode? instance, ValidationResult result)
+        private static void EvaluateSchema(SchemaLoader.Bundle bundle, JsonNode? instance, ValidationResult result)
         {
             var options = new EvaluationOptions
             {
@@ -102,10 +102,18 @@ namespace GhJSON.Core.DiffOperations
                 EvaluateAs = SpecVersion.Draft202012,
             };
 
+            foreach (var kvp in bundle.Schemas)
+            {
+                options.SchemaRegistry.Register(kvp.Key, kvp.Value);
+            }
+
             EvaluationResults evaluation;
             try
             {
-                evaluation = schema.Evaluate(instance, options);
+                lock (GhJsonValidator.SchemaEvaluationLock)
+                {
+                    evaluation = bundle.Main.Evaluate(instance, options);
+                }
             }
             catch (Exception ex)
             {

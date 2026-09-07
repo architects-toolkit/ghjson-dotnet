@@ -28,7 +28,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: dev
 
@@ -66,7 +66,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.check-changes.outputs.has-changes == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: update copyright year to ${{ steps.year.outputs.year }}"

@@ -369,6 +369,18 @@ namespace GhJSON.Grasshopper
             return Query.CanvasSelector.From(objects);
         }
 
+        /// <summary>
+        /// Classifies a set of canvas objects into topological roles (start, end, middle, isolated)
+        /// based on their connections to each other. This walks the live Grasshopper connection graph
+        /// without serialization.
+        /// </summary>
+        /// <param name="objects">The objects to classify.</param>
+        /// <returns>A <see cref="Query.TopologyClassification"/> containing the GUIDs in each role.</returns>
+        public static Query.TopologyClassification ClassifyTopology(IEnumerable<IGH_DocumentObject> objects)
+        {
+            return Query.ConnectionWalker.Classify(objects);
+        }
+
         #endregion
 
         #region Object Handler Extensibility

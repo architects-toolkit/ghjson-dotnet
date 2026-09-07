@@ -49,12 +49,16 @@ ghjson-dotnet/
 ## Pull Request Process
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+2. Create a topic branch from `main` (`git checkout -b feature/amazing-feature`)
 3. Make your changes
 4. Run tests (`dotnet test`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Commit your changes using Conventional Commit style (`git commit -m 'feat: add amazing feature'`)
 6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+7. Open a Pull Request **targeting `main`**
+
+All pull requests target `main` — there is no `dev` branch. Fixes for a
+specific released line target its `release/X.Y` stabilization branch instead.
+See [Branching and Release Workflow](docs/RELEASE_WORKFLOW.md) for details.
 
 ## Code Style
 
@@ -69,9 +73,13 @@ ghjson-dotnet/
 
 The release process is automated via GitHub Actions:
 
-1. **Milestone Close** → Creates a release draft
-2. **Release Published** → Builds packages and attaches to release
-3. **Manual Trigger** → Publishes packages to NuGet
+1. **Release 1 - Prepare Release** (manual) → opens a `release-prep/<version>` PR
+2. **Release 2 - Tag on Merge** → creates the bare version tag and a draft GitHub Release
+3. **Release Published** → `release-3-build.yml` builds packages and attaches them to the release
+4. **Publish to NuGet** (manual) → pushes packages to nuget.org via trusted publishing
+
+See [docs/RELEASE_WORKFLOW.md](docs/RELEASE_WORKFLOW.md) for the full branch
+model, stabilization lines, and hotfix flow.
 
 ## License
 

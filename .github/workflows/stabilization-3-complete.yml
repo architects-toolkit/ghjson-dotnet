@@ -1,0 +1,278 @@
+name: Stabilization 3 - Complete Release Line
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version to complete
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: stabilization-complete-${{ inputs.version || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve stable release and stabilization line
+        id: determine
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # Tolerate a legacy v-prefixed tag name, but normalize to bare X.Y.Z.
+          VERSION="${VERSION#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "This is not a stable release; no stabilization completion is needed."
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git fetch --all --tags
+          TAG_REF="refs/tags/$VERSION"
+          if ! git rev-parse --verify "$TAG_REF^{commit}" >/dev/null 2>&1; then
+            if git rev-parse --verify "refs/tags/v$VERSION^{commit}" >/dev/null 2>&1; then
+              TAG_REF="refs/tags/v$VERSION"
+            else
+              echo "::error::Release tag '$VERSION' does not exist." >&2
+              exit 1
+            fi
+          fi
+
+          TAG_SHA=$(git rev-parse "$TAG_REF^{commit}")
+          if git merge-base --is-ancestor "$TAG_SHA" origin/main; then
+            echo "Release tag '$VERSION' is already contained in main; skipping completion."
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CORE="${VERSION%.*}"
+          LINE=""
+          while IFS= read -r branch; do
+            [[ -z "$branch" ]] && continue
+            if git merge-base --is-ancestor "$TAG_SHA" "$branch"; then
+              LINE="${branch#origin/}"
+              break
+            fi
+          done < <(git for-each-ref --format='%(refname:short)' 'refs/remotes/origin/release/*')
+
+          if [[ -z "$LINE" ]]; then
+            echo "::error::Tag '$VERSION' is not contained in an active release/X.Y branch." >&2
+            exit 1
+          fi
+
+          mapfile -t TAGS < <(git tag --merged "origin/$LINE" |
+            grep -E "^v?[0-9]+\.[0-9]+\.[0-9]+(-((alpha|beta|rc)(\.[0-9]+)?)?)?$" || true)
+          PREVIOUS=$(python3 - "$VERSION" "${TAGS[@]}" <<'PY'
+          import re
+          import sys
+
+          version = sys.argv[1]
+          match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+          current = tuple(map(int, match.groups()))
+          rank = {"alpha": 0, "beta": 1, "rc": 2, None: 3}
+          candidates = []
+          for tag in sys.argv[2:]:
+              parsed = re.fullmatch(
+                  r"v?(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|rc)(?:\.(\d+))?)?",
+                  tag,
+              )
+              if not parsed:
+                  continue
+              core = tuple(map(int, parsed.groups()[:3]))
+              stage = parsed.group(4)
+              number = int(parsed.group(5) or (1 if stage else 0))
+              key = core + (rank[stage], number)
+              if core[:2] == current[:2] and core <= current and tag != version and tag != f"v{version}":
+                  candidates.append((key, tag))
+          print(max(candidates)[1] if candidates else "")
+          PY
+          )
+          if [[ -z "$PREVIOUS" ]]; then
+            PREVIOUS=$(git rev-list --max-parents=0 "$TAG_SHA" | tail -n 1)
+          fi
+
+          {
+            echo "should-run=true"
+            echo "version=$VERSION"
+            echo "line=$LINE"
+            echo "tag-sha=$TAG_SHA"
+            echo "previous-tag=$PREVIOUS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build backport branch
+        id: backport
+        if: steps.determine.outputs.should-run == 'true'
+        uses: ./.github/actions/utils/cherry-pick-range
+        with:
+          base-branch: main
+          new-branch: backport/${{ steps.determine.outputs.version }}
+          source-ref: origin/${{ steps.determine.outputs.line }}
+          from-ref: ${{ steps.determine.outputs.previous-tag }}
+          exclude-paths: |
+            Directory.Build.props
+            README.md
+          push: 'true'
+          bot-name: ${{ vars.GHJSON_BOT_NAME }}
+          bot-email: ${{ vars.GHJSON_BOT_EMAIL }}
+        env:
+          VERSION: ${{ steps.determine.outputs.version }}
+
+      - name: Report backport conflict
+        if: steps.backport.outputs.conflict == 'true'
+        uses: actions/github-script@v9
+        env:
+          VERSION: ${{ steps.determine.outputs.version }}
+          LINE: ${{ steps.determine.outputs.line }}
+          PREVIOUS: ${{ steps.determine.outputs.previous-tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = `⛔ Backport needs manual work: ${process.env.VERSION}`;
+            const body = [
+              `The stabilization backport for \`${process.env.VERSION}\` could not be cherry-picked automatically.`,
+              '',
+              'Run these commands locally, resolve each conflict, and open the backport PR manually:',
+              '```bash',
+              'git fetch origin main ' + process.env.LINE + ' --tags',
+              'git checkout -B backport/' + process.env.VERSION + ' origin/main',
+              'git cherry-pick ' + process.env.PREVIOUS + '..origin/' + process.env.LINE,
+              'git cherry-pick --continue',
+              'git push origin backport/' + process.env.VERSION,
+              '```',
+              '',
+              `**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const existing = issues.find(issue => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['automated', 'status: needs attention'],
+              });
+            }
+
+      - name: Fail after backport conflict
+        if: steps.backport.outputs.conflict == 'true'
+        shell: bash
+        run: |
+          echo "::error::Backport requires manual conflict resolution." >&2
+          exit 1
+
+      - name: Open backport pull request
+        id: create-pr
+        if: steps.backport.outputs.conflict != 'true' && steps.backport.outputs.picked-count != '0' && steps.determine.outputs.should-run == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.determine.outputs.version }}
+          LINE: ${{ steps.determine.outputs.line }}
+        run: |
+          set -euo pipefail
+          PR_OUTPUT=$(gh pr create \
+            --base main \
+            --head "backport/$VERSION" \
+            --title "chore: backport $VERSION to main" \
+            --body "Backports the stabilization-line changes for \`$VERSION\` from \`$LINE\` to \`main\`." 2>&1 || true)
+          PR_URL=$(printf '%s\n' "$PR_OUTPUT" | grep -Eo 'https://[^[:space:]]+/pull/[0-9]+' | tail -n 1 || true)
+          if [[ -z "$PR_URL" ]]; then
+            PR_URL=$(gh pr list --base main --head "backport/$VERSION" \
+              --state open --json url --jq '.[0].url // empty' || true)
+          fi
+          echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
+          PR_NUMBER=$(gh pr view "$PR_URL" --json number --jq '.number' 2>/dev/null || true)
+          if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            PR_NUMBER=$(gh pr list --base main --head "backport/$VERSION" \
+              --state open --json number --jq '.[0].number // empty' || true)
+          fi
+          if [[ ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "::error::Failed to resolve the stabilization backport PR number." >&2
+            printf '%s\n' "$PR_OUTPUT" >&2
+            exit 1
+          fi
+          gh pr edit "$PR_NUMBER" --add-label automated
+          echo "pr-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch required PR checks
+        if: steps.create-pr.outputs.pr-number != ''
+        uses: ./.github/actions/dispatch-required-pr-checks
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: backport/${{ steps.determine.outputs.version }}
+          pr-number: ${{ steps.create-pr.outputs.pr-number }}
+          base-ref: main
+          pr-title: "chore: backport ${{ steps.determine.outputs.version }} to main"
+
+      - name: Close matching milestone
+        if: steps.determine.outputs.should-run == 'true'
+        uses: actions/github-script@v9
+        env:
+          VERSION: ${{ steps.determine.outputs.version }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const milestones = await github.paginate(github.rest.issues.listMilestones, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const milestone = milestones.find(item => item.title === process.env.VERSION);
+            if (milestone) {
+              await github.rest.issues.updateMilestone({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                milestone_number: milestone.number,
+                state: 'closed',
+              });
+            }
+
+      - name: Write completion summary
+        if: always()
+        shell: bash
+        env:
+          VERSION: ${{ steps.determine.outputs.version || inputs.version || github.event.release.tag_name || 'unknown' }}
+          LINE: ${{ steps.determine.outputs.line || 'not applicable' }}
+          PREVIOUS: ${{ steps.determine.outputs.previous-tag || 'not applicable' }}
+          PR_URL: ${{ steps.create-pr.outputs.url || 'not created' }}
+        run: |
+          {
+            echo "## Stabilization completion"
+            echo
+            echo "- **Version:** \`$VERSION\`"
+            echo "- **Release line:** \`$LINE\`"
+            echo "- **Previous tag:** \`$PREVIOUS\`"
+            echo "- **Backport PR:** $PR_URL"
+          } >> "$GITHUB_STEP_SUMMARY"

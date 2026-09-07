@@ -13,7 +13,7 @@ This folder contains documentation for the **ghjson-dotnet** project — the .NE
   - [Component State and Extensions](./ARCHITECTURE.md#component-state-and-extensions) — Extension mechanism for component-specific properties
   - [Object Serialization Process](./ARCHITECTURE.md#object-serialization-and-deserialization-process) — Handler orchestration and priority system
 - [NuGet Publishing](./NUGET-PUBLISHING.md) — Release workflow and NuGet package publishing
-- [Release Workflow](../.github/workflows/RELEASE_WORKFLOW.md) — CI/CD workflows, PR validations, and release process
+- [Branching and Release Workflow](./RELEASE_WORKFLOW.md) — Branch model, CI/CD workflows, PR validations, and release process
 
 ## Quick Reference
 

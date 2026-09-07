@@ -1,0 +1,96 @@
+name: Hotfix 1 - Start Hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      base-tag:
+        description: Base release tag (e.g., 1.1.1; legacy v-prefixed tags are accepted)
+        required: false
+        type: string
+        default: ''
+      slug:
+        description: Short slug for the hotfix branch (e.g., null-pointer)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hotfix-start-${{ inputs.base-tag || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve base tag
+        id: resolve-tag
+        uses: ./.github/actions/versioning/resolve-release-tag
+        with:
+          tag: ${{ inputs.base-tag }}
+          stable-only: 'true'
+          reject-branches: 'true'
+
+      - name: Validate slug
+        shell: bash
+        env:
+          SLUG: ${{ inputs.slug }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SLUG" =~ ^[a-z0-9-]+$ ]]; then
+            echo "::error::Invalid slug '$SLUG'; expected lowercase letters, numbers, and hyphens." >&2
+            exit 1
+          fi
+
+      - name: Create hotfix branch
+        id: create-branch
+        shell: bash
+        env:
+          VERSION: ${{ steps.resolve-tag.outputs.version }}
+          SLUG: ${{ inputs.slug }}
+          SHA: ${{ steps.resolve-tag.outputs.sha }}
+          GH_TOKEN: ${{ secrets.STABILITY_PAT_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Use the bare version in the branch name so Hotfix 2 can parse it;
+          # legacy v-prefixed tags resolve to the same X.Y.Z version.
+          BRANCH="hotfix/${VERSION}-${SLUG}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Hotfix branch '$BRANCH' already exists." >&2
+            exit 1
+          fi
+          # Release tags contain `.github/workflows/` files. The GITHUB_TOKEN
+          # cannot hold the `workflow` scope, so the REST API rejects ref
+          # creation at tag SHAs. Use the repo's `STABILITY_PAT_TOKEN` secret
+          # (a classic PAT with `repo` + `workflow` scopes) instead.
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f "ref=refs/heads/${BRANCH}" \
+            -f "sha=${SHA}" \
+            --silent
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Write summary
+        shell: bash
+        env:
+          TAG: ${{ steps.resolve-tag.outputs.tag }}
+          BRANCH: ${{ steps.create-branch.outputs.branch }}
+          SHA: ${{ steps.resolve-tag.outputs.sha }}
+        run: |
+          {
+            echo "## Hotfix branch created"
+            echo
+            echo "- **Base tag:** \`$TAG\`"
+            echo "- **Base SHA:** \`$SHA\`"
+            echo "- **Branch:** \`$BRANCH\`"
+            echo
+            echo "Apply the fix on \`$BRANCH\`, then run **Hotfix 2 - Release Hotfix** with \`target-branch\` set to the protected release line or \`main\`."
+          } >> "$GITHUB_STEP_SUMMARY"

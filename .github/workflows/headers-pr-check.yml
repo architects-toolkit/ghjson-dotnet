@@ -1,16 +1,38 @@
 name: 📝 Header Check
 
 # Description: Validates that all C# source files have the correct Apache-2.0 license header.
-# This is a required check for PRs targeting main and dev branches.
+# This is a required check for PRs targeting main, release/*, and hotfix/* branches.
 #
-# Trigger: Automatically when a pull request targets main or dev
+# Triggers:
+# - Pull requests targeting main, release/*, or hotfix/*
+# - Merge queue (merge_group) checks for protected branches
+# - Manual dispatch (used to run required checks on automation-created PRs)
 #
 # Permissions:
 # - contents:read - Required to read repository content
 
 on:
   pull_request:
-    branches: [main, dev]
+    branches:
+      - main
+      - 'release/**'
+      - 'hotfix/**'
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number (informational)
+        required: false
+        type: string
+      base_ref:
+        description: Pull request base branch (informational)
+        required: false
+        type: string
+      pr_title:
+        description: Pull request title (informational)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -23,7 +45,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Check C# headers
         shell: pwsh

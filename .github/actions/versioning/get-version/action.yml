@@ -1,5 +1,5 @@
 name: 'Get Version'
-description: 'Extract the current version from Directory.Build.props'
+description: 'Extract the current version from Directory.Build.props and parse it'
 inputs:
   branch:
     description: 'Branch name (for context)'
@@ -12,16 +12,25 @@ outputs:
     value: ${{ steps.get-version.outputs.version }}
   major:
     description: 'Major version component'
-    value: ${{ steps.parse-version.outputs.major }}
+    value: ${{ steps.parse.outputs.major }}
   minor:
     description: 'Minor version component'
-    value: ${{ steps.parse-version.outputs.minor }}
+    value: ${{ steps.parse.outputs.minor }}
   patch:
     description: 'Patch version component'
-    value: ${{ steps.parse-version.outputs.patch }}
+    value: ${{ steps.parse.outputs.patch }}
   suffix:
     description: 'Version suffix (if any)'
-    value: ${{ steps.parse-version.outputs.suffix }}
+    value: ${{ steps.parse.outputs.suffix }}
+  stage:
+    description: 'Release stage (stable, dev, alpha, beta, or rc)'
+    value: ${{ steps.parse.outputs.stage }}
+  sequence:
+    description: 'Sequence/build number from the suffix (e.g., 1 from alpha.1 or dev.YYMMDD.1)'
+    value: ${{ steps.parse.outputs.sequence }}
+  is-prerelease:
+    description: 'Whether this is a pre-release version'
+    value: ${{ steps.parse.outputs.is-prerelease }}
 
 runs:
   using: "composite"
@@ -35,23 +44,7 @@ runs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Parse version components
-      id: parse-version
-      shell: bash
-      run: |
-        VERSION="${{ steps.get-version.outputs.version }}"
-        if [[ $VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-[a-zA-Z0-9]+(\.[0-9]+)?)?$ ]]; then
-          MAJOR="${BASH_REMATCH[1]}"
-          MINOR="${BASH_REMATCH[2]}"
-          PATCH="${BASH_REMATCH[3]}"
-          SUFFIX="${BASH_REMATCH[4]}"
-
-          echo "major=$MAJOR" >> $GITHUB_OUTPUT
-          echo "minor=$MINOR" >> $GITHUB_OUTPUT
-          echo "patch=$PATCH" >> $GITHUB_OUTPUT
-          echo "suffix=$SUFFIX" >> $GITHUB_OUTPUT
-
-          echo "Parsed version: Major=$MAJOR, Minor=$MINOR, Patch=$PATCH, Suffix=$SUFFIX"
-        else
-          echo "Error: Version format doesn't follow semantic versioning: $VERSION"
-          exit 1
-        fi
+      id: parse
+      uses: ./.github/actions/versioning/parse-version
+      with:
+        version: ${{ steps.get-version.outputs.version }}

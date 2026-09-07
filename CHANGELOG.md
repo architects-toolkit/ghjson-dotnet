@@ -5,6 +5,18 @@ All notable changes to the GhJSON project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **CI/CD: migrated to the SmartHopper single-`main` release model** — `main` is now the only long-lived integration branch (the `dev` branch is retired); releases are prepared through `release-prep/<version>` PRs, tagged with bare `X.Y.Z` version tags (legacy `v`-prefixed tags remain supported), and shipped from temporary `release/X.Y` stabilization lines or `hotfix/*` branches. See `docs/RELEASE_WORKFLOW.md`.
+- New workflows: `release-1-prepare`, `release-2-tag-on-merge`, `stabilization-1-start`, `stabilization-3-complete`, `hotfix-1-start`, `hotfix-2-release`, `version-bump`, `chore-version-sync`, `pr-version-validation`, `pr-delete-auto-branches`, `chore-cleanup-stale-branches`.
+- `ci.yml`, `headers-pr-check.yml`, and `pr-version-validation.yml` now cover PRs to `main`, `release/**`, and `hotfix/**`, support the merge queue (`merge_group`), and accept `workflow_dispatch` inputs so required checks can run on automation-created PRs.
+
+### Removed
+
+- Dev-era workflows superseded by the new pipeline: `pr-block-dev-to-main.yml`, `chore-version-main-release.yml`, `milestone-release-draft.yml`, `chore-version-badge.yml`.
+
 ## [1.1.1] - 2026-07-05
 
 ### New Features

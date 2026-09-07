@@ -1,4 +1,15 @@
-name: Build and Attach Release Assets
+name: Release 3 - Build and Attach Release Assets
+
+# Description: Builds the NuGet packages for a published GitHub Release and
+# attaches the .nupkg/.snupkg artifacts to it. The release (and its bare X.Y.Z
+# tag) is created earlier by release-2-tag-on-merge.yml; publishing the draft
+# triggers this workflow.
+#
+# Triggers:
+# - release.types: published
+#
+# Permissions:
+# - contents:write - Required to attach assets to the release
 
 on:
   release:

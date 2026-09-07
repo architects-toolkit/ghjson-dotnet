@@ -42,7 +42,7 @@ namespace GhJSON.Core.Validation
         /// is evaluated concurrently from multiple threads. A global lock ensures deterministic
         /// results in parallel test runs and multi-threaded callers.
         /// </summary>
-        private static readonly object SchemaEvaluationLock = new object();
+        internal static readonly object SchemaEvaluationLock = new object();
         /// <summary>
         /// Validates a GhJSON document.
         /// </summary>

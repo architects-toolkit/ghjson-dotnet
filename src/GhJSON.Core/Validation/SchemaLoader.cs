@@ -213,6 +213,42 @@ namespace GhJSON.Core.Validation
         }
 
         /// <summary>
+        /// Loads the GhPatch JSON Schema together with the main GhJSON schema bundle.
+        /// The returned <see cref="Bundle"/> uses the patch schema as <see cref="Bundle.Main"/>
+        /// and includes the main schema and all extension schemas in <see cref="Bundle.Schemas"/>
+        /// so that patch <c>$ref</c>s to <c>ghjson.schema.json#/$defs/...</c> resolve correctly.
+        /// </summary>
+        /// <param name="version">The schema version (e.g. "1.0"). Defaults to <see cref="DefaultVersion"/>.</param>
+        /// <param name="preferOnline">Prefer online schemas over embedded snapshots.</param>
+        /// <returns>A bundle containing the patch schema as main and all dependency schemas.</returns>
+        internal static Bundle LoadPatchBundle(string? version = null, bool preferOnline = false)
+        {
+            var mainBundle = Load(new SchemaLoaderOptions
+            {
+                Version = version,
+                PreferOnline = preferOnline,
+            });
+
+            var patch = LoadPatchSchema(version, preferOnline);
+
+            var schemas = mainBundle.Schemas.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            var ids = new List<Uri>(mainBundle.Ids);
+
+            var patchId = patch.GetId();
+            if (patchId != null)
+            {
+                schemas[patchId] = patch;
+
+                if (!ids.Contains(patchId))
+                {
+                    ids.Add(patchId);
+                }
+            }
+
+            return new Bundle(patch, ids, schemas);
+        }
+
+        /// <summary>
         /// Returns the embedded resource prefix for the given version.
         /// MSBuild transforms path separators to dots, and dots in folder names become
         /// <c>._digit</c> (e.g. v1.0 becomes v1._0).

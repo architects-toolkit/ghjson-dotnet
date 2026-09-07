@@ -103,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `PatchValidator` now loads the patch schema as a bundle with the main GhJSON schema, registers all schemas in the per-evaluation `SchemaRegistry`, and uses the shared `SchemaEvaluationLock`; this resolves `ghjson.schema.json#/$defs/...` `$ref`s when `ValidatePatch` is called with `preferOnline: true`.
 - `ComponentNameResolver` Python aliases now resolve to `"Python 3 Script"` (Rhino 8 canonical name) instead of legacy `"Python Script"`
 - `ComponentNameResolver` IronPython alias now resolves to `"IronPython 2 Script"` (Rhino 8 canonical name) instead of legacy `"IronPython Script"`
 - `ComponentNameResolver` alias dictionary expanded with missing entries: `"python3"`, `"ghpython"`, `"python script"`, `"csharp script"`, `"c# component"`, `"number slider"` (with space), `"str"`, `"string"` (→ Text), `"streamfilter"`, `"filter"` (→ Stream Filter)

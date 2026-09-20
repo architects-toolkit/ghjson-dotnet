@@ -73,7 +73,36 @@ namespace GhJSON.Core.DependencyGraph.Internal
                 }
             }
 
+            // Port-slot estimates: the largest connected index + 1, raised by the declared
+            // parameter count when the document carries settings for unconnected ports.
+            for (var i = 0; i < nodes.Count; i++)
+            {
+                var node = nodes[i];
+                var component = document.Components[i];
+                node.InputPortCount = EstimatePortCount(node.Parents.Values, component.InputSettings?.Count ?? 0);
+                node.OutputPortCount = EstimatePortCount(node.Children.Values, component.OutputSettings?.Count ?? 0);
+            }
+
             return nodes;
+        }
+
+        /// <summary>
+        /// Estimates a node's port count as the largest connected port index + 1, never below
+        /// the declared parameter count. An unknown (-1) index still implies one port exists.
+        /// </summary>
+        private static int EstimatePortCount(IEnumerable<int> usedPortIndices, int declaredCount)
+        {
+            var count = declaredCount;
+            foreach (var index in usedPortIndices)
+            {
+                var implied = index < 0 ? 1 : index + 1;
+                if (implied > count)
+                {
+                    count = implied;
+                }
+            }
+
+            return count;
         }
 
         /// <summary>

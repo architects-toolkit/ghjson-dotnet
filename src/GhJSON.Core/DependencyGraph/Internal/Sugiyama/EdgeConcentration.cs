@@ -37,15 +37,18 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             var byId = nodes.ToDictionary(n => n.ComponentId, n => n);
             var result = new List<LayoutNode>(nodes);
 
-            // Snapshot edges first so the adjacency can be mutated while iterating.
-            var edges = new List<(Guid From, Guid To, int ParamIndex)>();
+            // Snapshot edges first so the adjacency can be mutated while iterating. Both
+            // port indices are captured: the source's output index from Children and the
+            // target's input index from Parents.
+            var edges = new List<(Guid From, Guid To, int OutIndex, int InIndex)>();
             foreach (var u in nodes)
             {
                 foreach (var kv in u.Children)
                 {
-                    if (byId.ContainsKey(kv.Key))
+                    if (byId.TryGetValue(kv.Key, out var target))
                     {
-                        edges.Add((u.ComponentId, kv.Key, kv.Value));
+                        var inIndex = target.Parents.TryGetValue(u.ComponentId, out var ii) ? ii : -1;
+                        edges.Add((u.ComponentId, kv.Key, kv.Value, inIndex));
                     }
                 }
             }
@@ -53,7 +56,7 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             var dummyWidth = options.DefaultNodeWidth * 0.1f;
             var dummyHeight = options.DefaultNodeHeight * 0.1f;
 
-            foreach (var (fromId, toId, paramIndex) in edges)
+            foreach (var (fromId, toId, outIndex, inIndex) in edges)
             {
                 var from = byId[fromId];
                 var to = byId[toId];
@@ -78,6 +81,8 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
                         Layer = lyr,
                         Width = dummyWidth,
                         Height = dummyHeight,
+                        InputPortCount = 1,
+                        OutputPortCount = 1,
                         Parents = new Dictionary<Guid, int>(),
                         Children = new Dictionary<Guid, int>(),
                     };
@@ -85,14 +90,16 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
                     result.Add(dummy);
                     byId[dummy.ComponentId] = dummy;
 
-                    byId[prevId].Children[dummy.ComponentId] = -1;
+                    // The first segment keeps the source's real output port index so
+                    // port-aware ordering/coordinates still see the true wire origin.
+                    byId[prevId].Children[dummy.ComponentId] = lyr == from.Layer + 1 ? outIndex : -1;
                     dummy.Parents[prevId] = -1;
                     prevId = dummy.ComponentId;
                 }
 
-                // Re-attach the final segment to the real target, preserving the param index.
-                byId[prevId].Children[toId] = paramIndex;
-                to.Parents[prevId] = paramIndex;
+                // Re-attach the final segment to the real target, preserving its input index.
+                byId[prevId].Children[toId] = -1;
+                to.Parents[prevId] = inIndex;
             }
 
             return result;

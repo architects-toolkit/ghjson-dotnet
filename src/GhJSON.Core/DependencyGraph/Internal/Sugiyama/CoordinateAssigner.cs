@@ -58,6 +58,7 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             }
 
             // Row bands: per-row tallest node across all layers, stacked top to bottom.
+            // Used as the fallback slot position for nodes without resolvable parents.
             var rowHeight = new Dictionary<int, float>();
             foreach (var node in nodes)
             {
@@ -76,12 +77,58 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
                 yCursor += rowHeight[row] + spacingY;
             }
 
-            foreach (var node in nodes)
+            // Port-slot Y assignment: sweep layers left to right and place each node so its
+            // input ports land on their connected parents' output port rows
+            // (pivotY = parentPortY − inputPortCenterOffset). Within a layer the clamp keeps
+            // the order chosen by the crossing minimizer and guarantees no vertical overlap.
+            var byId = nodes.ToDictionary(n => n.ComponentId, n => n);
+            foreach (var layerGroup in nodes.GroupBy(n => n.Layer).OrderBy(g => g.Key))
             {
-                var x = columnX.TryGetValue(node.Layer, out var cx) ? cx : node.Layer * spacingX;
-                var y = rowCenterY.TryGetValue(node.Order, out var cy) ? cy : node.Order * spacingY;
-                node.Pivot = new PointF(x, y);
+                var x = columnX.TryGetValue(layerGroup.Key, out var cx) ? cx : layerGroup.Key * spacingX;
+                var prevBottom = float.MinValue;
+                var prevIsDummy = false;
+
+                foreach (var node in layerGroup.OrderBy(n => n.Order))
+                {
+                    var desired = new List<float>();
+                    foreach (var kv in node.Parents)
+                    {
+                        if (!byId.TryGetValue(kv.Key, out var parent) || parent.Layer >= node.Layer)
+                        {
+                            continue; // Unresolved or backward (cycle) edge.
+                        }
+
+                        var outIndex = parent.Children.TryGetValue(node.ComponentId, out var oi) ? oi : -1;
+                        desired.Add(
+                            parent.Pivot.Y + (parent.OutputPortCenterOffset(outIndex) * parent.Height)
+                            - (node.InputPortCenterOffset(kv.Value) * node.Height));
+                    }
+
+                    var y = desired.Count > 0
+                        ? Median(desired)
+                        : rowCenterY.TryGetValue(node.Order, out var cy) ? cy : node.Order * spacingY;
+
+                    // Dummy routing nodes are invisible, so they need no gap at all; this
+                    // keeps long-edge port rows from drifting away from their true slot.
+                    var gap = node.IsDummy || prevIsDummy ? 0f : spacingY;
+                    var minY = prevBottom + gap + (node.Height / 2f);
+                    if (y < minY)
+                    {
+                        y = minY;
+                    }
+
+                    node.Pivot = new PointF(x, y);
+                    prevBottom = y + (node.Height / 2f);
+                    prevIsDummy = node.IsDummy;
+                }
             }
+        }
+
+        private static float Median(List<float> values)
+        {
+            values.Sort();
+            var mid = values.Count / 2;
+            return values.Count % 2 == 1 ? values[mid] : (values[mid - 1] + values[mid]) / 2f;
         }
     }
 }

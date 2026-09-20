@@ -52,12 +52,12 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             // Subsequent layers: order by barycenter of already-placed parents.
             for (var li = 1; li < byLayer.Count; li++)
             {
-                var prevOrder = BuildOrderLookup(byLayer[li - 1]);
+                var prevById = BuildNodeLookup(byLayer[li - 1]);
                 var current = byLayer[li];
                 current.Sort((a, b) =>
                 {
-                    var cmp = Barycenter(a, prevOrder, useParents: true)
-                        .CompareTo(Barycenter(b, prevOrder, useParents: true));
+                    var cmp = Barycenter(a, prevById, useParents: true)
+                        .CompareTo(Barycenter(b, prevById, useParents: true));
                     return cmp != 0 ? cmp : a.ComponentId.CompareTo(b.ComponentId);
                 });
                 AssignOrderIndices(current);
@@ -72,33 +72,54 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             }
         }
 
-        private static Dictionary<Guid, int> BuildOrderLookup(List<LayoutNode> layer)
+        private static Dictionary<Guid, LayoutNode> BuildNodeLookup(List<LayoutNode> layer)
         {
-            var map = new Dictionary<Guid, int>(layer.Count);
+            var map = new Dictionary<Guid, LayoutNode>(layer.Count);
             foreach (var n in layer)
             {
-                map[n.ComponentId] = n.Order;
+                map[n.ComponentId] = n;
             }
 
             return map;
         }
 
         /// <summary>
-        /// Average order index of a node's neighbors in the adjacent layer. Nodes with no
-        /// resolvable neighbor return <see cref="float.MaxValue"/> so they sort to the end of
-        /// the initial ordering (the crossing minimizer subsequently keeps them in place).
+        /// Average port-aware position of a node's neighbors in the adjacent layer: each
+        /// edge contributes the node order offset by the connected ports' fractional slot
+        /// offsets, so a wire targets the slot where it enters/exits the port row rather
+        /// than the neighbor's center. Nodes with no resolvable neighbor return
+        /// <see cref="float.MaxValue"/> so they sort to the end of the initial ordering (the
+        /// crossing minimizer subsequently keeps them in place).
         /// </summary>
-        private static float Barycenter(LayoutNode node, Dictionary<Guid, int> adjacentOrder, bool useParents)
+        private static float Barycenter(LayoutNode node, Dictionary<Guid, LayoutNode> adjacent, bool useParents)
         {
-            var connected = useParents ? node.Parents.Keys : node.Children.Keys;
             var sum = 0f;
             var count = 0;
-            foreach (var id in connected)
+
+            if (useParents)
             {
-                if (adjacentOrder.TryGetValue(id, out var order))
+                foreach (var kv in node.Parents)
                 {
-                    sum += order;
-                    count++;
+                    if (adjacent.TryGetValue(kv.Key, out var parent))
+                    {
+                        var outIndex = parent.Children.TryGetValue(node.ComponentId, out var oi) ? oi : -1;
+                        sum += parent.Order + parent.OutputPortCenterOffset(outIndex)
+                             - node.InputPortCenterOffset(kv.Value);
+                        count++;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var kv in node.Children)
+                {
+                    if (adjacent.TryGetValue(kv.Key, out var child))
+                    {
+                        var inIndex = child.Parents.TryGetValue(node.ComponentId, out var ii) ? ii : -1;
+                        sum += child.Order + child.InputPortCenterOffset(inIndex)
+                             - node.OutputPortCenterOffset(kv.Value);
+                        count++;
+                    }
                 }
             }
 

@@ -83,38 +83,34 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             {
                 for (var li = 1; li < layers.Count; li++)
                 {
-                    ReorderLayer(layers[li], BuildOrderLookup(layers[li - 1]), useParents: true);
+                    ReorderLayer(layers[li], BuildNodeLookup(layers[li - 1]), useParents: true);
                 }
             }
             else
             {
                 for (var li = layers.Count - 2; li >= 0; li--)
                 {
-                    ReorderLayer(layers[li], BuildOrderLookup(layers[li + 1]), useParents: false);
+                    ReorderLayer(layers[li], BuildNodeLookup(layers[li + 1]), useParents: false);
                 }
             }
         }
 
         /// <summary>
-        /// Sorts <paramref name="layer"/> by each node's median neighbor position. Nodes with
-        /// no neighbor in the adjacent layer are pinned to their current position (classic
-        /// Sugiyama behavior) rather than being swept to one end.
+        /// Sorts <paramref name="layer"/> by each node's median port-aware neighbor position.
+        /// Nodes with no neighbor in the adjacent layer are pinned to their current position
+        /// (classic Sugiyama behavior) rather than being swept to one end.
         /// </summary>
-        private static void ReorderLayer(List<LayoutNode> layer, Dictionary<Guid, int> adjacentOrder, bool useParents)
+        private static void ReorderLayer(List<LayoutNode> layer, Dictionary<Guid, LayoutNode> adjacent, bool useParents)
         {
             // Capture fixed nodes' slots so they stay put; sort the rest by median.
-            var medians = new Dictionary<Guid, float>(layer.Count);
+            var medians = new Dictionary<Guid, float?>(layer.Count);
             var movable = new List<LayoutNode>();
             foreach (var node in layer)
             {
-                var median = Median(node, adjacentOrder, useParents);
-                if (median < 0f)
+                var median = Median(node, adjacent, useParents);
+                medians[node.ComponentId] = median; // null = fixed
+                if (median.HasValue)
                 {
-                    medians[node.ComponentId] = -1f; // fixed
-                }
-                else
-                {
-                    medians[node.ComponentId] = median;
                     movable.Add(node);
                 }
             }
@@ -128,7 +124,7 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             // into the slots not occupied by fixed nodes, preserving fixed node positions.
             movable.Sort((a, b) =>
             {
-                var cmp = medians[a.ComponentId].CompareTo(medians[b.ComponentId]);
+                var cmp = medians[a.ComponentId]!.Value.CompareTo(medians[b.ComponentId]!.Value);
                 return cmp != 0 ? cmp : a.ComponentId.CompareTo(b.ComponentId);
             });
 
@@ -136,7 +132,7 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             var fixedSlots = new HashSet<int>();
             for (var i = 0; i < layer.Count; i++)
             {
-                if (medians[layer[i].ComponentId] < 0f)
+                if (!medians[layer[i].ComponentId].HasValue)
                 {
                     result[i] = layer[i];
                     fixedSlots.Add(i);
@@ -228,25 +224,31 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
         }
 
         /// <summary>
-        /// Counts crossings between two adjacent layers by collecting all edges as
-        /// (upperOrder, lowerOrder) pairs and counting inversions.
+        /// Counts crossings between two adjacent layers over port-level edge endpoints: an
+        /// edge's position is its node's order offset by the connected port's fractional
+        /// slot offset, so fan-out edges get distinct rows and stop competing for one
+        /// center. Inversions over these endpoint pairs are counted after sorting by the
+        /// upper endpoint.
         /// </summary>
         private static int CountCrossingsBetween(List<LayoutNode> upper, List<LayoutNode> lower)
         {
-            var lowerOrder = BuildOrderLookup(lower);
-            var edges = new List<(int Upper, int Lower)>();
+            var lowerById = BuildNodeLookup(lower);
+            var edges = new List<(float Upper, float Lower)>();
             foreach (var u in upper)
             {
-                foreach (var childId in u.Children.Keys)
+                foreach (var kv in u.Children)
                 {
-                    if (lowerOrder.TryGetValue(childId, out var lo))
+                    if (lowerById.TryGetValue(kv.Key, out var v))
                     {
-                        edges.Add((u.Order, lo));
+                        var inIndex = v.Parents.TryGetValue(u.ComponentId, out var ii) ? ii : -1;
+                        edges.Add((
+                            u.Order + u.OutputPortCenterOffset(kv.Value),
+                            v.Order + v.InputPortCenterOffset(inIndex)));
                     }
                 }
             }
 
-            // Sort by upper position, then count inversions in the lower positions.
+            // Sort by upper endpoint, then count inversions in the lower endpoints.
             edges.Sort((a, b) => a.Upper != b.Upper ? a.Upper.CompareTo(b.Upper) : a.Lower.CompareTo(b.Lower));
 
             var crossings = 0;
@@ -264,36 +266,57 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             return crossings;
         }
 
-        private static Dictionary<Guid, int> BuildOrderLookup(List<LayoutNode> layer)
+        private static Dictionary<Guid, LayoutNode> BuildNodeLookup(List<LayoutNode> layer)
         {
-            var map = new Dictionary<Guid, int>(layer.Count);
+            var map = new Dictionary<Guid, LayoutNode>(layer.Count);
             foreach (var n in layer)
             {
-                map[n.ComponentId] = n.Order;
+                map[n.ComponentId] = n;
             }
 
             return map;
         }
 
         /// <summary>
-        /// Weighted median of a node's neighbor positions in the adjacent layer. Returns -1
-        /// when the node has no resolvable neighbor (treated as "fixed in place").
+        /// Weighted median of a node's port-aware neighbor positions in the adjacent layer:
+        /// each edge contributes the slot the node would need so that wire runs horizontally
+        /// (neighbor order + neighbor port offset − own port offset). Returns null when the
+        /// node has no resolvable neighbor (treated as "fixed in place").
         /// </summary>
-        private static float Median(LayoutNode node, Dictionary<Guid, int> adjacentOrder, bool useParents)
+        private static float? Median(LayoutNode node, Dictionary<Guid, LayoutNode> adjacent, bool useParents)
         {
-            var connected = useParents ? node.Parents.Keys : node.Children.Keys;
-            var positions = new List<int>();
-            foreach (var id in connected)
+            var positions = new List<float>();
+
+            if (useParents)
             {
-                if (adjacentOrder.TryGetValue(id, out var order))
+                foreach (var kv in node.Parents)
                 {
-                    positions.Add(order);
+                    if (adjacent.TryGetValue(kv.Key, out var parent))
+                    {
+                        var outIndex = parent.Children.TryGetValue(node.ComponentId, out var oi) ? oi : -1;
+                        positions.Add(
+                            parent.Order + parent.OutputPortCenterOffset(outIndex)
+                            - node.InputPortCenterOffset(kv.Value));
+                    }
+                }
+            }
+            else
+            {
+                foreach (var kv in node.Children)
+                {
+                    if (adjacent.TryGetValue(kv.Key, out var child))
+                    {
+                        var inIndex = child.Parents.TryGetValue(node.ComponentId, out var ii) ? ii : -1;
+                        positions.Add(
+                            child.Order + child.InputPortCenterOffset(inIndex)
+                            - node.OutputPortCenterOffset(kv.Value));
+                    }
                 }
             }
 
             if (positions.Count == 0)
             {
-                return -1f;
+                return null;
             }
 
             positions.Sort();

@@ -19,28 +19,29 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using System.Linq;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.GetOperations;
-using Grasshopper;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.LayoutRefinements
 {
     /// <summary>
     /// Post-layout refinements that align source parameter components to their target
-    /// component's input ports. Depends on <see cref="Instances.ActiveCanvas"/> for bounds
-    /// and port positions; when no canvas is available these methods degrade to no-ops.
+    /// component's input ports. Depends on <see cref="Grasshopper.Instances.ActiveCanvas"/>
+    /// for bounds and port positions; when no canvas is available these methods degrade to
+    /// no-ops.
     /// </summary>
     internal static class PortAlignment
     {
         /// <summary>
-        /// Single, coherent port-alignment pass that replaces the three previously competing
-        /// passes (param-to-port, one-to-one, and connection-length minimization). For every
-        /// connection it computes the Y the source <em>would need</em> so its wire enters the
-        /// target's specific input port horizontally, then moves each source to the median of
-        /// all such desired positions. Using the median keeps fan-out sources balanced and
-        /// avoids the cumulative drift the old multi-pass approach produced.
+        /// Single, coherent port-alignment pass. For every connection it computes the Y the
+        /// source <em>would need</em> so its wire enters the target's specific input port
+        /// horizontally, then moves each source to the median of all such desired positions.
+        /// Wires are aligned port-to-port: the target's input port offset and the source's
+        /// output port offset (via <c>conn.From.ParamIndex</c>) are both accounted for, so
+        /// multi-output sources (e.g. Deconstruct, larger-than) can satisfy several ports at
+        /// once. Floating parameter targets (panels, params) contribute through their own
+        /// bounds, and floating parameter sources through their right-edge output grip.
         /// </summary>
         public static Dictionary<Guid, PointF> AlignToPorts(
             Dictionary<Guid, PointF> positions,
@@ -60,55 +61,58 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 return result;
             }
 
-            var idToGuidMap = document.GetIdToGuidMapping();
+            // Map connection endpoint ids to the same stable keys the layout engine emits,
+            // so id-only components (no InstanceGuid) still participate in alignment.
+            var idToGuidMap = new Dictionary<int, Guid>();
+            foreach (var component in document.Components)
+            {
+                if (component.Id.HasValue)
+                {
+                    idToGuidMap[component.Id.Value] = Core.GhJson.GetLayoutKey(component);
+                }
+            }
+
             var desired = new Dictionary<Guid, List<float>>();
 
             foreach (var conn in document.Connections)
             {
-                if (!idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) ||
-                    !idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
+                try
                 {
-                    continue;
-                }
+                    if (!idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) ||
+                        !idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
+                    {
+                        continue;
+                    }
 
-                if (!result.TryGetValue(toGuid, out var targetPos))
+                    if (!result.TryGetValue(toGuid, out var targetPos) ||
+                        !result.ContainsKey(fromGuid))
+                    {
+                        continue;
+                    }
+
+                    if (!TryGetInputPortCenterDelta(ghDocument, toGuid, conn.To.ParamIndex, out var targetDelta))
+                    {
+                        continue;
+                    }
+
+                    var sourceDelta = GetOutputPortCenterDelta(ghDocument, fromGuid, conn.From.ParamIndex);
+
+                    // The wire is horizontal when
+                    // sourcePivotY + sourceDelta == targetPivotY + targetDelta.
+                    var desiredSourceY = targetPos.Y + targetDelta - sourceDelta;
+
+                    if (!desired.TryGetValue(fromGuid, out var list))
+                    {
+                        list = new List<float>();
+                        desired[fromGuid] = list;
+                    }
+
+                    list.Add(desiredSourceY);
+                }
+                catch (Exception ex)
                 {
-                    continue;
+                    Debug.WriteLine($"[PortAlignment.AlignToPorts] Skipping connection: {ex.Message}");
                 }
-
-                var childObj = ghDocument.FindObject(toGuid, false);
-                if (!(childObj is IGH_Component childComp))
-                {
-                    continue;
-                }
-
-                var inputIdx = conn.To.ParamIndex ?? -1;
-                if (inputIdx < 0 || inputIdx >= childComp.Params.Input.Count)
-                {
-                    continue;
-                }
-
-                var inputParam = childComp.Params.Input[inputIdx];
-                if (inputParam?.Attributes == null || childObj.Attributes == null)
-                {
-                    continue;
-                }
-
-                var rect = inputParam.Attributes.Bounds;
-                var childBounds = childObj.Attributes.Bounds;
-
-                // Port offset relative to the component center is stable regardless of where
-                // the component ends up, so apply it to the target's (already laid out) Y.
-                var relativeDelta = (rect.Y + (rect.Height / 2f)) - (childBounds.Y + (childBounds.Height / 2f));
-                var desiredSourceY = targetPos.Y + relativeDelta;
-
-                if (!desired.TryGetValue(fromGuid, out var list))
-                {
-                    list = new List<float>();
-                    desired[fromGuid] = list;
-                }
-
-                list.Add(desiredSourceY);
             }
 
             foreach (var kvp in desired)
@@ -122,6 +126,90 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             return result;
         }
 
+        /// <summary>
+        /// Vertical distance between the center of the target's input port receiving the
+        /// connection and the center of the target object itself. For component targets this
+        /// is the connected input parameter's bounds; for floating parameter targets the
+        /// input grip is vertically centered on the param's own bounds. Returns false when
+        /// the target cannot supply a port position at all.
+        /// </summary>
+        private static bool TryGetInputPortCenterDelta(
+            GH_Document ghDocument,
+            Guid targetGuid,
+            int? paramIndex,
+            out float delta)
+        {
+            delta = 0f;
+
+            var targetObj = ghDocument.FindObject(targetGuid, false);
+            if (targetObj?.Attributes == null)
+            {
+                return false;
+            }
+
+            if (targetObj is IGH_Component component)
+            {
+                var index = paramIndex ?? -1;
+                if (index < 0 || index >= component.Params.Input.Count)
+                {
+                    // Unknown input port: the component center is the mean of its ports,
+                    // so a zero delta still contributes a reasonable vote.
+                    return true;
+                }
+
+                var inputParam = component.Params.Input[index];
+                if (inputParam?.Attributes == null)
+                {
+                    return true;
+                }
+
+                delta = CenterY(inputParam.Attributes.Bounds) - CenterY(targetObj.Attributes.Bounds);
+                return true;
+            }
+
+            // Floating parameters (panels, value params…) take wires at their left-edge
+            // input grip, which is vertically centered on the param's own bounds.
+            return targetObj is IGH_Param;
+        }
+
+        /// <summary>
+        /// Vertical distance between the center of the source's output port feeding the
+        /// connection and the center of the source object itself. Component sources use the
+        /// connected output parameter's bounds; floating parameter sources emit from their
+        /// right-edge output grip, vertically centered on their own bounds. Returns 0 when
+        /// the source cannot be measured so the connection still votes for the target port.
+        /// </summary>
+        private static float GetOutputPortCenterDelta(
+            GH_Document ghDocument,
+            Guid sourceGuid,
+            int? paramIndex)
+        {
+            var sourceObj = ghDocument.FindObject(sourceGuid, false);
+            if (sourceObj?.Attributes == null || !(sourceObj is IGH_Component component))
+            {
+                return 0f;
+            }
+
+            var index = paramIndex ?? -1;
+            if (index < 0 || index >= component.Params.Output.Count)
+            {
+                return 0f;
+            }
+
+            var outputParam = component.Params.Output[index];
+            if (outputParam?.Attributes == null)
+            {
+                return 0f;
+            }
+
+            return CenterY(outputParam.Attributes.Bounds) - CenterY(sourceObj.Attributes.Bounds);
+        }
+
+        private static float CenterY(RectangleF bounds)
+        {
+            return bounds.Y + (bounds.Height / 2f);
+        }
+
         private static float Median(List<float> values)
         {
             values.Sort();
@@ -132,187 +220,6 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             }
 
             return (values[mid - 1] + values[mid]) / 2f;
-        }
-
-        public static Dictionary<Guid, PointF> AlignParamsToInputPorts(
-            Dictionary<Guid, PointF> positions,
-            GhJsonDocument document,
-            float spacingY)
-        {
-            var result = new Dictionary<Guid, PointF>(positions);
-
-            var ghDocument = CanvasReader.GetActiveDocument();
-            if (ghDocument == null)
-            {
-                Debug.WriteLine("[PortAlignment.AlignParamsToInputPorts] No active Grasshopper document; skipping.");
-                return result;
-            }
-
-            var idToGuidMap = document.GetIdToGuidMapping();
-            var connectionsByTarget = new Dictionary<Guid, List<(Guid sourceGuid, int targetParamIndex)>>();
-
-            if (document.Connections != null)
-            {
-                foreach (var conn in document.Connections)
-                {
-                    if (idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) &&
-                        idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
-                    {
-                        if (!connectionsByTarget.ContainsKey(toGuid))
-                        {
-                            connectionsByTarget[toGuid] = new List<(Guid, int)>();
-                        }
-
-                        connectionsByTarget[toGuid].Add((fromGuid, conn.To.ParamIndex ?? -1));
-                    }
-                }
-            }
-
-            var byColumn = positions.GroupBy(kvp => kvp.Value.X)
-                                   .OrderBy(g => g.Key)
-                                   .Select(g => g.ToList())
-                                   .ToList();
-
-            for (int i = 1; i < byColumn.Count; i++)
-            {
-                var prevCol = byColumn[i - 1];
-                var currCol = byColumn[i];
-
-                foreach (var childKvp in currCol)
-                {
-                    if (!connectionsByTarget.TryGetValue(childKvp.Key, out var connections))
-                    {
-                        continue;
-                    }
-
-                    var childObj = ghDocument.FindObject(childKvp.Key, false);
-                    if (!(childObj is IGH_Component childComp))
-                    {
-                        continue;
-                    }
-
-                    var parents = connections.Where(c => prevCol.Any(p => p.Key == c.sourceGuid)).ToList();
-
-                    if (parents.Count > 1 &&
-                        childComp.Params.Input.Count == parents.Count &&
-                        parents.All(p => ghDocument.FindObject(p.sourceGuid, false) is IGH_Param))
-                    {
-                        foreach (var parent in parents.OrderBy(p => p.targetParamIndex))
-                        {
-                            int inputIdx = parent.targetParamIndex;
-                            if (inputIdx >= 0 && inputIdx < childComp.Params.Input.Count)
-                            {
-                                var inputParam = childComp.Params.Input[inputIdx];
-                                var rect = inputParam.Attributes.Bounds;
-
-                                float inputPivotY = rect.Y + rect.Height / 2f;
-                                var childBounds = childObj.Attributes.Bounds;
-                                float childCenterY = childBounds.Y + childBounds.Height / 2f;
-                                float deltaY = inputPivotY - childCenterY;
-
-                                float targetY = childKvp.Value.Y + deltaY;
-                                result[parent.sourceGuid] = new PointF(result[parent.sourceGuid].X, targetY);
-                            }
-                        }
-                    }
-                }
-            }
-
-            return result;
-        }
-
-        public static Dictionary<Guid, PointF> AlignOneToOneConnections(
-            Dictionary<Guid, PointF> positions,
-            GhJsonDocument document,
-            float spacingY)
-        {
-            var result = new Dictionary<Guid, PointF>(positions);
-
-            var ghDocument = CanvasReader.GetActiveDocument();
-            if (ghDocument == null)
-            {
-                Debug.WriteLine("[PortAlignment.AlignOneToOneConnections] No active Grasshopper document; skipping.");
-                return result;
-            }
-
-            var idToGuidMap = document.GetIdToGuidMapping();
-            var childrenByParent = new Dictionary<Guid, List<(Guid childGuid, int inputIndex)>>();
-            var parentsByChild = new Dictionary<Guid, List<(Guid parentGuid, int inputIndex)>>();
-
-            if (document.Connections != null)
-            {
-                foreach (var conn in document.Connections)
-                {
-                    if (idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) &&
-                        idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
-                    {
-                        if (!childrenByParent.ContainsKey(fromGuid))
-                        {
-                            childrenByParent[fromGuid] = new List<(Guid, int)>();
-                        }
-
-                        childrenByParent[fromGuid].Add((toGuid, conn.To.ParamIndex ?? -1));
-
-                        if (!parentsByChild.ContainsKey(toGuid))
-                        {
-                            parentsByChild[toGuid] = new List<(Guid, int)>();
-                        }
-
-                        parentsByChild[toGuid].Add((fromGuid, conn.To.ParamIndex ?? -1));
-                    }
-                }
-            }
-
-            foreach (var parentKvp in positions)
-            {
-                if (!childrenByParent.TryGetValue(parentKvp.Key, out var children) || children.Count != 1)
-                {
-                    continue;
-                }
-
-                var childGuid = children[0].childGuid;
-                var inputIndex = children[0].inputIndex;
-
-                if (!parentsByChild.TryGetValue(childGuid, out var parents) || parents.Count != 1)
-                {
-                    continue;
-                }
-
-                if (inputIndex < 0)
-                {
-                    continue;
-                }
-
-                var childObj = ghDocument.FindObject(childGuid, false);
-                if (!(childObj is IGH_Component childComp))
-                {
-                    continue;
-                }
-
-                if (inputIndex >= childComp.Params.Input.Count)
-                {
-                    continue;
-                }
-
-                var inputParam = childComp.Params.Input[inputIndex];
-                var rect = inputParam.Attributes.Bounds;
-
-                float inputPivotY = rect.Y + rect.Height / 2f;
-                var childBounds = childObj.Attributes.Bounds;
-                float childCenterY = childBounds.Y + childBounds.Height / 2f;
-                float deltaY = inputPivotY - childCenterY;
-
-                if (result.TryGetValue(childGuid, out var childPos))
-                {
-                    // Align the parent's vertical center with the target input port.
-                    // Previous implementation added spacingY/2 unconditionally, producing
-                    // cumulative drift on chained single-wire pairs.
-                    float targetY = childPos.Y + deltaY;
-                    result[parentKvp.Key] = new PointF(parentKvp.Value.X, targetY);
-                }
-            }
-
-            return result;
         }
     }
 }

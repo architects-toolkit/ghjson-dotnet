@@ -91,56 +91,5 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
             return result;
         }
-
-        public static Dictionary<Guid, PointF> MinimizeConnectionLengths(
-            Dictionary<Guid, PointF> positions,
-            GhJSON.Core.SchemaModels.GhJsonDocument document)
-        {
-            var result = new Dictionary<Guid, PointF>(positions);
-            var idToGuidMap = document.GetIdToGuidMapping();
-
-            var byLayer = positions.GroupBy(kvp => kvp.Value.X).OrderBy(g => g.Key).ToList();
-
-            for (int i = 0; i < byLayer.Count - 1; i++)
-            {
-                var currLayer = byLayer[i].ToList();
-                var nextLayer = byLayer[i + 1].ToList();
-                var nextLayerX = nextLayer.First().Value.X;
-                var deltas = new List<float>();
-
-                if (document.Connections != null)
-                {
-                    foreach (var conn in document.Connections)
-                    {
-                        if (idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) &&
-                            idToGuidMap.TryGetValue(conn.To.Id, out var toGuid))
-                        {
-                            var fromPos = currLayer.FirstOrDefault(kvp => kvp.Key == fromGuid);
-                            var toPos = nextLayer.FirstOrDefault(kvp => kvp.Key == toGuid);
-
-                            if (fromPos.Key != Guid.Empty && toPos.Key != Guid.Empty &&
-                                Math.Abs(toPos.Value.X - nextLayerX) < 0.001f)
-                            {
-                                deltas.Add(fromPos.Value.Y - toPos.Value.Y);
-                            }
-                        }
-                    }
-                }
-
-                if (deltas.Count == 0)
-                {
-                    continue;
-                }
-
-                var avgDelta = deltas.Sum() / deltas.Count;
-
-                foreach (var kvp in nextLayer)
-                {
-                    result[kvp.Key] = new PointF(kvp.Value.X, kvp.Value.Y + avgDelta);
-                }
-            }
-
-            return result;
-        }
     }
 }

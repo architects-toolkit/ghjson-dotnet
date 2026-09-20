@@ -17,14 +17,19 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
-using System.Linq;
 using GhJSON.Grasshopper.GetOperations;
-using Grasshopper;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.LayoutRefinements
 {
+    /// <summary>
+    /// Re-spaces layout columns and rows using the real measured bounds of the canvas
+    /// objects they contain, so <c>spacingX</c>/<c>spacingY</c> act as true edge-to-edge
+    /// gaps even when the core layout ran without live bounds. Positions are component
+    /// centers (pivots). Degrades to a no-op without an active document.
+    /// </summary>
     internal static class BoundsAwareSpacing
     {
         public static Dictionary<Guid, PointF> ApplyBoundsAwareSpacing(
@@ -34,64 +39,87 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var byLayer = positions.GroupBy(kvp => (int)kvp.Value.X)
-                                   .OrderBy(g => g.Key)
-                                   .ToList();
-
-            var colOffsets = new Dictionary<int, float>();
-            float xOffset = 0;
-
-            foreach (var layer in byLayer)
+            var document = CanvasReader.GetActiveDocument();
+            if (document == null)
             {
-                float maxWidth = 0;
-                foreach (var kvp in layer)
-                {
-                    var obj = CanvasReader.GetActiveDocument()?.FindObject(kvp.Key, false);
-                    if (obj?.Attributes?.Bounds != null)
-                    {
-                        maxWidth = Math.Max(maxWidth, obj.Attributes.Bounds.Width);
-                    }
-                }
-
-                colOffsets[layer.Key] = xOffset;
-                xOffset += maxWidth + spacingX;
+                Debug.WriteLine("[BoundsAwareSpacing.ApplyBoundsAwareSpacing] No active Grasshopper document; skipping.");
+                return result;
             }
 
-            var byRow = positions.GroupBy(kvp => (int)kvp.Value.Y)
-                                 .OrderBy(g => g.Key)
-                                 .ToList();
+            var columnX = new Dictionary<int, float>();
+            var rowY = new Dictionary<int, float>();
 
-            var rowOffsets = new Dictionary<int, float>();
-            float yOffset = 0;
-
-            foreach (var row in byRow)
+            var columns = PositionClustering.Cluster(positions, p => p.X);
+            var xCursor = 0f;
+            for (var i = 0; i < columns.Count; i++)
             {
-                float maxHeight = 0;
-                foreach (var kvp in row)
-                {
-                    var obj = CanvasReader.GetActiveDocument()?.FindObject(kvp.Key, false);
-                    if (obj?.Attributes?.Bounds != null)
-                    {
-                        maxHeight = Math.Max(maxHeight, obj.Attributes.Bounds.Height);
-                    }
-                }
-
-                rowOffsets[row.Key] = yOffset;
-                yOffset += maxHeight + spacingY;
+                var maxWidth = MaxMeasuredWidth(columns[i], document);
+                columnX[i] = xCursor + (maxWidth / 2f);
+                xCursor += maxWidth + spacingX;
             }
 
-            foreach (var kvp in positions.ToList())
+            var rows = PositionClustering.Cluster(positions, p => p.Y);
+            var yCursor = 0f;
+            for (var i = 0; i < rows.Count; i++)
             {
-                int col = (int)kvp.Value.X;
-                int row = (int)kvp.Value.Y;
+                var maxHeight = MaxMeasuredHeight(rows[i], document);
+                rowY[i] = yCursor + (maxHeight / 2f);
+                yCursor += maxHeight + spacingY;
+            }
 
-                if (colOffsets.TryGetValue(col, out var x) && rowOffsets.TryGetValue(row, out var y))
+            for (var i = 0; i < columns.Count; i++)
+            {
+                foreach (var kvp in columns[i])
                 {
-                    result[kvp.Key] = new PointF(x, y);
+                    if (result.TryGetValue(kvp.Key, out var pos))
+                    {
+                        result[kvp.Key] = new PointF(columnX[i], pos.Y);
+                    }
+                }
+            }
+
+            for (var i = 0; i < rows.Count; i++)
+            {
+                foreach (var kvp in rows[i])
+                {
+                    if (result.TryGetValue(kvp.Key, out var pos))
+                    {
+                        result[kvp.Key] = new PointF(pos.X, rowY[i]);
+                    }
                 }
             }
 
             return result;
+        }
+
+        private static float MaxMeasuredWidth(List<KeyValuePair<Guid, PointF>> cluster, GH_Document document)
+        {
+            var max = 0f;
+            foreach (var kvp in cluster)
+            {
+                var bounds = document.FindObject(kvp.Key, false)?.Attributes?.Bounds;
+                if (bounds.HasValue && bounds.Value.Width > max)
+                {
+                    max = bounds.Value.Width;
+                }
+            }
+
+            return max;
+        }
+
+        private static float MaxMeasuredHeight(List<KeyValuePair<Guid, PointF>> cluster, GH_Document document)
+        {
+            var max = 0f;
+            foreach (var kvp in cluster)
+            {
+                var bounds = document.FindObject(kvp.Key, false)?.Attributes?.Bounds;
+                if (bounds.HasValue && bounds.Value.Height > max)
+                {
+                    max = bounds.Value.Height;
+                }
+            }
+
+            return max;
         }
     }
 }

@@ -23,10 +23,10 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
 {
     /// <summary>
     /// Converts integer <see cref="LayoutNode.Layer"/> / <see cref="LayoutNode.Order"/> ranks
-    /// into pixel <see cref="LayoutNode.Pivot"/> coordinates. Column X positions account for
-    /// the widest component in each preceding column, and the row unit accounts for the
-    /// tallest component, so the raw layout never overlaps even before Grasshopper-specific
-    /// bounds refinements run.
+    /// into pixel <see cref="LayoutNode.Pivot"/> coordinates (component centers). Each column
+    /// is a band as wide as its widest node and each row a band as tall as its tallest node,
+    /// so <paramref name="spacingX"/>/<paramref name="spacingY"/> act as true edge-to-edge
+    /// gaps and a single tall component only inflates its own row.
     /// </summary>
     internal static class CoordinateAssigner
     {
@@ -37,7 +37,8 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
                 return;
             }
 
-            // Column X: cumulative offset using the widest node per layer.
+            // Column X: cumulative offset using the widest node per layer. The pivot is the
+            // component center, so the pivot X sits at the middle of the column band.
             var maxWidthByLayer = new Dictionary<int, float>();
             foreach (var node in nodes)
             {
@@ -52,19 +53,34 @@ namespace GhJSON.Core.DependencyGraph.Internal.Sugiyama
             var cursor = 0f;
             foreach (var layer in maxWidthByLayer.Keys.OrderBy(k => k))
             {
-                columnX[layer] = cursor;
+                columnX[layer] = cursor + (maxWidthByLayer[layer] / 2f);
                 cursor += maxWidthByLayer[layer] + spacingX;
             }
 
-            // Row unit: uniform band tall enough for the tallest component, so equal Order
-            // indices align horizontally across columns and never overlap vertically.
-            var maxHeight = nodes.Max(n => n.Height > 0 ? n.Height : 0f);
-            var rowUnit = maxHeight + spacingY;
+            // Row bands: per-row tallest node across all layers, stacked top to bottom.
+            var rowHeight = new Dictionary<int, float>();
+            foreach (var node in nodes)
+            {
+                var h = node.Height > 0 ? node.Height : 0f;
+                if (!rowHeight.TryGetValue(node.Order, out var existing) || h > existing)
+                {
+                    rowHeight[node.Order] = h;
+                }
+            }
+
+            var rowCenterY = new Dictionary<int, float>();
+            var yCursor = 0f;
+            foreach (var row in rowHeight.Keys.OrderBy(k => k))
+            {
+                rowCenterY[row] = yCursor + (rowHeight[row] / 2f);
+                yCursor += rowHeight[row] + spacingY;
+            }
 
             foreach (var node in nodes)
             {
                 var x = columnX.TryGetValue(node.Layer, out var cx) ? cx : node.Layer * spacingX;
-                node.Pivot = new PointF(x, node.Order * rowUnit);
+                var y = rowCenterY.TryGetValue(node.Order, out var cy) ? cy : node.Order * spacingY;
+                node.Pivot = new PointF(x, y);
             }
         }
     }

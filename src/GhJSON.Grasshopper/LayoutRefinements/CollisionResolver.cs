@@ -35,12 +35,6 @@ namespace GhJSON.Grasshopper.LayoutRefinements
     internal static class CollisionResolver
     {
         /// <summary>
-        /// Rounds X-coordinates to a stable bucket so that float drift introduced by
-        /// previous refinement passes does not fragment the column grouping.
-        /// </summary>
-        private const int ColumnRoundDigits = 3;
-
-        /// <summary>
         /// Minimum vertical gap left between stacked components in the same column so they do
         /// not sit flush against each other.
         /// </summary>
@@ -57,35 +51,30 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 return result;
             }
 
-            var byColumn = positions
-                .GroupBy(kvp => (float)Math.Round(kvp.Value.X, ColumnRoundDigits))
-                .OrderBy(g => g.Key);
-
-            foreach (var col in byColumn)
+            // Positions are component centers (pivots); compare top edges, not centers.
+            foreach (var column in PositionClustering.Cluster(positions, p => p.X))
             {
-                var sorted = col.OrderBy(kvp => kvp.Value.Y).ToList();
+                var sorted = column.OrderBy(kvp => kvp.Value.Y).ToList();
                 float lastBottom = float.MinValue;
 
                 foreach (var kvp in sorted)
                 {
-                    var obj = document.FindObject(kvp.Key, false);
-                    if (obj?.Attributes?.Bounds == null)
+                    var bounds = document.FindObject(kvp.Key, false)?.Attributes?.Bounds;
+                    if (!bounds.HasValue)
                     {
                         continue;
                     }
 
-                    var bounds = obj.Attributes.Bounds;
-                    var currentY = kvp.Value.Y;
+                    var height = bounds.Value.Height;
+                    var top = kvp.Value.Y - (height / 2f);
 
-                    if (currentY < lastBottom)
+                    if (top < lastBottom)
                     {
-                        result[kvp.Key] = new PointF(kvp.Value.X, lastBottom);
-                        lastBottom = lastBottom + bounds.Height + VerticalPadding;
+                        result[kvp.Key] = new PointF(kvp.Value.X, lastBottom + (height / 2f));
+                        top = lastBottom;
                     }
-                    else
-                    {
-                        lastBottom = currentY + bounds.Height + VerticalPadding;
-                    }
+
+                    lastBottom = top + height + VerticalPadding;
                 }
             }
 

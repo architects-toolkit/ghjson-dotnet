@@ -95,11 +95,10 @@ namespace GhJSON.Grasshopper.PutOperations
             var idToObject = new Dictionary<int, IGH_DocumentObject>();
             var addedObjects = new List<IGH_DocumentObject>();
 
-            // Calculate positions for components without pivots using dependency graph layout
-            var layoutPositions = hasPivots
-                ? new Dictionary<Guid, PointF>()
-                : CalculateLayoutPositions(document, ghDoc, options.AutoOffsetSpacing);
-
+            // Phase 1: instantiate every component up front. Created objects carry real
+            // attribute bounds before they are added to the canvas, which lets the layout
+            // pass below measure actual component sizes instead of default estimates.
+            var placed = new List<(GhJsonComponent Component, IGH_DocumentObject Obj)>(document.Components.Count);
             for (int i = 0; i < document.Components.Count; i++)
             {
                 var component = document.Components[i];
@@ -118,6 +117,18 @@ namespace GhJSON.Grasshopper.PutOperations
                     continue;
                 }
 
+                placed.Add((component, obj));
+            }
+
+            // Phase 2: calculate positions for components without pivots using dependency
+            // graph layout, measured against the freshly instantiated objects' bounds.
+            var layoutPositions = hasPivots
+                ? new Dictionary<Guid, PointF>()
+                : CalculateLayoutPositions(document, ghDoc, options.AutoOffsetSpacing, placed);
+
+            // Phase 3: assign pivots and add the objects to the document.
+            foreach (var (component, obj) in placed)
+            {
                 // Apply position: either from pivot + offset, or calculated layout position
                 if (obj.Attributes != null)
                 {
@@ -368,38 +379,50 @@ namespace GhJSON.Grasshopper.PutOperations
         /// <param name="document">The GhJSON document.</param>
         /// <param name="ghDoc">The Grasshopper document.</param>
         /// <param name="spacing">Vertical spacing to add below existing content.</param>
+        /// <param name="placed">Freshly instantiated (not yet added) objects, measured for real bounds.</param>
         /// <returns>Dictionary mapping instance GUID to calculated position.</returns>
         private static Dictionary<Guid, PointF> CalculateLayoutPositions(
             GhJsonDocument document,
             GH_Document ghDoc,
-            float spacing)
+            float spacing,
+            IReadOnlyList<(GhJsonComponent Component, IGH_DocumentObject Obj)> placed)
         {
-            const float spacingX = 200f;
-            const float spacingY = 100f;
-            const float islandSpacingY = 150f;
+            // Real bounds come from the freshly instantiated objects first; anything not
+            // measurable there falls back to a live canvas lookup (e.g. objects sharing
+            // instance GUIDs with the incoming document).
+            var measuredByKey = new Dictionary<Guid, IGH_DocumentObject>(placed.Count);
+            foreach (var (component, obj) in placed)
+            {
+                var key = Core.GhJson.GetLayoutKey(component);
+                if (key != Guid.Empty)
+                {
+                    measuredByKey[key] = obj;
+                }
+            }
+
+            var canvasProvider = CanvasNodeSizeProvider.Create(ghDoc);
+            Func<Guid, SizeF?> sizeProvider = guid =>
+            {
+                if (measuredByKey.TryGetValue(guid, out var obj) &&
+                    CanvasNodeSizeProvider.Measure(obj) is SizeF measured)
+                {
+                    return measured;
+                }
+
+                return canvasProvider(guid);
+            };
 
             // Calculate base dependency graph layout using Sugiyama algorithm
             var layoutResult = Core.GhJson.CalculateLayout(document, new LayoutOptions
             {
-                SpacingX = spacingX,
-                SpacingY = spacingY,
-                IslandSpacingY = islandSpacingY
+                NodeSizeProvider = sizeProvider
             });
 
             // Apply Grasshopper-aware refinements (bounds-aware spacing, port alignment, collision avoidance)
             var refinedPositions = LayoutRefinementEngine.ApplyRefinements(
                 layoutResult,
                 document,
-                new LayoutRefinementOptions
-                {
-                    SpacingX = spacingX,
-                    SpacingY = spacingY,
-                    ApplyBoundsAwareSpacing = true,
-                    AlignParamsToInputPorts = true,
-                    AlignOneToOneConnections = true,
-                    MinimizeConnectionLengths = true,
-                    AvoidCollisions = true
-                });
+                LayoutRefinementOptions.Default);
 
             // Offset positions to place below existing canvas content
             return OffsetPositionsBelowExistingContent(refinedPositions, ghDoc, spacing);

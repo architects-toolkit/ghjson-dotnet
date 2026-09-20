@@ -56,23 +56,65 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     options.SpacingY);
             }
 
-            // Single, coherent port-alignment pass replaces the former trio of competing
-            // passes (param-to-port, one-to-one, connection-length minimization) that used to
-            // overwrite each other's Y. Any of the legacy flags enables it.
-            if (options.AlignParamsToInputPorts ||
-                options.AlignOneToOneConnections ||
-                options.MinimizeConnectionLengths)
-            {
-                positions = PortAlignment.AlignToPorts(positions, document);
-            }
+            // Port alignment and collision resolution compete: alignment pulls sources
+            // toward exact port heights while collision pushes overlapping column members
+            // down, silently re-breaking alignment. Iterate the pair — collision always
+            // gets the final word within a pass — until positions converge or the pass
+            // budget runs out. Any of the legacy alignment flags enables the pass.
+            var alignToPorts = options.AlignParamsToInputPorts ||
+                               options.AlignOneToOneConnections ||
+                               options.MinimizeConnectionLengths;
 
-            // Always the final pass: guarantees no two components in a column overlap.
-            if (options.AvoidCollisions)
+            if (alignToPorts || options.AvoidCollisions)
             {
-                positions = CollisionResolver.AvoidCollisions(positions);
+                const int maxPasses = 3;
+                const float convergenceEpsilon = 0.5f;
+
+                for (var pass = 0; pass < maxPasses; pass++)
+                {
+                    var before = positions;
+
+                    if (alignToPorts)
+                    {
+                        positions = PortAlignment.AlignToPorts(positions, document);
+                    }
+
+                    if (options.AvoidCollisions)
+                    {
+                        positions = CollisionResolver.AvoidCollisions(positions);
+                    }
+
+                    if (MaxMovement(before, positions) <= convergenceEpsilon)
+                    {
+                        break;
+                    }
+                }
             }
 
             return positions;
+        }
+
+        /// <summary>
+        /// Largest Manhattan distance any component moved between two refinement passes.
+        /// </summary>
+        private static float MaxMovement(
+            Dictionary<Guid, PointF> before,
+            Dictionary<Guid, PointF> after)
+        {
+            var max = 0f;
+            foreach (var kvp in after)
+            {
+                if (before.TryGetValue(kvp.Key, out var old))
+                {
+                    var delta = Math.Abs(kvp.Value.X - old.X) + Math.Abs(kvp.Value.Y - old.Y);
+                    if (delta > max)
+                    {
+                        max = delta;
+                    }
+                }
+            }
+
+            return max;
         }
     }
 }

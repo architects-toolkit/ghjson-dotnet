@@ -209,7 +209,9 @@ namespace GhJSON.Grasshopper.Deserialization
 
         /// <summary>
         /// Finds the best matching proxy by exact name, optionally filtered by library.
-        /// When multiple proxies match, the one with the highest type priority score wins.
+        /// Obsolete proxies (<see cref="IGH_ObjectProxy.Obsolete"/>) are never returned:
+        /// name-based resolution requires a current implementation. When multiple
+        /// non-obsolete proxies match, the highest type priority score wins.
         /// </summary>
         private static IGH_ObjectProxy? FindProxyByName(string name, string? library)
         {
@@ -239,22 +241,34 @@ namespace GhJSON.Grasshopper.Deserialization
                     return null;
                 }
 
+                // Obsolete proxies never win by name: only an explicit ComponentGuid
+                // (EmitObjectProxy) may instantiate a deprecated component, so files that
+                // reference one by name fail resolution rather than silently degrading.
+                var candidates = matches.Where(m => !IsObsolete(m)).ToList();
+                if (candidates.Count == 0)
+                {
 #if DEBUG
-                var scored = matches.Select(m => new
+                    Debug.WriteLine($"[FindProxyByName] '{name}' matched only obsolete proxies; refusing.");
+#endif
+                    return null;
+                }
+
+#if DEBUG
+                var scored = candidates.Select(m => new
                 {
                     Proxy = m,
                     Score = ComponentTypeResolver.CalculateTypePriorityScore(m.Type),
                     TypeName = m.Type?.Name ?? "unknown"
                 }).OrderByDescending(x => x.Score).ToList();
 
-                Debug.WriteLine($"[FindProxyByName] Found {matches.Count} match(es) for '{name}':");
+                Debug.WriteLine($"[FindProxyByName] Found {candidates.Count} candidate(s) for '{name}':");
                 foreach (var s in scored)
                 {
                     Debug.WriteLine($"  - {s.Proxy.Desc.Name} (Lib: {s.Proxy.Desc.Category}, Type: {s.TypeName}, Score: {s.Score})");
                 }
 #endif
 
-                return matches
+                return candidates
                     .OrderByDescending(m => ComponentTypeResolver.CalculateTypePriorityScore(m.Type))
                     .First();
             }
@@ -264,6 +278,22 @@ namespace GhJSON.Grasshopper.Deserialization
                 Debug.WriteLine($"[FindProxyByName] Exception for '{name}': {ex.Message}");
 #endif
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Checks proxy metadata for the obsolete flag. Guarded: a proxy that fails to
+        /// report is treated as non-obsolete so resolution still proceeds.
+        /// </summary>
+        private static bool IsObsolete(IGH_ObjectProxy proxy)
+        {
+            try
+            {
+                return proxy.Obsolete;
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -287,11 +317,14 @@ namespace GhJSON.Grasshopper.Deserialization
 
         /// <summary>
         /// Resolves a component name using alias lookup and fuzzy matching against
-        /// all components registered in the Grasshopper component server.
+        /// all components registered in the Grasshopper component server. Obsolete
+        /// proxies are excluded from the candidate pool so a fuzzy match can never
+        /// resolve to a deprecated implementation.
         /// </summary>
         private static string? ResolveComponentName(string name, string? library)
         {
             var knownNames = Instances.ComponentServer.ObjectProxies
+                .Where(p => !IsObsolete(p))
                 .Where(p => string.IsNullOrEmpty(library) ||
                             p.Desc.Category.Equals(library, StringComparison.OrdinalIgnoreCase))
                 .Select(p => p.Desc.Name)

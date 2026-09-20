@@ -51,8 +51,48 @@ namespace GhJSON.Core.DependencyGraph.Internal
         /// <summary>Estimated component height, used for bounds-aware row spacing.</summary>
         public float Height { get; set; }
 
+        /// <summary>
+        /// Estimated number of input port slots (largest connected input index + 1, or the
+        /// declared input count when the document carries parameter settings). Each input
+        /// port contributes its own ordered row within the node when ordering layers.
+        /// </summary>
+        public int InputPortCount { get; set; }
+
+        /// <summary>Estimated number of output port slots; see <see cref="InputPortCount"/>.</summary>
+        public int OutputPortCount { get; set; }
+
+        /// <summary>Parent node id to this node's input port index (or -1 when unknown).</summary>
         public Dictionary<Guid, int> Parents { get; set; } = new Dictionary<Guid, int>();
 
+        /// <summary>Child node id to this node's output port index (or -1 when unknown).</summary>
         public Dictionary<Guid, int> Children { get; set; } = new Dictionary<Guid, int>();
+
+        /// <summary>
+        /// Vertical offset of an input port's center from the node center, expressed as a
+        /// fraction of <see cref="Height"/> in (-0.5, 0.5). Ports are approximated as evenly
+        /// distributed across the node height; multiply by <see cref="Height"/> for a pixel
+        /// offset, or use the raw fraction as an offset within the node's order slot.
+        /// </summary>
+        public float InputPortCenterOffset(int portIndex)
+        {
+            return PortCenterOffset(portIndex, this.InputPortCount);
+        }
+
+        /// <summary>See <see cref="InputPortCenterOffset"/>; uses <see cref="OutputPortCount"/>.</summary>
+        public float OutputPortCenterOffset(int portIndex)
+        {
+            return PortCenterOffset(portIndex, this.OutputPortCount);
+        }
+
+        private static float PortCenterOffset(int portIndex, int portCount)
+        {
+            if (portIndex < 0 || portCount <= 1)
+            {
+                return 0f;
+            }
+
+            var count = Math.Max(portCount, portIndex + 1);
+            return ((portIndex + 0.5f) / count) - 0.5f;
+        }
     }
 }

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### New Features
+
+#### Port-Aware Layout Engine
+
+- **Real component bounds feed the core layout**
+  - `LayoutOptions.NodeSizeProvider` (`Func<Guid, SizeF?>`) lets callers supply measured bounds; the engine falls back to the default 100x60 when the provider is unset, returns null, or throws
+  - `GhJsonGrasshopper.CreateNodeSizeProvider(GH_Document? document = null)` exposes a live-bounds provider reading `Attributes.Bounds`; `gh_put` uses it automatically so layouts reflect real component geometry
+  - Column widths and row heights are per-column/per-row maxima instead of global units, so a single large component only inflates its own band
+- **Port-aware ordering and placement**
+  - Layout nodes track estimated input/output port counts and each edge's connected port indices (`To.ParamIndex` = input, `From.ParamIndex` = output)
+  - Crossing counting, barycenter ordering, and weighted-median sweeps operate on port-level endpoints, so fan-out wires occupy distinct rows and a lower output port deterministically orders its target below a higher port's
+  - Coordinate assignment pulls each node toward the median of its parents' connected output port rows (`pivotY = parentPortY - inputPortOffset`), falling back to row bands when no parent is resolvable
+  - Long edges keep their real port indices through dummy routing chains; dummy segments use index -1
+- **Port-to-port wire alignment** (`gh_put` refinement)
+  - `PortAlignment.AlignToPorts` aligns each source so its wire enters the target's specific input port horizontally, using the target input port's and source output port's real bounds-center deltas
+  - Floating parameters (panels, sliders, value params) participate as both targets (left-edge input grip) and sources (right-edge output grip)
+  - The alignment/collision pair now iterates up to three convergence passes (0.5 px epsilon) with collision resolution always getting the final word in each pass
+
+### Changed
+
+- **Compact default spacing**: `SpacingX = 80`, `SpacingY = 28`, `IslandSpacingY = 100` (edge-to-edge gaps, previously looser center-based spacing)
+- **Tolerance-based position clustering**: `BoundsAwareSpacing` and `CollisionResolver` group components into columns/rows when positions differ by <= 1 px instead of integer truncation/rounding
+- **Obsolete proxies never resolve by name**: exact-name and fuzzy resolution in `ComponentInstantiator` exclude proxies flagged `IGH_ObjectProxy.Obsolete`. An obsolete component is only ever instantiated through an explicit `ComponentGuid`, so round-tripping old files still works
+
 ## [1.1.2] - 2026-09-07
 
 ### Changed

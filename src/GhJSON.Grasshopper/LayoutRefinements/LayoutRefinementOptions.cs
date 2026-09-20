@@ -29,9 +29,17 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
         public bool AvoidCollisions { get; set; } = true;
 
-        public float SpacingX { get; set; } = 200f;
+        /// <summary>
+        /// Horizontal gap between a column's right edge and the next column's left edge.
+        /// Mirrors <see cref="GhJSON.Core.DependencyGraph.LayoutOptions.SpacingX"/>.
+        /// </summary>
+        public float SpacingX { get; set; } = 80f;
 
-        public float SpacingY { get; set; } = 100f;
+        /// <summary>
+        /// Vertical gap between consecutive rows: the bottom edge of a row's tallest node
+        /// to the top edge of the next row's nodes.
+        /// </summary>
+        public float SpacingY { get; set; } = 28f;
 
         public static LayoutRefinementOptions Default => new LayoutRefinementOptions();
 

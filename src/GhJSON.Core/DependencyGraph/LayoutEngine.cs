@@ -42,12 +42,15 @@ namespace GhJSON.Core.DependencyGraph
                     diagnostics);
             }
 
-            // Seed default bounds so the bounds-aware coordinate pass works even without a
-            // Grasshopper canvas. Grasshopper consumers refine these with real bounds later.
+            // Seed node bounds: real measured sizes when the caller supplies a
+            // NodeSizeProvider (e.g. live canvas bounds), otherwise the defaults so the
+            // bounds-aware coordinate pass works even without a Grasshopper canvas.
+            var sizeProvider = options.NodeSizeProvider;
             foreach (var node in nodes)
             {
-                node.Width = options.DefaultNodeWidth;
-                node.Height = options.DefaultNodeHeight;
+                var size = GetNodeSize(sizeProvider, node.ComponentId);
+                node.Width = size?.Width > 0f ? size.Value.Width : options.DefaultNodeWidth;
+                node.Height = size?.Height > 0f ? size.Value.Height : options.DefaultNodeHeight;
             }
 
             var islands = IslandDetector.DetectIslands(nodes);
@@ -161,6 +164,27 @@ namespace GhJSON.Core.DependencyGraph
             CrossingMinimizer.MinimizeCrossings(nodes, options.MaxOrderingIterations);
             CoordinateAssigner.AssignCoordinates(nodes, options.SpacingX, options.SpacingY);
             return nodes;
+        }
+
+        /// <summary>
+        /// Queries <paramref name="provider"/> for a node's measured size, returning null on
+        /// any failure so a throwing provider degrades to the configured defaults.
+        /// </summary>
+        private static SizeF? GetNodeSize(Func<Guid, SizeF?>? provider, Guid componentId)
+        {
+            if (provider == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return provider(componentId);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>

@@ -17,12 +17,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.ConnectionOperations;
 using GhJSON.Grasshopper.DeleteOperations;
 using GhJSON.Grasshopper.Deserialization;
 using GhJSON.Grasshopper.GetOperations;
+using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.PutOperations;
 using GhJSON.Grasshopper.Serialization;
 using Grasshopper.Kernel;
@@ -204,6 +206,18 @@ namespace GhJSON.Grasshopper
         public static IGH_DocumentObject? FindObject(GH_Document doc, Guid guid)
         {
             return CanvasReader.FindObject(doc, guid);
+        }
+
+        /// <summary>
+        /// Creates a node-size provider measuring live canvas bounds, suitable for
+        /// <see cref="GhJSON.Core.DependencyGraph.LayoutOptions.NodeSizeProvider"/> so
+        /// <c>GhJson.CalculateLayout</c> can reason about real component geometry.
+        /// </summary>
+        /// <param name="document">The document to measure; when null the active canvas document is used per call.</param>
+        /// <returns>A provider mapping layout node keys to measured sizes, or null when unmeasurable.</returns>
+        public static Func<Guid, SizeF?> CreateNodeSizeProvider(GH_Document? document = null)
+        {
+            return CanvasNodeSizeProvider.Create(document);
         }
 
         #endregion

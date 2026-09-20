@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+using System;
+using System.Drawing;
 using GhJSON.Core.SchemaModels;
 
 namespace GhJSON.Core.DependencyGraph
@@ -23,15 +25,35 @@ namespace GhJSON.Core.DependencyGraph
     {
         public LayoutAlgorithm Algorithm { get; set; } = LayoutAlgorithm.Sugiyama;
 
-        public float SpacingX { get; set; } = 200f;
+        /// <summary>
+        /// Horizontal gap between a column's right edge and the next column's left edge.
+        /// </summary>
+        public float SpacingX { get; set; } = 80f;
 
-        public float SpacingY { get; set; } = 100f;
+        /// <summary>
+        /// Vertical gap between consecutive rows: the bottom edge of a row's tallest node
+        /// to the top edge of the next row's nodes.
+        /// </summary>
+        public float SpacingY { get; set; } = 28f;
 
-        public float IslandSpacingY { get; set; } = 150f;
+        /// <summary>
+        /// Vertical gap between shelves when packing disconnected islands.
+        /// </summary>
+        public float IslandSpacingY { get; set; } = 100f;
 
         public bool PreserveIslandOrder { get; set; } = false;
 
         public GhJsonPivot? Origin { get; set; } = null;
+
+        /// <summary>
+        /// Optional provider of measured node bounds: layout node key (the component's
+        /// instance GUID, or the synthesized key for id-only components) to its size in
+        /// canvas units. Grasshopper consumers supply live <c>Attributes.Bounds</c> here so
+        /// column widths and row heights reflect real component geometry instead of
+        /// <see cref="DefaultNodeWidth"/>/<see cref="DefaultNodeHeight"/>. Return null (or a
+        /// non-positive size) for unknown nodes to keep the defaults.
+        /// </summary>
+        public Func<Guid, SizeF?>? NodeSizeProvider { get; set; }
 
         /// <summary>
         /// Default component width used for bounds-aware column spacing when a node does not

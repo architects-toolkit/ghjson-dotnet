@@ -53,16 +53,36 @@ namespace GhJSON.Core.DependencyGraph
                 node.Height = size?.Height > 0f ? size.Value.Height : options.DefaultNodeHeight;
             }
 
+            // Capture original pivots before layout overwrites them: island ordering
+            // follows the canvas reading order (top-to-bottom, left-to-right) so a
+            // tidied arrangement keeps each island roughly where the user had it.
+            var originalPivots = nodes.ToDictionary(n => n.ComponentId, n => n.Pivot);
+            var hasOriginalPositions = nodes.Any(n => n.Pivot != PointF.Empty);
+
             var islands = IslandDetector.DetectIslands(nodes);
             diagnostics.Add($"Detected {islands.Count} disconnected island(s)");
 
-            // Deterministic island order: largest first, tie-broken by smallest member GUID.
             if (!options.PreserveIslandOrder)
             {
-                islands = islands
-                    .OrderByDescending(i => i.Count)
-                    .ThenBy(i => i.Min(n => n.ComponentId))
-                    .ToList();
+                if (hasOriginalPositions)
+                {
+                    // Reading order: sort each island by the topmost-then-leftmost
+                    // original pivot of its members. Deterministic and spatially
+                    // faithful to the incoming document.
+                    islands = islands
+                        .OrderBy(i => i.Min(n => originalPivots[n.ComponentId].Y))
+                        .ThenBy(i => i.Min(n => originalPivots[n.ComponentId].X))
+                        .ToList();
+                }
+                else
+                {
+                    // No original positions to read: deterministic order, largest
+                    // island first, tie-broken by smallest member GUID.
+                    islands = islands
+                        .OrderByDescending(i => i.Count)
+                        .ThenBy(i => i.Min(n => n.ComponentId))
+                        .ToList();
+                }
             }
 
             var laidOut = new List<IslandLayout>();
@@ -86,23 +106,26 @@ namespace GhJSON.Core.DependencyGraph
                 totalCrossings += CrossingMinimizer.CountCrossings(islandNodes);
 
                 // Normalize each island to its own origin (0,0) using only real nodes.
+                // Positions are bounds centers, so the island origin is the top-left
+                // of the island's bounding box — not the leftmost/topmost center — to
+                // make island edges line up when they are stacked.
                 var realNodes = islandNodes.Where(n => !n.IsDummy).ToList();
                 if (realNodes.Count == 0)
                 {
                     continue;
                 }
 
-                var minX = realNodes.Min(n => n.Pivot.X);
-                var minY = realNodes.Min(n => n.Pivot.Y);
+                var minLeft = realNodes.Min(n => n.Pivot.X - (n.Width / 2f));
+                var minTop = realNodes.Min(n => n.Pivot.Y - (n.Height / 2f));
 
                 var positions = new Dictionary<Guid, PointF>(realNodes.Count);
                 float width = 0f, height = 0f;
                 foreach (var node in realNodes)
                 {
-                    var p = new PointF(node.Pivot.X - minX, node.Pivot.Y - minY);
+                    var p = new PointF(node.Pivot.X - minLeft, node.Pivot.Y - minTop);
                     positions[node.ComponentId] = p;
-                    width = Math.Max(width, p.X + node.Width);
-                    height = Math.Max(height, p.Y + node.Height);
+                    width = Math.Max(width, p.X + (node.Width / 2f));
+                    height = Math.Max(height, p.Y + (node.Height / 2f));
                 }
 
                 laidOut.Add(new IslandLayout(
@@ -112,34 +135,26 @@ namespace GhJSON.Core.DependencyGraph
                     height));
             }
 
-            // Shelf-pack islands left-to-right, wrapping at IslandWrapWidth, to avoid one tall
-            // vertical strip when there are many small disconnected groups.
+            // Stack islands vertically with a shared left edge. Island origins are
+            // bounding-box top-lefts, so stacking at the same X keeps every island's
+            // left edge aligned instead of drifting diagonally.
             var allPositions = new Dictionary<Guid, GhJsonPivot>();
             var islandIds = new List<IReadOnlyList<Guid>>();
-            float cursorX = 0f, shelfY = 0f, shelfHeight = 0f;
             float originX = options.Origin != null ? (float)options.Origin.X : 0f;
-            float originY = options.Origin != null ? (float)options.Origin.Y : 0f;
+            float cursorY = options.Origin != null ? (float)options.Origin.Y : 0f;
 
             foreach (var island in laidOut)
             {
-                if (cursorX > 0f && cursorX + island.Width > options.IslandWrapWidth)
-                {
-                    cursorX = 0f;
-                    shelfY += shelfHeight + options.IslandSpacingY;
-                    shelfHeight = 0f;
-                }
-
                 foreach (var kvp in island.Positions)
                 {
                     var p = new PointF(
-                        kvp.Value.X + cursorX + originX,
-                        kvp.Value.Y + shelfY + originY);
+                        kvp.Value.X + originX,
+                        kvp.Value.Y + cursorY);
                     allPositions[kvp.Key] = GhJsonPivot.FromPointF(p);
                 }
 
                 islandIds.Add(island.RealIds);
-                cursorX += island.Width + options.SpacingX;
-                shelfHeight = Math.Max(shelfHeight, island.Height);
+                cursorY += island.Height + options.IslandSpacingY;
             }
 
             if (cycleCount > 0)

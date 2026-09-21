@@ -159,9 +159,11 @@ namespace GhJSON.Core.Tests.DependencyGraph
             var options = new LayoutOptions { Origin = new GhJsonPivot { X = 500, Y = 600 } };
             var result = GhJson.CalculateLayout(doc, options);
 
+            // Positions are bounds centers; Origin is the layout's bounding-box
+            // top-left, so a default 100x60 node's center sits half a node inside.
             Assert.Equal(1, result.Positions.Count);
-            Assert.Equal(500, result.Positions[guid].X);
-            Assert.Equal(600, result.Positions[guid].Y);
+            Assert.Equal(550, result.Positions[guid].X);
+            Assert.Equal(630, result.Positions[guid].Y);
         }
 
         [Fact]

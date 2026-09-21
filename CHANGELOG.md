@@ -30,10 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Compact default spacing**: `SpacingX = 80`, `SpacingY = 28`, `IslandSpacingY = 100` (edge-to-edge gaps, previously looser center-based spacing)
 - **Tolerance-based position clustering**: `BoundsAwareSpacing` and `CollisionResolver` group components into columns/rows when positions differ by <= 1 px instead of integer truncation/rounding
 - **Obsolete proxies never resolve by name**: exact-name and fuzzy resolution in `ComponentInstantiator` exclude proxies flagged `IGH_ObjectProxy.Obsolete`. An obsolete component is only ever instantiated through an explicit `ComponentGuid`, so round-tripping old files still works
+- **Islands stack vertically with a shared left edge** instead of horizontal shelf-packing, ordered by their original canvas position (top-to-bottom, left-to-right) when the document carries pivots, or largest-first otherwise. `LayoutOptions.IslandWrapWidth` was removed
+- **Island normalization uses bounding-box edges**: each island's origin is its bounds top-left rather than its leftmost center, so island edges actually align when stacked
 
 ### Fixed
 
 - **Renamed "Deconstruct Point" resolves to the Rhino 8 "Deconstruct" component**: the legacy `Deconstruct Point` (`670fcdba-…`) is obsolete, so name resolution refused it and fuzzy matching fell back to `Construct Point`. New aliases (`deconstructpoint`, `pointdeconstruct`, `pointcoordinates`, `pdecon`) map deterministically to `Deconstruct`, bypassing fuzzy matching entirely
+- **Layout positions are converted to per-object pivots before placement**: the layout engine works in bounds-center coordinates, but Grasshopper pivots differ per object type (components pivot at center, sliders/panels/floating parameters at top-left). New `PivotSemantics.CenterToPivot`/`BoundsCenter` helpers perform the conversion in `CanvasPlacer`, fixing panels and sliders landing offset relative to components
+- **`CanvasBoundsCalculator` uses rendered bounds directly** instead of deriving edges from `Pivot + size`, which mis-measured center-pivot objects
+- **Panels size to their content** when the GhJSON carries no explicit `bounds`: `PanelHandler` estimates width/height from text, font, multiline and wrap instead of leaving the oversized default
 
 ## [1.1.2] - 2026-09-07
 

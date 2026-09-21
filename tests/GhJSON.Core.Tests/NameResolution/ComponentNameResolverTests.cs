@@ -60,6 +60,9 @@ namespace GhJSON.Core.Tests.NameResolution
         [InlineData("string", "Panel")]
         [InlineData("filter", "Stream Filter")]
         [InlineData("streamfilter", "Stream Filter")]
+        [InlineData("deconstructpoint", "Deconstruct")]
+        [InlineData("Deconstruct Point", "Deconstruct")]
+        [InlineData("pdecon", "Deconstruct")]
         public void ResolveAlias_KnownAliases_ReturnsCanonicalName(string input, string expected)
         {
             Assert.Equal(expected, ComponentNameResolver.ResolveAlias(input));

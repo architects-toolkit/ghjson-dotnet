@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tolerance-based position clustering**: `BoundsAwareSpacing` and `CollisionResolver` group components into columns/rows when positions differ by <= 1 px instead of integer truncation/rounding
 - **Obsolete proxies never resolve by name**: exact-name and fuzzy resolution in `ComponentInstantiator` exclude proxies flagged `IGH_ObjectProxy.Obsolete`. An obsolete component is only ever instantiated through an explicit `ComponentGuid`, so round-tripping old files still works
 
+### Fixed
+
+- **Renamed "Deconstruct Point" resolves to the Rhino 8 "Deconstruct" component**: the legacy `Deconstruct Point` (`670fcdba-…`) is obsolete, so name resolution refused it and fuzzy matching fell back to `Construct Point`. New aliases (`deconstructpoint`, `pointdeconstruct`, `pointcoordinates`, `pdecon`) map deterministically to `Deconstruct`, bypassing fuzzy matching entirely
+
 ## [1.1.2] - 2026-09-07
 
 ### Changed

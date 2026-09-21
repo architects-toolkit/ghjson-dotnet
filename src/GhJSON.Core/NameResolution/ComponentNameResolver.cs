@@ -100,6 +100,12 @@ namespace GhJSON.Core.NameResolution
             { "vector", "Vector XYZ" },
             { "vectorxyz", "Vector XYZ" },
 
+            // Deconstruct components (Rhino 8 renamed "Deconstruct Point" to "Deconstruct")
+            { "deconstructpoint", "Deconstruct" },
+            { "pointdeconstruct", "Deconstruct" },
+            { "pointcoordinates", "Deconstruct" },
+            { "pdecon", "Deconstruct" },
+
             // Math components
             { "add", "Addition" },
             { "addition", "Addition" },

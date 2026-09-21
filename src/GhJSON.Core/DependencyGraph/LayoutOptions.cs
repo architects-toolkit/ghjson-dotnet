@@ -73,13 +73,6 @@ namespace GhJSON.Core.DependencyGraph
         /// </summary>
         public int MaxOrderingIterations { get; set; } = 24;
 
-        /// <summary>
-        /// When packing multiple disconnected islands, islands are laid out left-to-right on
-        /// "shelves" until this width budget is exceeded, then wrapped to a new shelf. This
-        /// keeps many small islands from forming one tall vertical strip.
-        /// </summary>
-        public float IslandWrapWidth { get; set; } = 2000f;
-
         public static LayoutOptions Default => new LayoutOptions();
     }
 }

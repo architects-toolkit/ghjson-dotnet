@@ -187,15 +187,22 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         /// <inheritdoc/>
         public void Deserialize(GhJsonComponent component, IGH_DocumentObject obj)
         {
-            if (obj is GH_Panel panel &&
-                component.ComponentState?.Extensions != null &&
-                component.ComponentState.Extensions.TryGetValue(ExtensionKey, out var extData))
+            if (obj is not GH_Panel panel)
             {
-                if (extData is Dictionary<string, object> panelData)
-                {
-                    ApplyPanelData(panel, panelData);
-                }
+                return;
             }
+
+            if (component.ComponentState?.Extensions != null &&
+                component.ComponentState.Extensions.TryGetValue(ExtensionKey, out var extData) &&
+                extData is Dictionary<string, object> panelData)
+            {
+                ApplyPanelData(panel, panelData);
+                return;
+            }
+
+            // No extension data: still size the panel to its content so panels placed
+            // from ghjson that omit panel state don't keep the oversized default bounds.
+            FitToContent(panel);
         }
 
         private static void ApplyPanelData(GH_Panel panel, Dictionary<string, object> data)
@@ -328,34 +335,43 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             // oversized default, so one-line panels don't occupy a huge footprint.
             if (!data.ContainsKey("bounds"))
             {
-                try
+                FitToContent(panel);
+            }
+        }
+
+        /// <summary>
+        /// Sizes the panel to fit its current text, font, and display properties.
+        /// </summary>
+        private static void FitToContent(GH_Panel panel)
+        {
+            try
+            {
+                var estimated = EstimatePanelSize(panel);
+                var attr = panel.Attributes;
+                if (attr != null)
                 {
-                    var estimated = EstimatePanelSize(panel);
-                    var attr = panel.Attributes;
-                    if (attr != null)
-                    {
-                        attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, estimated.Width, estimated.Height);
-                    }
+                    attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, estimated.Width, estimated.Height);
                 }
-                catch (Exception ex)
-                {
+            }
+            catch (Exception ex)
+            {
 #if DEBUG
-                    Debug.WriteLine($"[PanelHandler] Error estimating panel size: {ex.Message}");
+                Debug.WriteLine($"[PanelHandler] Error estimating panel size: {ex.Message}");
 #endif
-                }
             }
         }
 
         /// <summary>
         /// Estimates a compact panel size from its text, font, and display properties.
-        /// Width follows the longest line (capped when wrapping is enabled); height
-        /// follows the line count. Grips and margins are included as fixed padding.
+        /// Width follows the longest line (or the nickname) and is only capped at the
+        /// wrap width when wrapping actually needs to break the text; height follows
+        /// the line count. Grips and margins are included as fixed padding.
         /// </summary>
         private static SizeF EstimatePanelSize(GH_Panel panel)
         {
             const float paddingX = 36f;
             const float paddingY = 18f;
-            const float minWidth = 60f;
+            const float minWidth = 80f;
             const float minHeight = 32f;
             const float maxWidth = 600f;
             const float maxHeight = 600f;
@@ -371,9 +387,16 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 ? text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n')
                 : new[] { text.Replace("\r\n", " ").Replace('\n', ' ') };
 
+            // The title bar shows the nickname; a panel narrower than its nickname
+            // truncates it, so the nickname participates in the width estimate.
+            var longest = Math.Max(
+                lines.Length == 0 ? 0 : lines.Max(line => line.Length),
+                panel.NickName?.Length ?? 0);
+            var naturalWidth = (longest * charWidth) + paddingX;
+
             float width;
             int lineCount;
-            if (panel.Properties?.Wrap == true)
+            if (panel.Properties?.Wrap == true && naturalWidth > wrapWidth)
             {
                 var charsPerLine = Math.Max((int)((wrapWidth - paddingX) / charWidth), 1);
                 lineCount = lines.Sum(line => Math.Max(1, (int)Math.Ceiling(line.Length / (double)charsPerLine)));
@@ -381,8 +404,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             else
             {
-                var longest = lines.Length == 0 ? 0 : lines.Max(line => line.Length);
-                width = (longest * charWidth) + paddingX;
+                width = naturalWidth;
                 lineCount = Math.Max(1, lines.Length);
             }
 

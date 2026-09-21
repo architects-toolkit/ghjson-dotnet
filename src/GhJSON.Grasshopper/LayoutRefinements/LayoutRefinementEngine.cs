@@ -53,7 +53,9 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 positions = BoundsAwareSpacing.ApplyBoundsAwareSpacing(
                     positions,
                     options.SpacingX,
-                    options.SpacingY);
+                    options.SpacingY,
+                    layoutResult.Islands,
+                    options.NodeSizeProvider);
             }
 
             // Port alignment and collision resolution compete: alignment pulls sources
@@ -81,7 +83,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
                     if (options.AvoidCollisions)
                     {
-                        positions = CollisionResolver.AvoidCollisions(positions);
+                        positions = CollisionResolver.AvoidCollisions(positions, options.NodeSizeProvider);
                     }
 
                     if (MaxMovement(before, positions) <= convergenceEpsilon)

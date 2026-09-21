@@ -29,6 +29,7 @@ using GhJSON.Grasshopper.GetOperations;
 using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.Serialization;
 using GhJSON.Grasshopper.Serialization.ObjectHandlers;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -146,7 +147,10 @@ namespace GhJSON.Grasshopper.PutOperations
                         // Use dependency graph calculated position for components without pivots.
                         // Use the same stable key as the layout engine so id-only components
                         // (no InstanceGuid) also receive their calculated position.
-                        obj.Attributes.Pivot = calculatedPosition;
+                        // Layout positions are bounds centers; convert to this object's
+                        // pivot semantics (components pivot at center, sliders/panels at
+                        // their top-left corner).
+                        obj.Attributes.Pivot = PivotSemantics.CenterToPivot(obj, calculatedPosition);
 #if DEBUG
                         Debug.WriteLine($"[CanvasPlacer.Put] Applied layout position for '{component.Name}': ({calculatedPosition.X:F2}, {calculatedPosition.Y:F2})");
 #endif

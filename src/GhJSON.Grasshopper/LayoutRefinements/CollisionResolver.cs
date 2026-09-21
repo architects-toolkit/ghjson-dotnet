@@ -40,14 +40,16 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// </summary>
         private const float VerticalPadding = 20f;
 
-        public static Dictionary<Guid, PointF> AvoidCollisions(Dictionary<Guid, PointF> positions)
+        public static Dictionary<Guid, PointF> AvoidCollisions(
+            Dictionary<Guid, PointF> positions,
+            Func<Guid, SizeF?>? sizeProvider = null)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
             var document = CanvasReader.GetActiveDocument();
-            if (document == null)
+            if (document == null && sizeProvider == null)
             {
-                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document; skipping.");
+                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document and no size provider; skipping.");
                 return result;
             }
 
@@ -59,13 +61,11 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
                 foreach (var kvp in sorted)
                 {
-                    var bounds = document.FindObject(kvp.Key, false)?.Attributes?.Bounds;
-                    if (!bounds.HasValue)
+                    var height = MeasureHeight(kvp.Key, document, sizeProvider);
+                    if (height <= 0f)
                     {
                         continue;
                     }
-
-                    var height = bounds.Value.Height;
                     var top = kvp.Value.Y - (height / 2f);
 
                     if (top < lastBottom)
@@ -79,6 +79,31 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Resolves a node's height, preferring the supplied provider (freshly
+        /// instantiated objects not yet on the canvas) and falling back to live
+        /// document bounds.
+        /// </summary>
+        private static float MeasureHeight(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        {
+            if (sizeProvider != null)
+            {
+                try
+                {
+                    if (sizeProvider(id) is SizeF provided)
+                    {
+                        return provided.Height;
+                    }
+                }
+                catch
+                {
+                    // Provider failure falls through to live bounds.
+                }
+            }
+
+            return document?.FindObject(id, false)?.Attributes?.Bounds.Height ?? 0f;
         }
     }
 }

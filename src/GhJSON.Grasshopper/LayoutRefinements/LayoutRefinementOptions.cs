@@ -15,11 +15,21 @@
  * limitations under the License.
  */
 
+using System;
+using System.Drawing;
+
 namespace GhJSON.Grasshopper.LayoutRefinements
 {
     public sealed class LayoutRefinementOptions
     {
         public bool ApplyBoundsAwareSpacing { get; set; } = true;
+
+        /// <summary>
+        /// Optional node-size lookup matching <see cref="GhJSON.Core.DependencyGraph.LayoutOptions.NodeSizeProvider"/>.
+        /// Consulted before live canvas bounds so refinements can measure objects that are
+        /// instantiated but not yet added to the document (e.g. the gh_put flow).
+        /// </summary>
+        public Func<Guid, SizeF?>? NodeSizeProvider { get; set; }
 
         public bool AlignParamsToInputPorts { get; set; } = true;
 

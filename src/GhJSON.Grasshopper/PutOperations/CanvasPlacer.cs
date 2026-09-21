@@ -422,11 +422,17 @@ namespace GhJSON.Grasshopper.PutOperations
                 NodeSizeProvider = sizeProvider
             });
 
-            // Apply Grasshopper-aware refinements (bounds-aware spacing, port alignment, collision avoidance)
+            // Apply Grasshopper-aware refinements (bounds-aware spacing, port alignment,
+            // collision avoidance). The same measured-bounds provider feeds the
+            // refinements so freshly instantiated objects — not yet on the canvas —
+            // still contribute their real sizes.
             var refinedPositions = LayoutRefinementEngine.ApplyRefinements(
                 layoutResult,
                 document,
-                LayoutRefinementOptions.Default);
+                new LayoutRefinementOptions
+                {
+                    NodeSizeProvider = sizeProvider,
+                });
 
             // Offset positions to place below existing canvas content
             return OffsetPositionsBelowExistingContent(refinedPositions, ghDoc, spacing);

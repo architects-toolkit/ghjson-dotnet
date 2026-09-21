@@ -76,30 +76,32 @@ namespace GhJSON.Grasshopper.PutOperations
 
             foreach (var obj in objects)
             {
-                if (obj.Attributes == null) continue;
+                var boundsRect = obj.Attributes?.Bounds;
+                if (!boundsRect.HasValue || boundsRect.Value.IsEmpty) continue;
 
                 bounds.IsEmpty = false;
 
-                float bottomEdge = obj.Attributes.Pivot.Y + obj.Attributes.Bounds.Height;
-                if (bottomEdge > bounds.LowestY)
+                // Use the rendered bounds directly: pivot semantics differ per object
+                // type (components pivot at center, sliders/panels at top-left), so
+                // deriving edges from Pivot + size misplaces non-top-left objects.
+                if (boundsRect.Value.Bottom > bounds.LowestY)
                 {
-                    bounds.LowestY = bottomEdge;
+                    bounds.LowestY = boundsRect.Value.Bottom;
                 }
 
-                float rightEdge = obj.Attributes.Pivot.X + obj.Attributes.Bounds.Width;
-                if (rightEdge > bounds.RightmostX)
+                if (boundsRect.Value.Right > bounds.RightmostX)
                 {
-                    bounds.RightmostX = rightEdge;
+                    bounds.RightmostX = boundsRect.Value.Right;
                 }
 
-                if (obj.Attributes.Pivot.Y < bounds.TopmostY)
+                if (boundsRect.Value.Top < bounds.TopmostY)
                 {
-                    bounds.TopmostY = obj.Attributes.Pivot.Y;
+                    bounds.TopmostY = boundsRect.Value.Top;
                 }
 
-                if (obj.Attributes.Pivot.X < bounds.LeftmostX)
+                if (boundsRect.Value.Left < bounds.LeftmostX)
                 {
-                    bounds.LeftmostX = obj.Attributes.Pivot.X;
+                    bounds.LeftmostX = boundsRect.Value.Left;
                 }
             }
 

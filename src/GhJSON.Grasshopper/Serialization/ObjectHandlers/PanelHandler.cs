@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Linq;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Serialization.DataTypes;
 using Grasshopper.Kernel;
@@ -322,6 +323,73 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 #endif
                 }
             }
+
+            // No explicit bounds: size the panel to its content instead of leaving the
+            // oversized default, so one-line panels don't occupy a huge footprint.
+            if (!data.ContainsKey("bounds"))
+            {
+                try
+                {
+                    var estimated = EstimatePanelSize(panel);
+                    var attr = panel.Attributes;
+                    if (attr != null)
+                    {
+                        attr.Bounds = new RectangleF(attr.Bounds.X, attr.Bounds.Y, estimated.Width, estimated.Height);
+                    }
+                }
+                catch (Exception ex)
+                {
+#if DEBUG
+                    Debug.WriteLine($"[PanelHandler] Error estimating panel size: {ex.Message}");
+#endif
+                }
+            }
+        }
+
+        /// <summary>
+        /// Estimates a compact panel size from its text, font, and display properties.
+        /// Width follows the longest line (capped when wrapping is enabled); height
+        /// follows the line count. Grips and margins are included as fixed padding.
+        /// </summary>
+        private static SizeF EstimatePanelSize(GH_Panel panel)
+        {
+            const float paddingX = 36f;
+            const float paddingY = 18f;
+            const float minWidth = 60f;
+            const float minHeight = 32f;
+            const float maxWidth = 600f;
+            const float maxHeight = 600f;
+            const float wrapWidth = 240f;
+
+            var text = panel.UserText ?? string.Empty;
+            var font = panel.Properties?.Font;
+            var emSize = font?.Size ?? 10f;
+            var charWidth = Math.Max(emSize * 0.6f, 4f);
+            var lineHeight = Math.Max((emSize * 1.6f) + 4f, 16f);
+
+            var lines = panel.Properties?.Multiline == true
+                ? text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n')
+                : new[] { text.Replace("\r\n", " ").Replace('\n', ' ') };
+
+            float width;
+            int lineCount;
+            if (panel.Properties?.Wrap == true)
+            {
+                var charsPerLine = Math.Max((int)((wrapWidth - paddingX) / charWidth), 1);
+                lineCount = lines.Sum(line => Math.Max(1, (int)Math.Ceiling(line.Length / (double)charsPerLine)));
+                width = wrapWidth;
+            }
+            else
+            {
+                var longest = lines.Length == 0 ? 0 : lines.Max(line => line.Length);
+                width = (longest * charWidth) + paddingX;
+                lineCount = Math.Max(1, lines.Length);
+            }
+
+            var height = (lineCount * lineHeight) + paddingY;
+            return new SizeF(
+                Math.Clamp(width, minWidth, maxWidth),
+                Math.Clamp(height, minHeight, maxHeight));
         }
     }
 }

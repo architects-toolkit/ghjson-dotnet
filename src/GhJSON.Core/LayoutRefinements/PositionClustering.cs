@@ -20,7 +20,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
-namespace GhJSON.Grasshopper.LayoutRefinements
+namespace GhJSON.Core.LayoutRefinements
 {
     /// <summary>
     /// Groups layout positions into columns or rows by proximity along one axis. Replaces

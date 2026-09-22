@@ -43,6 +43,8 @@ ghjson-dotnet/
 │   │   ├── DiffOperations/             # Diff/patch operations on `.ghpatch` documents
 │   │   ├── PatchModels/                # Strongly-typed model for `.ghpatch` documents
 │   │   ├── NameResolution/             # Fuzzy name matching for components and parameters
+│   │   ├── DependencyGraph/            # Sugiyama-style layout engine (host-independent)
+│   │   ├── LayoutRefinements/          # Layout refinement passes on abstract node metrics
 │   │   ├── TidyUpOperations/           # Schema tidy up operations
 │   │   └── GhJson.cs                   # Main façade entry point
 │   │
@@ -51,6 +53,7 @@ ghjson-dotnet/
 │       ├── Deserialization/            # GH object deserialization
 │       ├── GetOperations/              # GH object retrieval operations from canvas
 │       ├── PutOperations/              # GH object placement operations on canvas
+│       ├── LayoutRefinements/          # Adapter measuring live objects into core node metrics
 │       ├── Validation/                 # GH-specific validation (could all validation be moved to Core?)
 │       ├── Utils/                      # Utility functions
 │       │   ├── Canvas/                 # Canvas operations

@@ -19,7 +19,7 @@ using System;
 using System.Collections.Generic;
 using GhJSON.Core.SchemaModels;
 
-namespace GhJSON.Grasshopper.LayoutRefinements
+namespace GhJSON.Core.LayoutRefinements
 {
     /// <summary>
     /// Maps GhJSON connection endpoint ids to the same stable layout keys the layout
@@ -40,7 +40,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             {
                 if (component.Id.HasValue)
                 {
-                    map[component.Id.Value] = Core.GhJson.GetLayoutKey(component);
+                    map[component.Id.Value] = GhJson.GetLayoutKey(component);
                 }
             }
 

@@ -228,7 +228,7 @@ namespace GhJSON.Grasshopper
         /// <summary>
         /// Computes canvas positions for a GhJSON document through the single shared
         /// layout pipeline: the core dependency-graph pass followed by the
-        /// Grasshopper-aware refinements (bounds-aware spacing, port alignment, wire
+        /// measurement-aware refinements (bounds-aware spacing, port alignment, wire
         /// corridors, collision resolution). Positions are bounds centers; convert them
         /// to pivots with <c>PivotSemantics.CenterToPivot</c> at the application
         /// boundary.
@@ -255,8 +255,23 @@ namespace GhJSON.Grasshopper
             refinements.NodeSizeProvider ??= options.NodeSizeProvider;
             refinements.ObjectProvider ??= options.ObjectProvider;
 
+            // Compose the Grasshopper providers and live canvas measurements into the
+            // core metrics contract so the refinement passes stay host-independent. A
+            // caller-supplied metrics provider always wins. When no measurement source
+            // exists at all, the provider is left unset so the passes keep the
+            // dependency-graph positions untouched (the historical no-document no-op).
+            if (refinements.ObjectProvider != null ||
+                refinements.NodeSizeProvider != null ||
+                CanvasReader.GetActiveDocument() != null)
+            {
+                refinements.NodeMetricsProvider ??= CanvasNodeMetricsProvider.Create(
+                    null,
+                    refinements.ObjectProvider,
+                    refinements.NodeSizeProvider);
+            }
+
             var layoutResult = Core.GhJson.CalculateLayout(document, layout);
-            return LayoutRefinementEngine.ApplyRefinements(layoutResult, document, refinements);
+            return Core.LayoutRefinements.LayoutRefinementEngine.ApplyRefinements(layoutResult, document, refinements);
         }
 
         #endregion

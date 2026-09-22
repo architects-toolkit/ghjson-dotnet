@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -21,14 +21,17 @@ using System.Drawing;
 using GhJSON.Core.DependencyGraph;
 using GhJSON.Core.SchemaModels;
 
-namespace GhJSON.Grasshopper.LayoutRefinements
+namespace GhJSON.Core.LayoutRefinements
 {
     /// <summary>
-    /// Runs the Grasshopper-aware refinement passes over a core
+    /// Runs the measurement-aware refinement passes over a core
     /// <see cref="LayoutResult"/>: per-island bounds-aware spacing first, then an
     /// iterated wire-clearance/port-alignment/collision loop that converges to whole
-    /// pixels. Consumed through <see cref="GhJsonGrasshopper.ComputeLayout"/> so every
-    /// caller shares the same pipeline.
+    /// pixels. The engine is host-independent — it consumes measured node geometry
+    /// through <see cref="LayoutRefinementOptions.NodeMetricsProvider"/> — so the same
+    /// pipeline runs on a live Grasshopper canvas (via
+    /// <c>GhJsonGrasshopper.ComputeLayout</c>) or on any other adapter that supplies
+    /// metrics.
     /// </summary>
     public static class LayoutRefinementEngine
     {
@@ -69,8 +72,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     options.SpacingX,
                     options.SpacingY,
                     layoutResult.Islands,
-                    options.NodeSizeProvider,
-                    options.ObjectProvider);
+                    options.NodeMetricsProvider);
             }
 
             // Port alignment, wire corridors, and collision resolution compete: corridor
@@ -95,22 +97,20 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                             positions,
                             document,
                             layoutResult.Islands,
-                            options.ObjectProvider,
-                            options.NodeSizeProvider,
+                            options.NodeMetricsProvider,
                             options.WireClearance);
                     }
 
                     if (options.AlignToPorts)
                     {
-                        positions = PortAlignment.AlignToPorts(positions, document, options.ObjectProvider);
+                        positions = PortAlignment.AlignToPorts(positions, document, options.NodeMetricsProvider);
                     }
 
                     if (options.AvoidCollisions)
                     {
                         positions = CollisionResolver.AvoidCollisions(
                             positions,
-                            options.NodeSizeProvider,
-                            options.ObjectProvider);
+                            options.NodeMetricsProvider);
                     }
 
                     positions = Round(positions);

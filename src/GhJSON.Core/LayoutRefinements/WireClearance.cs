@@ -22,17 +22,15 @@ using System.Drawing;
 using System.Linq;
 using GhJSON.Core.DependencyGraph.Internal;
 using GhJSON.Core.SchemaModels;
-using GhJSON.Grasshopper.GetOperations;
-using Grasshopper.Kernel;
 
-namespace GhJSON.Grasshopper.LayoutRefinements
+namespace GhJSON.Core.LayoutRefinements
 {
     /// <summary>
     /// Adapter between the refinement pipeline and <see cref="WireCorridorPlanner"/>: it
-    /// translates bounds-center positions, measured node sizes, and live port geometry
-    /// into the planner's pure-geometry input, then applies the returned vertical deltas
-    /// to node centers. Wires that skip one or more columns gain a clear corridor so they
-    /// no longer run through unrelated component bounds.
+    /// translates bounds-center positions, measured node sizes, and port deltas into the
+    /// planner's pure-geometry input, then applies the returned vertical deltas to node
+    /// centers. Wires that skip one or more columns gain a clear corridor so they no
+    /// longer run through unrelated component bounds.
     /// </summary>
     internal static class WireClearance
     {
@@ -45,23 +43,20 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// <param name="positions">Current bounds-center positions per layout key.</param>
         /// <param name="document">The GhJSON document supplying the connections.</param>
         /// <param name="islands">Island membership from the layout result; null treats all nodes as one island.</param>
-        /// <param name="objectProvider">Optional caller-owned object lookup for port geometry.</param>
-        /// <param name="sizeProvider">Optional size lookup for off-document objects.</param>
+        /// <param name="metricsProvider">Optional lookup resolving a layout key to measured node metrics.</param>
         /// <param name="clearance">Minimum wire-to-bounds distance in pixels.</param>
         public static Dictionary<Guid, PointF> EnsureWireClearance(
             Dictionary<Guid, PointF> positions,
             GhJsonDocument document,
             IReadOnlyList<IReadOnlyList<Guid>>? islands,
-            Func<Guid, IGH_DocumentObject?>? objectProvider,
-            Func<Guid, SizeF?>? sizeProvider,
+            Func<Guid, LayoutNodeMetrics?>? metricsProvider,
             float clearance)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var ghDocument = CanvasReader.GetActiveDocument();
-            if (ghDocument == null && objectProvider == null && sizeProvider == null)
+            if (metricsProvider == null)
             {
-                Debug.WriteLine("[WireClearance.EnsureWireClearance] No document or providers; skipping.");
+                Debug.WriteLine("[WireClearance.EnsureWireClearance] No metrics provider; skipping.");
                 return result;
             }
 
@@ -120,9 +115,11 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 }
 
                 var nodeBounds = new Dictionary<Guid, RectangleF>();
+                var metrics = new Dictionary<Guid, LayoutNodeMetrics?>();
                 foreach (var id in group)
                 {
-                    if (TryMeasureBounds(id, subset[id], ghDocument, objectProvider, sizeProvider, out var rect))
+                    metrics[id] = LayoutNodeMetrics.Resolve(metricsProvider, id);
+                    if (TryMeasureBounds(metrics[id], subset[id], out var rect))
                     {
                         nodeBounds[id] = rect;
                     }
@@ -145,9 +142,9 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     }
 
                     var fromPort = GetOutputPortPoint(
-                        ghDocument, objectProvider, sizeProvider, fromGuid, conn.From.ParamIndex, result[fromGuid]);
+                        metrics[fromGuid], conn.From.ParamIndex, result[fromGuid]);
                     var toPort = GetInputPortPoint(
-                        ghDocument, objectProvider, sizeProvider, toGuid, conn.To.ParamIndex, result[toGuid]);
+                        metrics[toGuid], conn.To.ParamIndex, result[toGuid]);
                     if (fromPort == null || toPort == null)
                     {
                         continue;
@@ -182,15 +179,12 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// on <paramref name="center"/>.
         /// </summary>
         private static bool TryMeasureBounds(
-            Guid id,
+            LayoutNodeMetrics? metrics,
             PointF center,
-            GH_Document? ghDocument,
-            Func<Guid, IGH_DocumentObject?>? objectProvider,
-            Func<Guid, SizeF?>? sizeProvider,
             out RectangleF rect)
         {
             rect = default;
-            var size = CanvasNodeSizeProvider.Measure(id, ghDocument, objectProvider, sizeProvider);
+            var size = metrics?.Size;
             if (size == null || size.Value.Width <= 0f || size.Value.Height <= 0f)
             {
                 return false;
@@ -210,21 +204,17 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// back to the bounds center vertically when the specific port is unknown.
         /// </summary>
         private static PointF? GetOutputPortPoint(
-            GH_Document? ghDocument,
-            Func<Guid, IGH_DocumentObject?>? objectProvider,
-            Func<Guid, SizeF?>? sizeProvider,
-            Guid sourceGuid,
+            LayoutNodeMetrics? metrics,
             int? paramIndex,
             PointF center)
         {
-            var size = CanvasNodeSizeProvider.Measure(sourceGuid, ghDocument, objectProvider, sizeProvider);
+            var size = metrics?.Size;
             if (size == null)
             {
                 return null;
             }
 
-            var obj = PortAlignment.ResolveObject(ghDocument, objectProvider, sourceGuid);
-            var y = center.Y + PortAlignment.GetOutputPortDelta(obj, paramIndex);
+            var y = center.Y + PortAlignment.GetOutputPortDelta(metrics, paramIndex);
             return new PointF(center.X + size.Value.Width / 2f, y);
         }
 
@@ -233,22 +223,18 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// left edge of the target bounds at the connected input port's height.
         /// </summary>
         private static PointF? GetInputPortPoint(
-            GH_Document? ghDocument,
-            Func<Guid, IGH_DocumentObject?>? objectProvider,
-            Func<Guid, SizeF?>? sizeProvider,
-            Guid targetGuid,
+            LayoutNodeMetrics? metrics,
             int? paramIndex,
             PointF center)
         {
-            var size = CanvasNodeSizeProvider.Measure(targetGuid, ghDocument, objectProvider, sizeProvider);
+            var size = metrics?.Size;
             if (size == null)
             {
                 return null;
             }
 
-            var obj = PortAlignment.ResolveObject(ghDocument, objectProvider, targetGuid);
             var y = center.Y;
-            if (PortAlignment.TryGetInputPortDelta(obj, paramIndex, out var delta))
+            if (PortAlignment.TryGetInputPortDelta(metrics, paramIndex, out var delta))
             {
                 y += delta;
             }

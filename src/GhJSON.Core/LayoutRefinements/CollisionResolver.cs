@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -20,17 +20,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using GhJSON.Grasshopper.GetOperations;
-using Grasshopper;
-using Grasshopper.Kernel;
 
-namespace GhJSON.Grasshopper.LayoutRefinements
+namespace GhJSON.Core.LayoutRefinements
 {
     /// <summary>
-    /// Post-layout refinements that depend on the active Grasshopper canvas for
-    /// per-component bounds. When no canvas is available (e.g. headless tests) these
-    /// methods degrade into no-ops and emit a single diagnostic, rather than silently
-    /// mutating positions based on stale state.
+    /// Post-layout refinement that pushes overlapping column members apart vertically
+    /// using measured node heights. When no metrics provider is available (e.g.
+    /// headless runs without measurement) the pass degrades into a no-op and emits a
+    /// single diagnostic, rather than silently mutating positions based on stale state.
     /// </summary>
     internal static class CollisionResolver
     {
@@ -42,15 +39,13 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
         public static Dictionary<Guid, PointF> AvoidCollisions(
             Dictionary<Guid, PointF> positions,
-            Func<Guid, SizeF?>? sizeProvider = null,
-            Func<Guid, IGH_DocumentObject?>? objectProvider = null)
+            Func<Guid, LayoutNodeMetrics?>? metricsProvider = null)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var document = CanvasReader.GetActiveDocument();
-            if (document == null && sizeProvider == null && objectProvider == null)
+            if (metricsProvider == null)
             {
-                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document and no providers; skipping.");
+                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No metrics provider; skipping.");
                 return result;
             }
 
@@ -62,7 +57,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
                 foreach (var kvp in sorted)
                 {
-                    var height = MeasureHeight(kvp.Key, document, sizeProvider, objectProvider);
+                    var height = MeasureHeight(kvp.Key, metricsProvider);
                     if (height <= 0f)
                     {
                         continue;
@@ -83,12 +78,12 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         }
 
         /// <summary>
-        /// Resolves a node's height through the shared measurement path (providers
-        /// first, then live document bounds).
+        /// Resolves a node's height through the shared metrics path, returning 0 when
+        /// the node has no measurable bounds.
         /// </summary>
-        private static float MeasureHeight(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
+        private static float MeasureHeight(Guid id, Func<Guid, LayoutNodeMetrics?> metricsProvider)
         {
-            return CanvasNodeSizeProvider.Measure(id, document, objectProvider, sizeProvider)?.Height ?? 0f;
+            return LayoutNodeMetrics.Resolve(metricsProvider, id)?.Size?.Height ?? 0f;
         }
     }
 }

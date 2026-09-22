@@ -20,7 +20,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
-using GhJSON.Core.DependencyGraph;
 using GhJSON.Core.NameResolution;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.ConnectionOperations;
@@ -207,6 +206,17 @@ namespace GhJSON.Grasshopper.PutOperations
 #if DEBUG
                 Debug.WriteLine($"[CanvasPlacer.Put] Created {result.ConnectionsCreated} connections, {result.Warnings.Count} warnings");
 #endif
+            }
+
+            // Connected panels render streamed data rows (path + value) instead of user
+            // text; reserve a data row now that sources exist so one-line panels don't
+            // clip the first entry.
+            foreach (var obj in addedObjects)
+            {
+                if (obj is GH_Panel panel)
+                {
+                    PanelHandler.ReserveDataRows(panel);
+                }
             }
 
             // Create groups
@@ -416,23 +426,21 @@ namespace GhJSON.Grasshopper.PutOperations
                 return canvasProvider(guid);
             };
 
-            // Calculate base dependency graph layout using Sugiyama algorithm
-            var layoutResult = Core.GhJson.CalculateLayout(document, new LayoutOptions
-            {
-                NodeSizeProvider = sizeProvider
-            });
+            // Fresh objects resolve through the caller-owned map so refinements can read
+            // their port geometry before they reach the canvas.
+            Func<Guid, IGH_DocumentObject?> objectProvider = guid =>
+                measuredByKey.TryGetValue(guid, out var obj) ? obj : ghDoc.FindObject(guid, false);
 
-            // Apply Grasshopper-aware refinements (bounds-aware spacing, port alignment,
-            // collision avoidance). The same measured-bounds provider feeds the
-            // refinements so freshly instantiated objects — not yet on the canvas —
-            // still contribute their real sizes.
-            var refinedPositions = LayoutRefinementEngine.ApplyRefinements(
-                layoutResult,
-                document,
-                new LayoutRefinementOptions
-                {
-                    NodeSizeProvider = sizeProvider,
-                });
+            // Shared layout pipeline: core dependency-graph pass + Grasshopper-aware
+            // refinements (bounds-aware spacing, port alignment, wire corridors,
+            // collision avoidance). The same measured-bounds and object providers feed
+            // every stage so freshly instantiated objects — not yet on the canvas —
+            // still contribute their real geometry.
+            var refinedPositions = GhJsonGrasshopper.ComputeLayout(document, new CanvasLayoutOptions
+            {
+                NodeSizeProvider = sizeProvider,
+                ObjectProvider = objectProvider,
+            });
 
             // Offset positions to place below existing canvas content
             return OffsetPositionsBelowExistingContent(refinedPositions, ghDoc, spacing);

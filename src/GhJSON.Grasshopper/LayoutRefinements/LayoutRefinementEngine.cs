@@ -23,8 +23,22 @@ using GhJSON.Core.SchemaModels;
 
 namespace GhJSON.Grasshopper.LayoutRefinements
 {
+    /// <summary>
+    /// Runs the Grasshopper-aware refinement passes over a core
+    /// <see cref="LayoutResult"/>: per-island bounds-aware spacing first, then an
+    /// iterated wire-clearance/port-alignment/collision loop that converges to whole
+    /// pixels. Consumed through <see cref="GhJsonGrasshopper.ComputeLayout"/> so every
+    /// caller shares the same pipeline.
+    /// </summary>
     public static class LayoutRefinementEngine
     {
+        /// <summary>
+        /// Applies the enabled refinement passes and returns refined bounds-center
+        /// positions per layout key.
+        /// </summary>
+        /// <param name="layoutResult">Core dependency-graph layout output.</param>
+        /// <param name="document">The GhJSON document supplying connections and components.</param>
+        /// <param name="options">Refinement toggles and providers; null uses defaults.</param>
         public static Dictionary<Guid, PointF> ApplyRefinements(
             LayoutResult layoutResult,
             GhJsonDocument document,
@@ -55,19 +69,18 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     options.SpacingX,
                     options.SpacingY,
                     layoutResult.Islands,
-                    options.NodeSizeProvider);
+                    options.NodeSizeProvider,
+                    options.ObjectProvider);
             }
 
-            // Port alignment and collision resolution compete: alignment pulls sources
-            // toward exact port heights while collision pushes overlapping column members
-            // down, silently re-breaking alignment. Iterate the pair — collision always
-            // gets the final word within a pass — until positions converge or the pass
-            // budget runs out. Any of the legacy alignment flags enables the pass.
-            var alignToPorts = options.AlignParamsToInputPorts ||
-                               options.AlignOneToOneConnections ||
-                               options.MinimizeConnectionLengths;
-
-            if (alignToPorts || options.AvoidCollisions)
+            // Port alignment, wire corridors, and collision resolution compete: corridor
+            // planning and alignment pull nodes toward wire-friendly heights while
+            // collision pushes overlapping column members down, silently re-breaking
+            // both. Iterate the trio — collision always gets the final word within a
+            // pass — until positions converge or the pass budget runs out. Positions
+            // round to whole pixels each pass so sub-pixel oscillation cannot stall
+            // convergence or leak ±1px drift into undo entries.
+            if (options.AlignToPorts || options.AvoidCollisions || options.EnsureWireClearance)
             {
                 const int maxPasses = 3;
                 const float convergenceEpsilon = 0.5f;
@@ -76,15 +89,31 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 {
                     var before = positions;
 
-                    if (alignToPorts)
+                    if (options.EnsureWireClearance)
                     {
-                        positions = PortAlignment.AlignToPorts(positions, document);
+                        positions = WireClearance.EnsureWireClearance(
+                            positions,
+                            document,
+                            layoutResult.Islands,
+                            options.ObjectProvider,
+                            options.NodeSizeProvider,
+                            options.WireClearance);
+                    }
+
+                    if (options.AlignToPorts)
+                    {
+                        positions = PortAlignment.AlignToPorts(positions, document, options.ObjectProvider);
                     }
 
                     if (options.AvoidCollisions)
                     {
-                        positions = CollisionResolver.AvoidCollisions(positions, options.NodeSizeProvider);
+                        positions = CollisionResolver.AvoidCollisions(
+                            positions,
+                            options.NodeSizeProvider,
+                            options.ObjectProvider);
                     }
+
+                    positions = Round(positions);
 
                     if (MaxMovement(before, positions) <= convergenceEpsilon)
                     {
@@ -94,6 +123,23 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             }
 
             return positions;
+        }
+
+        /// <summary>
+        /// Snaps positions to whole pixels. Grasshopper draws on a pixel grid, so the
+        /// sub-pixel residue left by median/port arithmetic only produces undo noise.
+        /// </summary>
+        private static Dictionary<Guid, PointF> Round(Dictionary<Guid, PointF> positions)
+        {
+            var rounded = new Dictionary<Guid, PointF>(positions.Count);
+            foreach (var kvp in positions)
+            {
+                rounded[kvp.Key] = new PointF(
+                    (float)Math.Round(kvp.Value.X),
+                    (float)Math.Round(kvp.Value.Y));
+            }
+
+            return rounded;
         }
 
         /// <summary>

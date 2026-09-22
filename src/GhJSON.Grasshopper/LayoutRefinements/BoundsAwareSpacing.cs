@@ -41,20 +41,21 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             float spacingX,
             float spacingY,
             IReadOnlyList<IReadOnlyList<Guid>>? islands = null,
-            Func<Guid, SizeF?>? sizeProvider = null)
+            Func<Guid, SizeF?>? sizeProvider = null,
+            Func<Guid, IGH_DocumentObject?>? objectProvider = null)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
             var document = CanvasReader.GetActiveDocument();
-            if (document == null && sizeProvider == null)
+            if (document == null && sizeProvider == null && objectProvider == null)
             {
-                Debug.WriteLine("[BoundsAwareSpacing.ApplyBoundsAwareSpacing] No active Grasshopper document and no size provider; skipping.");
+                Debug.WriteLine("[BoundsAwareSpacing.ApplyBoundsAwareSpacing] No active Grasshopper document and no providers; skipping.");
                 return result;
             }
 
             if (islands == null || islands.Count == 0)
             {
-                RespaceGroup(result, result, document, sizeProvider, spacingX, spacingY);
+                RespaceGroup(result, result, document, sizeProvider, objectProvider, spacingX, spacingY);
                 return result;
             }
 
@@ -69,7 +70,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     covered.Add(id);
                 }
 
-                RespaceGroup(subset, result, document, sizeProvider, spacingX, spacingY);
+                RespaceGroup(subset, result, document, sizeProvider, objectProvider, spacingX, spacingY);
             }
 
             // Nodes not claimed by any island (should not happen, but stay safe) are
@@ -78,7 +79,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             if (leftovers.Count > 0)
             {
                 var subset = leftovers.ToDictionary(id => id, id => result[id]);
-                RespaceGroup(subset, result, document, sizeProvider, spacingX, spacingY);
+                RespaceGroup(subset, result, document, sizeProvider, objectProvider, spacingX, spacingY);
             }
 
             return result;
@@ -93,6 +94,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             Dictionary<Guid, PointF> result,
             GH_Document? document,
             Func<Guid, SizeF?>? sizeProvider,
+            Func<Guid, IGH_DocumentObject?>? objectProvider,
             float spacingX,
             float spacingY)
         {
@@ -102,16 +104,16 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             }
 
             var leftEdge = subset.Min(kvp =>
-                kvp.Value.X - (MeasuredWidth(kvp.Key, document, sizeProvider) / 2f));
+                kvp.Value.X - (MeasuredWidth(kvp.Key, document, sizeProvider, objectProvider) / 2f));
             var topEdge = subset.Min(kvp =>
-                kvp.Value.Y - (MeasuredHeight(kvp.Key, document, sizeProvider) / 2f));
+                kvp.Value.Y - (MeasuredHeight(kvp.Key, document, sizeProvider, objectProvider) / 2f));
 
             var columns = PositionClustering.Cluster(subset, p => p.X);
             var columnX = new Dictionary<int, float>();
             var xCursor = leftEdge;
             for (var i = 0; i < columns.Count; i++)
             {
-                var maxWidth = MaxMeasuredWidth(columns[i], document, sizeProvider);
+                var maxWidth = MaxMeasuredWidth(columns[i], document, sizeProvider, objectProvider);
                 columnX[i] = xCursor + (maxWidth / 2f);
                 xCursor += maxWidth + spacingX;
             }
@@ -121,7 +123,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             var yCursor = topEdge;
             for (var i = 0; i < rows.Count; i++)
             {
-                var maxHeight = MaxMeasuredHeight(rows[i], document, sizeProvider);
+                var maxHeight = MaxMeasuredHeight(rows[i], document, sizeProvider, objectProvider);
                 rowY[i] = yCursor + (maxHeight / 2f);
                 yCursor += maxHeight + spacingY;
             }
@@ -143,46 +145,31 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             }
         }
 
-        private static float MeasuredWidth(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        private static float MeasuredWidth(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
         {
-            return Measure(id, document, sizeProvider)?.Width ?? 0f;
+            return Measure(id, document, sizeProvider, objectProvider)?.Width ?? 0f;
         }
 
-        private static float MeasuredHeight(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        private static float MeasuredHeight(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
         {
-            return Measure(id, document, sizeProvider)?.Height ?? 0f;
+            return Measure(id, document, sizeProvider, objectProvider)?.Height ?? 0f;
         }
 
         /// <summary>
-        /// Resolves a node's size, preferring the supplied provider (freshly instantiated
-        /// objects not yet on the canvas) and falling back to live document bounds.
+        /// Resolves a node's size through the shared measurement path (providers first,
+        /// then live document bounds).
         /// </summary>
-        private static SizeF? Measure(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        private static SizeF? Measure(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
         {
-            if (sizeProvider != null)
-            {
-                try
-                {
-                    if (sizeProvider(id) is SizeF provided)
-                    {
-                        return provided;
-                    }
-                }
-                catch
-                {
-                    // Provider failure falls through to live bounds.
-                }
-            }
-
-            return document?.FindObject(id, false)?.Attributes?.Bounds.Size;
+            return CanvasNodeSizeProvider.Measure(id, document, objectProvider, sizeProvider);
         }
 
-        private static float MaxMeasuredWidth(List<KeyValuePair<Guid, PointF>> cluster, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        private static float MaxMeasuredWidth(List<KeyValuePair<Guid, PointF>> cluster, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
         {
             var max = 0f;
             foreach (var kvp in cluster)
             {
-                var width = MeasuredWidth(kvp.Key, document, sizeProvider);
+                var width = MeasuredWidth(kvp.Key, document, sizeProvider, objectProvider);
                 if (width > max)
                 {
                     max = width;
@@ -192,12 +179,12 @@ namespace GhJSON.Grasshopper.LayoutRefinements
             return max;
         }
 
-        private static float MaxMeasuredHeight(List<KeyValuePair<Guid, PointF>> cluster, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        private static float MaxMeasuredHeight(List<KeyValuePair<Guid, PointF>> cluster, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
         {
             var max = 0f;
             foreach (var kvp in cluster)
             {
-                var height = MeasuredHeight(kvp.Key, document, sizeProvider);
+                var height = MeasuredHeight(kvp.Key, document, sizeProvider, objectProvider);
                 if (height > max)
                 {
                     max = height;

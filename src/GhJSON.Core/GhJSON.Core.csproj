@@ -53,6 +53,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GhJSON.Core.Tests" />
+    <InternalsVisibleTo Include="GhJSON.Grasshopper" />
   </ItemGroup>
 
 </Project>

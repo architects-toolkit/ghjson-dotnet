@@ -56,6 +56,51 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         }
 
         /// <summary>
+        /// Resolves a node's measured size through every available source, in priority
+        /// order: the caller-owned object provider (fresh/selected objects not on the
+        /// canvas), the explicit size provider, then the live document. This is the
+        /// single measurement path for all refinement passes.
+        /// </summary>
+        internal static SizeF? Measure(
+            Guid id,
+            GH_Document? document,
+            Func<Guid, IGH_DocumentObject?>? objectProvider,
+            Func<Guid, SizeF?>? sizeProvider)
+        {
+            if (objectProvider != null)
+            {
+                try
+                {
+                    if (Measure(objectProvider(id)) is SizeF providedObj)
+                    {
+                        return providedObj;
+                    }
+                }
+                catch
+                {
+                    // Provider failure falls through to the next source.
+                }
+            }
+
+            if (sizeProvider != null)
+            {
+                try
+                {
+                    if (sizeProvider(id) is SizeF provided)
+                    {
+                        return provided;
+                    }
+                }
+                catch
+                {
+                    // Provider failure falls through to live bounds.
+                }
+            }
+
+            return Measure(document?.FindObject(id, false));
+        }
+
+        /// <summary>
         /// Measures an object's <c>Attributes.Bounds</c>, returning null when the object,
         /// its attributes, or its bounds are unavailable or empty.
         /// </summary>

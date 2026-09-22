@@ -42,14 +42,15 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
         public static Dictionary<Guid, PointF> AvoidCollisions(
             Dictionary<Guid, PointF> positions,
-            Func<Guid, SizeF?>? sizeProvider = null)
+            Func<Guid, SizeF?>? sizeProvider = null,
+            Func<Guid, IGH_DocumentObject?>? objectProvider = null)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
             var document = CanvasReader.GetActiveDocument();
-            if (document == null && sizeProvider == null)
+            if (document == null && sizeProvider == null && objectProvider == null)
             {
-                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document and no size provider; skipping.");
+                Debug.WriteLine("[CollisionResolver.AvoidCollisions] No active Grasshopper document and no providers; skipping.");
                 return result;
             }
 
@@ -61,7 +62,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
                 foreach (var kvp in sorted)
                 {
-                    var height = MeasureHeight(kvp.Key, document, sizeProvider);
+                    var height = MeasureHeight(kvp.Key, document, sizeProvider, objectProvider);
                     if (height <= 0f)
                     {
                         continue;
@@ -82,28 +83,12 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         }
 
         /// <summary>
-        /// Resolves a node's height, preferring the supplied provider (freshly
-        /// instantiated objects not yet on the canvas) and falling back to live
-        /// document bounds.
+        /// Resolves a node's height through the shared measurement path (providers
+        /// first, then live document bounds).
         /// </summary>
-        private static float MeasureHeight(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider)
+        private static float MeasureHeight(Guid id, GH_Document? document, Func<Guid, SizeF?>? sizeProvider, Func<Guid, IGH_DocumentObject?>? objectProvider)
         {
-            if (sizeProvider != null)
-            {
-                try
-                {
-                    if (sizeProvider(id) is SizeF provided)
-                    {
-                        return provided.Height;
-                    }
-                }
-                catch
-                {
-                    // Provider failure falls through to live bounds.
-                }
-            }
-
-            return document?.FindObject(id, false)?.Attributes?.Bounds.Height ?? 0f;
+            return CanvasNodeSizeProvider.Measure(id, document, objectProvider, sizeProvider)?.Height ?? 0f;
         }
     }
 }

@@ -21,15 +21,16 @@ using System.Diagnostics;
 using System.Drawing;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.GetOperations;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.LayoutRefinements
 {
     /// <summary>
     /// Post-layout refinements that align source parameter components to their target
-    /// component's input ports. Depends on <see cref="Grasshopper.Instances.ActiveCanvas"/>
-    /// for bounds and port positions; when no canvas is available these methods degrade to
-    /// no-ops.
+    /// component's input ports. Port geometry resolves through the caller-supplied
+    /// object provider first, then the active canvas document; with neither available
+    /// these methods degrade to no-ops.
     /// </summary>
     internal static class PortAlignment
     {
@@ -43,16 +44,24 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// once. Floating parameter targets (panels, params) contribute through their own
         /// bounds, and floating parameter sources through their right-edge output grip.
         /// </summary>
+        /// <param name="positions">Current bounds-center positions per layout key.</param>
+        /// <param name="document">The GhJSON document supplying the connections.</param>
+        /// <param name="objectProvider">
+        /// Optional caller-owned lookup resolving a layout key to its Grasshopper object;
+        /// consulted before the live document so objects not yet on the canvas (gh_put)
+        /// contribute their port geometry.
+        /// </param>
         public static Dictionary<Guid, PointF> AlignToPorts(
             Dictionary<Guid, PointF> positions,
-            GhJsonDocument document)
+            GhJsonDocument document,
+            Func<Guid, IGH_DocumentObject?>? objectProvider = null)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
             var ghDocument = CanvasReader.GetActiveDocument();
-            if (ghDocument == null)
+            if (ghDocument == null && objectProvider == null)
             {
-                Debug.WriteLine("[PortAlignment.AlignToPorts] No active Grasshopper document; skipping.");
+                Debug.WriteLine("[PortAlignment.AlignToPorts] No active Grasshopper document and no object provider; skipping.");
                 return result;
             }
 
@@ -63,14 +72,7 @@ namespace GhJSON.Grasshopper.LayoutRefinements
 
             // Map connection endpoint ids to the same stable keys the layout engine emits,
             // so id-only components (no InstanceGuid) still participate in alignment.
-            var idToGuidMap = new Dictionary<int, Guid>();
-            foreach (var component in document.Components)
-            {
-                if (component.Id.HasValue)
-                {
-                    idToGuidMap[component.Id.Value] = Core.GhJson.GetLayoutKey(component);
-                }
-            }
+            var idToGuidMap = ConnectionKeyMap.Build(document);
 
             var desired = new Dictionary<Guid, List<float>>();
 
@@ -90,12 +92,14 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                         continue;
                     }
 
-                    if (!TryGetInputPortCenterDelta(ghDocument, toGuid, conn.To.ParamIndex, out var targetDelta))
+                    var targetObj = ResolveObject(ghDocument, objectProvider, toGuid);
+                    if (!TryGetInputPortDelta(targetObj, conn.To.ParamIndex, out var targetDelta))
                     {
                         continue;
                     }
 
-                    var sourceDelta = GetOutputPortCenterDelta(ghDocument, fromGuid, conn.From.ParamIndex);
+                    var sourceObj = ResolveObject(ghDocument, objectProvider, fromGuid);
+                    var sourceDelta = GetOutputPortDelta(sourceObj, conn.From.ParamIndex);
 
                     // The wire is horizontal when
                     // sourcePivotY + sourceDelta == targetPivotY + targetDelta.
@@ -127,21 +131,46 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         }
 
         /// <summary>
+        /// Resolves a layout key to its Grasshopper object, preferring the caller-supplied
+        /// provider (fresh or selected objects) and falling back to the live document.
+        /// </summary>
+        internal static IGH_DocumentObject? ResolveObject(
+            GH_Document? ghDocument,
+            Func<Guid, IGH_DocumentObject?>? objectProvider,
+            Guid guid)
+        {
+            if (objectProvider != null)
+            {
+                try
+                {
+                    if (objectProvider(guid) is IGH_DocumentObject provided)
+                    {
+                        return provided;
+                    }
+                }
+                catch
+                {
+                    // Provider failure falls through to the live document lookup.
+                }
+            }
+
+            return ghDocument?.FindObject(guid, false);
+        }
+
+        /// <summary>
         /// Vertical distance between the center of the target's input port receiving the
         /// connection and the center of the target object itself. For component targets this
         /// is the connected input parameter's bounds; for floating parameter targets the
         /// input grip is vertically centered on the param's own bounds. Returns false when
         /// the target cannot supply a port position at all.
         /// </summary>
-        private static bool TryGetInputPortCenterDelta(
-            GH_Document ghDocument,
-            Guid targetGuid,
+        internal static bool TryGetInputPortDelta(
+            IGH_DocumentObject? targetObj,
             int? paramIndex,
             out float delta)
         {
             delta = 0f;
 
-            var targetObj = ghDocument.FindObject(targetGuid, false);
             if (targetObj?.Attributes == null)
             {
                 return false;
@@ -163,7 +192,8 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                     return true;
                 }
 
-                delta = CenterY(inputParam.Attributes.Bounds) - CenterY(targetObj.Attributes.Bounds);
+                delta = PivotSemantics.BoundsCenter(inputParam.Attributes.Bounds).Y
+                    - PivotSemantics.BoundsCenter(targetObj.Attributes.Bounds).Y;
                 return true;
             }
 
@@ -179,12 +209,10 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// right-edge output grip, vertically centered on their own bounds. Returns 0 when
         /// the source cannot be measured so the connection still votes for the target port.
         /// </summary>
-        private static float GetOutputPortCenterDelta(
-            GH_Document ghDocument,
-            Guid sourceGuid,
+        internal static float GetOutputPortDelta(
+            IGH_DocumentObject? sourceObj,
             int? paramIndex)
         {
-            var sourceObj = ghDocument.FindObject(sourceGuid, false);
             if (sourceObj?.Attributes == null || !(sourceObj is IGH_Component component))
             {
                 return 0f;
@@ -202,12 +230,8 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 return 0f;
             }
 
-            return CenterY(outputParam.Attributes.Bounds) - CenterY(sourceObj.Attributes.Bounds);
-        }
-
-        private static float CenterY(RectangleF bounds)
-        {
-            return bounds.Y + (bounds.Height / 2f);
+            return PivotSemantics.BoundsCenter(outputParam.Attributes.Bounds).Y
+                - PivotSemantics.BoundsCenter(sourceObj.Attributes.Bounds).Y;
         }
 
         private static float Median(List<float> values)

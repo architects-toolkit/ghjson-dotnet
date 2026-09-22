@@ -340,6 +340,45 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         }
 
         /// <summary>
+        /// Minimum height for a panel with an incoming connection: the streamed data
+        /// rows replace the user text and each entry renders on its own line, so a
+        /// one-line panel needs roughly an extra row of height to show path + value.
+        /// </summary>
+        internal const float MinConnectedHeight = 55f;
+
+        /// <summary>
+        /// Reserves a data row on panels that have incoming connections. Connected
+        /// panels render streamed data (path + value per item) instead of their user
+        /// text, so the compact one-line height clips the first entry. Only grows the
+        /// panel; never shrinks it. Called during placement after wires exist — tidy-up
+        /// deliberately does not resize panels.
+        /// </summary>
+        /// <param name="panel">The panel to grow when connected.</param>
+        internal static void ReserveDataRows(GH_Panel panel)
+        {
+            try
+            {
+                var attr = panel.Attributes;
+                if (attr == null || panel.Sources.Count == 0)
+                {
+                    return;
+                }
+
+                var bounds = attr.Bounds;
+                if (bounds.Height < MinConnectedHeight)
+                {
+                    attr.Bounds = new RectangleF(bounds.X, bounds.Y, bounds.Width, MinConnectedHeight);
+                }
+            }
+            catch (Exception ex)
+            {
+#if DEBUG
+                Debug.WriteLine($"[PanelHandler] Error reserving data rows: {ex.Message}");
+#endif
+            }
+        }
+
+        /// <summary>
         /// Sizes the panel to fit its current text, font, and display properties.
         /// </summary>
         private static void FitToContent(GH_Panel panel)

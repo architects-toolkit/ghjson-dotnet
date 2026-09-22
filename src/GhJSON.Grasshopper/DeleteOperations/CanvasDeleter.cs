@@ -35,9 +35,10 @@ namespace GhJSON.Grasshopper.DeleteOperations
     /// fire-and-forget state before the callback had a chance to run).
     /// </para>
     /// <para>
-    /// Undo batching uses <c>GH_UndoUtil.CreateGenericObjectEvent</c> with every affected
-    /// object calling <c>RecordUndoEvent(undo)</c>, ensuring a single Ctrl+Z reverts the
-    /// whole batch.
+    /// Undo uses <c>GH_UndoUtil.RecordRemoveObjectEvent</c>, which serializes each removed
+    /// object into the undo record so a single Ctrl+Z re-adds the whole batch. Generic
+    /// object events (<c>RecordUndoEvent</c>) only snapshot state and fail to undo
+    /// removals because the target object no longer exists in the document.
     /// </para>
     /// </summary>
     internal static class CanvasDeleter
@@ -143,28 +144,21 @@ namespace GhJSON.Grasshopper.DeleteOperations
                 if (objectsToDelete.Count == 1)
                 {
                     var obj = objectsToDelete[0];
-                    obj.RecordUndoEvent(singleLabel);
+                    doc.UndoUtil.RecordRemoveObjectEvent(singleLabel, obj);
                     doc.RemoveObject(obj, false);
                     result.Deleted.Add(obj.InstanceGuid);
                 }
                 else
                 {
-                    var undo = doc.UndoUtil.CreateGenericObjectEvent(batchLabel, objectsToDelete[0]);
-
-                    // Every object in the batch — including the first — must record against
-                    // the same undo event so that a single Ctrl+Z reverts them all together.
-                    foreach (var obj in objectsToDelete)
-                    {
-                        obj.RecordUndoEvent(undo);
-                    }
+                    // The record serializes every affected object before removal so a
+                    // single Ctrl+Z re-adds them all together.
+                    doc.UndoUtil.RecordRemoveObjectEvent(batchLabel, objectsToDelete);
 
                     foreach (var obj in objectsToDelete)
                     {
                         doc.RemoveObject(obj, false);
                         result.Deleted.Add(obj.InstanceGuid);
                     }
-
-                    doc.UndoUtil.RecordEvent(undo);
                 }
 
                 if (options.Redraw)

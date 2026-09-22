@@ -19,10 +19,10 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using GhJSON.Grasshopper.LayoutRefinements;
+using GhJSON.Core.LayoutRefinements;
 using Xunit;
 
-namespace GhJSON.Grasshopper.Tests.LayoutRefinements
+namespace GhJSON.Core.Tests.LayoutRefinements
 {
     /// <summary>
     /// Pure-logic tests for tolerance-based position clustering used by the layout

@@ -53,7 +53,10 @@ namespace GhJSON.Grasshopper
         /// <summary>
         /// Shared object lookup forwarded to <see cref="LayoutRefinementOptions.ObjectProvider"/>
         /// when unset, so port geometry resolves against the caller's own object map
-        /// (freshly instantiated or selected objects) for every refinement pass.
+        /// (freshly instantiated or selected objects) for every refinement pass. Together
+        /// with <see cref="NodeSizeProvider"/> it is composed into the
+        /// <see cref="Core.LayoutRefinements.LayoutNodeMetrics"/> provider consumed by the
+        /// core refinement engine.
         /// </summary>
         public Func<Guid, IGH_DocumentObject?>? ObjectProvider { get; set; }
 

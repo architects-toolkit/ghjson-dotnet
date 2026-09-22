@@ -1,4 +1,4 @@
-﻿/*
+/*
  * GhJSON - JSON format for Grasshopper definitions
  * Copyright (C) 2026 Marc Roca Musach
  *
@@ -20,17 +20,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using GhJSON.Core.SchemaModels;
-using GhJSON.Grasshopper.GetOperations;
-using GhJSON.Grasshopper.Shared;
-using Grasshopper.Kernel;
 
-namespace GhJSON.Grasshopper.LayoutRefinements
+namespace GhJSON.Core.LayoutRefinements
 {
     /// <summary>
-    /// Post-layout refinements that align source parameter components to their target
-    /// component's input ports. Port geometry resolves through the caller-supplied
-    /// object provider first, then the active canvas document; with neither available
-    /// these methods degrade to no-ops.
+    /// Post-layout refinement that aligns source nodes to their target component's
+    /// input ports. Port geometry resolves through the caller-supplied metrics
+    /// provider; without one the pass degrades to a no-op.
     /// </summary>
     internal static class PortAlignment
     {
@@ -46,22 +42,20 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         /// </summary>
         /// <param name="positions">Current bounds-center positions per layout key.</param>
         /// <param name="document">The GhJSON document supplying the connections.</param>
-        /// <param name="objectProvider">
-        /// Optional caller-owned lookup resolving a layout key to its Grasshopper object;
-        /// consulted before the live document so objects not yet on the canvas (gh_put)
-        /// contribute their port geometry.
+        /// <param name="metricsProvider">
+        /// Optional lookup resolving a layout key to its measured node metrics; without
+        /// it the pass skips so unmeasurable geometry never drives positions.
         /// </param>
         public static Dictionary<Guid, PointF> AlignToPorts(
             Dictionary<Guid, PointF> positions,
             GhJsonDocument document,
-            Func<Guid, IGH_DocumentObject?>? objectProvider = null)
+            Func<Guid, LayoutNodeMetrics?>? metricsProvider = null)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
-            var ghDocument = CanvasReader.GetActiveDocument();
-            if (ghDocument == null && objectProvider == null)
+            if (metricsProvider == null)
             {
-                Debug.WriteLine("[PortAlignment.AlignToPorts] No active Grasshopper document and no object provider; skipping.");
+                Debug.WriteLine("[PortAlignment.AlignToPorts] No metrics provider; skipping.");
                 return result;
             }
 
@@ -92,14 +86,14 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                         continue;
                     }
 
-                    var targetObj = ResolveObject(ghDocument, objectProvider, toGuid);
-                    if (!TryGetInputPortDelta(targetObj, conn.To.ParamIndex, out var targetDelta))
+                    var targetMetrics = LayoutNodeMetrics.Resolve(metricsProvider, toGuid);
+                    if (!TryGetInputPortDelta(targetMetrics, conn.To.ParamIndex, out var targetDelta))
                     {
                         continue;
                     }
 
-                    var sourceObj = ResolveObject(ghDocument, objectProvider, fromGuid);
-                    var sourceDelta = GetOutputPortDelta(sourceObj, conn.From.ParamIndex);
+                    var sourceMetrics = LayoutNodeMetrics.Resolve(metricsProvider, fromGuid);
+                    var sourceDelta = GetOutputPortDelta(sourceMetrics, conn.From.ParamIndex);
 
                     // The wire is horizontal when
                     // sourcePivotY + sourceDelta == targetPivotY + targetDelta.
@@ -131,107 +125,65 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         }
 
         /// <summary>
-        /// Resolves a layout key to its Grasshopper object, preferring the caller-supplied
-        /// provider (fresh or selected objects) and falling back to the live document.
-        /// </summary>
-        internal static IGH_DocumentObject? ResolveObject(
-            GH_Document? ghDocument,
-            Func<Guid, IGH_DocumentObject?>? objectProvider,
-            Guid guid)
-        {
-            if (objectProvider != null)
-            {
-                try
-                {
-                    if (objectProvider(guid) is IGH_DocumentObject provided)
-                    {
-                        return provided;
-                    }
-                }
-                catch
-                {
-                    // Provider failure falls through to the live document lookup.
-                }
-            }
-
-            return ghDocument?.FindObject(guid, false);
-        }
-
-        /// <summary>
         /// Vertical distance between the center of the target's input port receiving the
-        /// connection and the center of the target object itself. For component targets this
-        /// is the connected input parameter's bounds; for floating parameter targets the
-        /// input grip is vertically centered on the param's own bounds. Returns false when
-        /// the target cannot supply a port position at all.
+        /// connection and the center of the target node itself. For component targets this
+        /// is the connected input port's delta; for floating parameter targets the input
+        /// grip is vertically centered on the param's own bounds. Returns false when the
+        /// target cannot supply a port position at all.
         /// </summary>
         internal static bool TryGetInputPortDelta(
-            IGH_DocumentObject? targetObj,
+            LayoutNodeMetrics? targetMetrics,
             int? paramIndex,
             out float delta)
         {
             delta = 0f;
 
-            if (targetObj?.Attributes == null)
+            if (targetMetrics == null)
             {
                 return false;
             }
 
-            if (targetObj is IGH_Component component)
+            if (targetMetrics.Kind == LayoutNodeKind.Component)
             {
                 var index = paramIndex ?? -1;
-                if (index < 0 || index >= component.Params.Input.Count)
+                if (index >= 0 && index < targetMetrics.InputPortDeltas.Count)
                 {
-                    // Unknown input port: the component center is the mean of its ports,
-                    // so a zero delta still contributes a reasonable vote.
-                    return true;
+                    delta = targetMetrics.InputPortDeltas[index];
                 }
 
-                var inputParam = component.Params.Input[index];
-                if (inputParam?.Attributes == null)
-                {
-                    return true;
-                }
-
-                delta = PivotSemantics.BoundsCenter(inputParam.Attributes.Bounds).Y
-                    - PivotSemantics.BoundsCenter(targetObj.Attributes.Bounds).Y;
+                // Unknown input port: the component center is the mean of its ports,
+                // so a zero delta still contributes a reasonable vote.
                 return true;
             }
 
             // Floating parameters (panels, value params…) take wires at their left-edge
             // input grip, which is vertically centered on the param's own bounds.
-            return targetObj is IGH_Param;
+            return targetMetrics.Kind == LayoutNodeKind.Parameter;
         }
 
         /// <summary>
         /// Vertical distance between the center of the source's output port feeding the
-        /// connection and the center of the source object itself. Component sources use the
-        /// connected output parameter's bounds; floating parameter sources emit from their
+        /// connection and the center of the source node itself. Component sources use the
+        /// connected output port's delta; floating parameter sources emit from their
         /// right-edge output grip, vertically centered on their own bounds. Returns 0 when
         /// the source cannot be measured so the connection still votes for the target port.
         /// </summary>
         internal static float GetOutputPortDelta(
-            IGH_DocumentObject? sourceObj,
+            LayoutNodeMetrics? sourceMetrics,
             int? paramIndex)
         {
-            if (sourceObj?.Attributes == null || !(sourceObj is IGH_Component component))
+            if (sourceMetrics == null || sourceMetrics.Kind != LayoutNodeKind.Component)
             {
                 return 0f;
             }
 
             var index = paramIndex ?? -1;
-            if (index < 0 || index >= component.Params.Output.Count)
+            if (index < 0 || index >= sourceMetrics.OutputPortDeltas.Count)
             {
                 return 0f;
             }
 
-            var outputParam = component.Params.Output[index];
-            if (outputParam?.Attributes == null)
-            {
-                return 0f;
-            }
-
-            return PivotSemantics.BoundsCenter(outputParam.Attributes.Bounds).Y
-                - PivotSemantics.BoundsCenter(sourceObj.Attributes.Bounds).Y;
+            return sourceMetrics.OutputPortDeltas[index];
         }
 
         private static float Median(List<float> values)

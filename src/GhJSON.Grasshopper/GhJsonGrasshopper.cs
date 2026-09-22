@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using GhJSON.Core.DependencyGraph;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.ConnectionOperations;
 using GhJSON.Grasshopper.DeleteOperations;
@@ -218,6 +219,44 @@ namespace GhJSON.Grasshopper
         public static Func<Guid, SizeF?> CreateNodeSizeProvider(GH_Document? document = null)
         {
             return CanvasNodeSizeProvider.Create(document);
+        }
+
+        #endregion
+
+        #region Layout (compute canvas positions)
+
+        /// <summary>
+        /// Computes canvas positions for a GhJSON document through the single shared
+        /// layout pipeline: the core dependency-graph pass followed by the
+        /// Grasshopper-aware refinements (bounds-aware spacing, port alignment, wire
+        /// corridors, collision resolution). Positions are bounds centers; convert them
+        /// to pivots with <c>PivotSemantics.CenterToPivot</c> at the application
+        /// boundary.
+        /// </summary>
+        /// <param name="document">The document to lay out.</param>
+        /// <param name="options">Shared layout options; null uses defaults.</param>
+        /// <returns>Refined bounds-center position per layout key.</returns>
+        public static Dictionary<Guid, PointF> ComputeLayout(
+            GhJsonDocument document,
+            CanvasLayoutOptions? options = null)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document));
+            }
+
+            options ??= CanvasLayoutOptions.Default;
+
+            // Forward the shared providers as defaults; explicitly configured
+            // per-stage providers take precedence.
+            var layout = options.Layout ?? new LayoutOptions();
+            layout.NodeSizeProvider ??= options.NodeSizeProvider;
+            var refinements = options.Refinements ?? LayoutRefinementOptions.Default;
+            refinements.NodeSizeProvider ??= options.NodeSizeProvider;
+            refinements.ObjectProvider ??= options.ObjectProvider;
+
+            var layoutResult = Core.GhJson.CalculateLayout(document, layout);
+            return LayoutRefinementEngine.ApplyRefinements(layoutResult, document, refinements);
         }
 
         #endregion

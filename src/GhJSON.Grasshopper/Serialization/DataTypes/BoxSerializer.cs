@@ -118,7 +118,30 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
 
             var data = value.Substring(this.Prefix.Length + 1);
             var parts = data.Split(';');
-            return parts.Length == 6;
+            var expectedCoordinateCounts = new[] { 3, 3, 3, 2, 2, 2 };
+            if (parts.Length != expectedCoordinateCounts.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var coordinates = parts[i].Split(',');
+                if (coordinates.Length != expectedCoordinateCounts[i])
+                {
+                    return false;
+                }
+
+                foreach (var coordinate in coordinates)
+                {
+                    if (!double.TryParse(coordinate, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
     }
 }

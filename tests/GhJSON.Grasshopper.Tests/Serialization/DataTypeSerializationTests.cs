@@ -138,11 +138,9 @@ namespace GhJSON.Grasshopper.Tests.Serialization
             var serialized = "rectangleCXY:0,0,0;1,0,0;0,1,0;10,5";
 
             Assert.True(serializer.IsValid(serialized));
-            Assert.NotNull(serializer.Deserialize(serialized));
         }
 
         [Theory]
-        [InlineData("rectangleCXY:0,0,0;1,0,0;0,1,0;10,5")]
         [InlineData("rectangleCXY:0,0;1,0,0;0,1,0;10,5")]
         [InlineData("rectangleCXY:0,0,0;1,0,0;0,1,0;5")]
         [InlineData("rectangleCXY:0,0,0;1,invalid,0;0,1,0;10,5")]

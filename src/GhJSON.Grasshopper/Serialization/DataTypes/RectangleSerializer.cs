@@ -115,7 +115,30 @@ namespace GhJSON.Grasshopper.Serialization.DataTypes
 
             var data = value.Substring(this.Prefix.Length + 1);
             var parts = data.Split(';');
-            return parts.Length == 4;
+            var expectedArities = new[] { 3, 3, 3, 2 };
+            if (parts.Length != expectedArities.Length)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < parts.Length; i++)
+            {
+                var values = parts[i].Split(',');
+                if (values.Length != expectedArities[i])
+                {
+                    return false;
+                }
+
+                foreach (var part in values)
+                {
+                    if (!double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
         }
     }
 }

@@ -16,6 +16,7 @@
  */
 
 using GhJSON.Grasshopper.Serialization;
+using GhJSON.Grasshopper.Serialization.DataTypes;
 using Xunit;
 
 namespace GhJSON.Grasshopper.Tests.Serialization
@@ -128,6 +129,29 @@ namespace GhJSON.Grasshopper.Tests.Serialization
             var deserialized = DataTypeRegistry.Deserialize(serialized);
 
             Assert.NotNull(deserialized);
+        }
+
+        [Fact]
+        public void RectangleSerializer_AcceptsWellFormedPayload()
+        {
+            var serializer = new RectangleSerializer();
+            var serialized = "rectangleCXY:0,0,0;1,0,0;0,1,0;10,5";
+
+            Assert.True(serializer.IsValid(serialized));
+            Assert.NotNull(serializer.Deserialize(serialized));
+        }
+
+        [Theory]
+        [InlineData("rectangleCXY:0,0,0;1,0,0;0,1,0;10,5")]
+        [InlineData("rectangleCXY:0,0;1,0,0;0,1,0;10,5")]
+        [InlineData("rectangleCXY:0,0,0;1,0,0;0,1,0;5")]
+        [InlineData("rectangleCXY:0,0,0;1,invalid,0;0,1,0;10,5")]
+        public void RectangleSerializer_RejectsMalformedPayloads(string serialized)
+        {
+            var serializer = new RectangleSerializer();
+
+            Assert.False(serializer.IsValid(serialized));
+            Assert.Throws<System.ArgumentException>(() => serializer.Deserialize(serialized));
         }
 
         [Fact]

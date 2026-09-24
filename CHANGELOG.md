@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Added
 - Port-aware layout engine with real component bounds support via `LayoutOptions.NodeSizeProvider` and `GhJsonGrasshopper.CreateNodeSizeProvider`
 - Per-column/row sizing based on actual component dimensions
@@ -31,8 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Connected panels reserve minimum height (55px) for data display
 - Undo after delete/clear operations now works correctly
 - Canvas bounds calculation now uses rendered bounds directly
-
-### New Contributors
 
 ## [1.1.2] - 2026-09-07
 

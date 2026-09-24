@@ -7,57 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### New Features
+## [Unreleased]
 
-#### Port-Aware Layout Engine
-
-- **Real component bounds feed the core layout**
-  - `LayoutOptions.NodeSizeProvider` (`Func<Guid, SizeF?>`) lets callers supply measured bounds; the engine falls back to the default 100x60 when the provider is unset, returns null, or throws
-  - `GhJsonGrasshopper.CreateNodeSizeProvider(GH_Document? document = null)` exposes a live-bounds provider reading `Attributes.Bounds`; `gh_put` uses it automatically so layouts reflect real component geometry
-  - Column widths and row heights are per-column/per-row maxima instead of global units, so a single large component only inflates its own band
-- **Port-aware ordering and placement**
-  - Layout nodes track estimated input/output port counts and each edge's connected port indices (`To.ParamIndex` = input, `From.ParamIndex` = output)
-  - Crossing counting, barycenter ordering, and weighted-median sweeps operate on port-level endpoints, so fan-out wires occupy distinct rows and a lower output port deterministically orders its target below a higher port's
-  - Coordinate assignment pulls each node toward the median of its parents' connected output port rows (`pivotY = parentPortY - inputPortOffset`), falling back to row bands when no parent is resolvable
-  - Long edges keep their real port indices through dummy routing chains; dummy segments use index -1
-- **Port-to-port wire alignment** (`gh_put` refinement)
-  - `PortAlignment.AlignToPorts` aligns each source so its wire enters the target's specific input port horizontally, using the target input port's and source output port's real bounds-center deltas
-  - Floating parameters (panels, sliders, value params) participate as both targets (left-edge input grip) and sources (right-edge output grip)
-  - The alignment/collision pair now iterates up to three convergence passes (0.5 px epsilon) with collision resolution always getting the final word in each pass
-
-#### Wire-Corridor Clearance
-
-- **`WireCorridorPlanner`** (pure geometry in `GhJSON.Core.DependencyGraph.Internal`): plans per-node vertical deltas so wires spanning two or more columns keep a configurable minimum distance (default 20 px) from intermediate component bounds
-  - Hybrid correction per skip edge: the wire's target is nudged part-way toward a clear corridor (bounded by `MaxTargetNudge`), then each still-violating intermediate node is pushed through the edge nearer the wire (bounded by `MaxNodeDelta`)
-  - Deepest spans are resolved first so long wires carve their corridors before shorter skip edges route through the remaining space
-- **`WireClearance` refinement pass** (`GhJSON.Core.LayoutRefinements`) adapts positions, measured sizes, and real port geometry into the planner and iterates with port alignment and collision resolution inside the shared refinement loop
-  - `LayoutRefinementOptions.EnsureWireClearance` (default on) and `WireClearance` (default 20 px) control the pass; `ObjectProvider` resolves layout keys to objects not yet on the canvas
-- **Refined positions round to whole pixels** each pass, eliminating the ±1 px oscillation that produced phantom moves and undo noise on repeated tidy-up runs
-
-#### Shared Layout Pipeline
-
-- **`GhJsonGrasshopper.ComputeLayout(document, CanvasLayoutOptions)`** runs the core dependency-graph pass plus all refinements in one call; `gh_put` and `gh_tidy_up` both consume it, so placement and tidy-up compute positions through identical rules
-- **`CanvasLayoutOptions`** bundles `LayoutOptions` (core pass) and `LayoutRefinementOptions` (refinements), plus shared `NodeSizeProvider`/`ObjectProvider` that forward as defaults to whichever stage leaves them unset — callers feed one measurement source to the whole pipeline
+### Added
+- Port-aware layout engine with real component bounds support via `LayoutOptions.NodeSizeProvider` and `GhJsonGrasshopper.CreateNodeSizeProvider`
+- Per-column/row sizing based on actual component dimensions
+- Port-to-port wire alignment with automatic convergence passes
+- Wire corridor clearance to maintain minimum distance (20px default) between wires and intermediate components
+- Shared layout pipeline via `GhJsonGrasshopper.ComputeLayout` combining core and refinement passes
+- Unified `CanvasLayoutOptions` for consistent spacing and measurement across all layout operations
 
 ### Changed
-
-- **Compact default spacing**: `SpacingX = 80`, `SpacingY = 28`, `IslandSpacingY = 100` (edge-to-edge gaps, previously looser center-based spacing)
-- **Tolerance-based position clustering**: `BoundsAwareSpacing` and `CollisionResolver` group components into columns/rows when positions differ by <= 1 px instead of integer truncation/rounding
-- **Obsolete proxies never resolve by name**: exact-name and fuzzy resolution in `ComponentInstantiator` exclude proxies flagged `IGH_ObjectProxy.Obsolete`. An obsolete component is only ever instantiated through an explicit `ComponentGuid`, so round-tripping old files still works
-- **Islands stack vertically with a shared left edge** instead of horizontal shelf-packing, ordered by their original canvas position (top-to-bottom, left-to-right) when the document carries pivots, or largest-first otherwise. `LayoutOptions.IslandWrapWidth` was removed
-- **Island normalization uses bounding-box edges**: each island's origin is its bounds top-left rather than its leftmost center, so island edges actually align when stacked
-- **Per-island bounds-aware spacing**: `BoundsAwareSpacing` now re-spaces each `LayoutResult.Islands` group independently around its own bounds origin, so column widths derive from the components actually in that island — a wide column in one island no longer inflates pitch in unrelated islands, and the shared left edge survives refinement
-- **Providers reach every measurement-based pass**: `ObjectProvider` and `NodeSizeProvider` feed `CanvasNodeSizeProvider.Measure`, the single resolution path (caller-owned objects → explicit size provider → live document) used by `BoundsAwareSpacing`, `CollisionResolver`, and `WireClearance`, so `gh_put` spaces and aligns objects using real bounds even before they are added to the document (previously only live-document lookups worked, silently degrading new placements to bare pitch)
-- **Layout refinements moved into `GhJSON.Core`** (`GhJSON.Core.LayoutRefinements`): `BoundsAwareSpacing`, `WireClearance`, `PortAlignment`, `CollisionResolver`, `LayoutRefinementEngine`, `PositionClustering`, `ConnectionKeyMap`, and `LayoutRefinementOptions` are now Grasshopper-free and operate on the new `LayoutNodeMetrics` contract (`SizeF? Size`, `LayoutNodeKind Kind`, input/output port-center deltas). `GhJSON.Grasshopper` keeps only the measurement adapter: `CanvasNodeMetricsProvider` resolves live `IGH_DocumentObject`s into metrics (bounds, component/parameter kind, per-port deltas), and `LayoutRefinementOptions` (in `GhJSON.Grasshopper.LayoutRefinements`) stays source-compatible, composing its `ObjectProvider`/`NodeSizeProvider` into the core `NodeMetricsProvider`. Headless callers can now run the full tidy-up pipeline by supplying metrics without any Grasshopper dependency
+- Default spacing now uses tighter edge-to-edge gaps (80px horizontal, 28px vertical, 100px island vertical)
+- Islands now stack vertically with shared left edge, ordered by original position or size
+- Obsolete components are excluded from name/fuzzy resolution and require explicit GUIDs
+- Layout refinements moved to `GhJSON.Core` for headless use with custom metrics
+- Position clustering now uses tolerance-based grouping (≤1px difference)
 
 ### Fixed
+- "Deconstruct Point" now resolves to Rhino 8's "Deconstruct" component via new aliases
+- Panel and slider placement now accounts for Grasshopper's pivot differences
+- Panels size to content when no explicit bounds are provided
+- Connected panels reserve minimum height (55px) for data display
+- Undo after delete/clear operations now works correctly
+- Canvas bounds calculation now uses rendered bounds directly
 
-- **Renamed "Deconstruct Point" resolves to the Rhino 8 "Deconstruct" component**: the legacy `Deconstruct Point` (`670fcdba-…`) is obsolete, so name resolution refused it and fuzzy matching fell back to `Construct Point`. New aliases (`deconstructpoint`, `pointdeconstruct`, `pointcoordinates`, `pdecon`) map deterministically to `Deconstruct`, bypassing fuzzy matching entirely
-- **Layout positions are converted to per-object pivots before placement**: the layout engine works in bounds-center coordinates, but Grasshopper pivots differ per object type (components pivot at center, sliders/panels/floating parameters at top-left). New `PivotSemantics.CenterToPivot`/`BoundsCenter` helpers perform the conversion in `CanvasPlacer`, fixing panels and sliders landing offset relative to components
-- **`CanvasBoundsCalculator` uses rendered bounds directly** instead of deriving edges from `Pivot + size`, which mis-measured center-pivot objects
-- **Panels size to their content** when the GhJSON carries no explicit `bounds`: `PanelHandler` estimates width/height from text (including the nickName), font, multiline and wrap instead of leaving the oversized default, applies even to extensionless panels, and treats `wrap` as a maximum-width cap rather than a fixed width so short text stays narrow
-- **Connected panels reserve a data row during placement**: `CanvasPlacer` grows panels that received an incoming wire to at least 55 px height after connections are created, because streamed data renders path + value per item instead of the user text. Tidy-up intentionally does not resize panels
-- **Ctrl+Z after `GhJsonGrasshopper.Delete`/`Clear` no longer throws "Undo failed: Object reference not set to an instance of an object"**: `CanvasDeleter` recorded removals with generic object-state events (`RecordUndoEvent`/`CreateGenericObjectEvent`), which look the object up in the document on undo and null-reference once it is gone. Deletion now records `GH_UndoUtil.RecordRemoveObjectEvent`, which serializes each removed object into the record and re-adds it on undo — matching Grasshopper's own delete behavior
+### New Contributors
 
 ## [1.1.2] - 2026-09-07
 

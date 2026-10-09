@@ -25,6 +25,7 @@ using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
 
 namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
@@ -131,11 +132,138 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             }
             else if (obj is IGH_Param param)
             {
-                var settings = component.OutputSettings?.FirstOrDefault(s => s.ParameterName == param.Name);
-                if (settings != null)
+                if (param is GH_Panel panel)
                 {
-                    DeserializeParamData(settings, param);
+                    DeserializePanelData(component, panel);
                 }
+                else
+                {
+                    var settings = component.OutputSettings?.FirstOrDefault(s => s.ParameterName == param.Name);
+                    if (settings != null)
+                    {
+                        DeserializeParamData(settings, param);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies parameter data to a <see cref="GH_Panel"/>. Panels are not persistent
+        /// parameters: their "internalized" data is the user text, which they emit as
+        /// one item per line while <c>Properties.Multiline</c> is false (despite its
+        /// name, "Multiline Data" collapses the whole text into a single item).
+        /// Items from <c>internalizedData</c> — with <c>runtimeData</c> as a fallback,
+        /// since panels have no separate persistent store — therefore map to
+        /// newline-separated <see cref="GH_Panel.UserText"/>.
+        /// </summary>
+        /// <param name="component">The component carrying the output settings.</param>
+        /// <param name="panel">The panel to configure.</param>
+        private static void DeserializePanelData(GhJsonComponent component, GH_Panel panel)
+        {
+            var settingsList = component.OutputSettings;
+            if (settingsList == null || settingsList.Count == 0)
+            {
+                return;
+            }
+
+            // A standalone panel exposes a single output, so prefer the name-matched
+            // entry and fall back to any entry carrying data.
+            var settings = settingsList.FirstOrDefault(s => s.ParameterName == panel.Name && HasData(s))
+                ?? settingsList.FirstOrDefault(HasData);
+
+            var items = CollectTextItems(settings?.InternalizedData)
+                ?? CollectTextItems(settings?.RuntimeData);
+            if (items == null || items.Count == 0)
+            {
+                return;
+            }
+
+            panel.Properties.Multiline = false;
+            panel.UserText = string.Join(Environment.NewLine, items);
+        }
+
+        private static bool HasData(GhJsonParameterSettings settings)
+        {
+            return settings.InternalizedData?.Count > 0 || settings.RuntimeData?.Count > 0;
+        }
+
+        /// <summary>
+        /// Flattens a serialized data tree into ordered text items: branches in path
+        /// order, items in index order, each value resolved through the data type
+        /// registry with the raw string as fallback.
+        /// </summary>
+        internal static List<string>? CollectTextItems(Dictionary<string, Dictionary<string, string>>? dataTree)
+        {
+            if (dataTree == null || dataTree.Count == 0)
+            {
+                return null;
+            }
+
+            var items = new List<string>();
+            foreach (var pathEntry in dataTree.OrderBy(kv => ParsePathIndices(kv.Key), IndexSequenceComparer.Instance))
+            {
+                foreach (var item in OrderItemsByIndex(pathEntry.Value))
+                {
+                    var value = DataTypeRegistry.Deserialize(item.Value);
+                    items.Add(value switch
+                    {
+                        null => item.Value,
+                        string s => s,
+                        _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? item.Value,
+                    });
+                }
+            }
+
+            return items;
+        }
+
+        /// <summary>
+        /// Extracts the index sequence from a data-tree path key such as "{0;2}".
+        /// Equivalent to <see cref="ParsePath"/> but returns plain indices so callers
+        /// that only need ordering do not construct a <see cref="GH_Path"/>.
+        /// </summary>
+        internal static int[] ParsePathIndices(string pathString)
+        {
+            if (string.IsNullOrWhiteSpace(pathString))
+            {
+                return new[] { 0 };
+            }
+
+            var clean = pathString.Trim('{', '}', ' ', '\t');
+            var indices = new List<int>();
+            foreach (var part in clean.Split(';'))
+            {
+                if (int.TryParse(part.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var index))
+                {
+                    indices.Add(index);
+                }
+            }
+
+            return indices.Count > 0 ? indices.ToArray() : new[] { 0 };
+        }
+
+        /// <summary>
+        /// Orders path index sequences lexicographically: "{0;2}" &lt; "{0;10}" &lt; "{1}".
+        /// </summary>
+        private sealed class IndexSequenceComparer : IComparer<int[]>
+        {
+            internal static readonly IndexSequenceComparer Instance = new IndexSequenceComparer();
+
+            public int Compare(int[]? x, int[]? y)
+            {
+                var xLength = x?.Length ?? 0;
+                var yLength = y?.Length ?? 0;
+                var count = Math.Min(xLength, yLength);
+                for (var i = 0; i < count; i++)
+                {
+                    var comparison = x![i].CompareTo(y![i]);
+                    if (comparison != 0)
+                    {
+                        return comparison;
+                    }
+                }
+
+                return xLength.CompareTo(yLength);
             }
         }
 

@@ -105,10 +105,11 @@ namespace GhJSON.Grasshopper.Deserialization
 
         /// <summary>
         /// Resolves a <see cref="GhJsonComponent"/> to an <see cref="IGH_ObjectProxy"/>
-        /// using the 6-step resolution chain. Both <see cref="Create"/> and
-        /// <see cref="CanInstantiate"/> delegate to this method to avoid duplication.
+        /// using the 6-step resolution chain. <see cref="Create"/>,
+        /// <see cref="CanInstantiate"/>, and the canvas placer's update-matching
+        /// delegate to this method to avoid duplication.
         /// </summary>
-        private static IGH_ObjectProxy? Resolve(GhJsonComponent component)
+        internal static IGH_ObjectProxy? Resolve(GhJsonComponent component)
         {
             IGH_ObjectProxy? proxy = null;
 

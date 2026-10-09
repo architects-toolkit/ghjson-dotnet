@@ -146,10 +146,20 @@ var result = GhJsonGrasshopper.Put(doc, new PutOptions
     SelectPlacedObjects = true,
     RegenerateInstanceGuids = true,
     SkipInvalidComponents = true,
+    UpdateExistingByInstanceGuid = true,
 });
 ```
 
 A successful `Put` records all placed components and groups as one Grasshopper add-object undo event.
+
+Set `UpdateExistingByInstanceGuid` to update objects in place: when a component's
+`instanceGuid` matches an object already on the canvas, the incoming state is
+applied to that object instead of placing a duplicate. The object keeps its
+identity, wiring, and position (`pivot` moves it when present; omit `pivot` to
+preserve the current position). A component that resolves to a different
+component type replaces the existing object while keeping its instance GUID and
+restoring external wires where parameter names still match. Updated objects are
+reported through `PutResult.UpdatedObjects` and `PutResult.ComponentsUpdated`.
 
 ### Querying the Canvas
 

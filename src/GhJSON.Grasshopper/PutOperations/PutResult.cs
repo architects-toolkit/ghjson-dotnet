@@ -37,6 +37,12 @@ namespace GhJSON.Grasshopper.PutOperations
         public int ComponentsPlaced { get; set; }
 
         /// <summary>
+        /// Gets or sets the number of existing canvas objects updated in place
+        /// (requires <see cref="PutOptions.UpdateExistingByInstanceGuid"/>).
+        /// </summary>
+        public int ComponentsUpdated { get; set; }
+
+        /// <summary>
         /// Gets or sets the number of connections created.
         /// </summary>
         public int ConnectionsCreated { get; set; }
@@ -50,6 +56,12 @@ namespace GhJSON.Grasshopper.PutOperations
         /// Gets or sets the placed document objects.
         /// </summary>
         public List<IGH_DocumentObject> PlacedObjects { get; set; } = new List<IGH_DocumentObject>();
+
+        /// <summary>
+        /// Gets or sets the existing canvas objects that were updated in place
+        /// (requires <see cref="PutOptions.UpdateExistingByInstanceGuid"/>).
+        /// </summary>
+        public List<IGH_DocumentObject> UpdatedObjects { get; set; } = new List<IGH_DocumentObject>();
 
         /// <summary>
         /// Gets or sets the mapping of component IDs to placed object GUIDs.

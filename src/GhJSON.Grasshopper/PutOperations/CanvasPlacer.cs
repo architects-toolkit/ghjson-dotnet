@@ -32,6 +32,7 @@ using GhJSON.Grasshopper.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
+using Grasshopper.Kernel.Undo;
 
 namespace GhJSON.Grasshopper.PutOperations
 {
@@ -94,15 +95,67 @@ namespace GhJSON.Grasshopper.PutOperations
             // Place components
             var idToObject = new Dictionary<int, IGH_DocumentObject>();
             var addedObjects = new List<IGH_DocumentObject>();
+            GH_UndoRecord? updateUndoRecord = null;
+            DeserializationOptions? preserveGuidOptions = null;
 
             // Phase 1: instantiate every component up front. Created objects carry real
             // attribute bounds before they are added to the canvas, which lets the layout
             // pass below measure actual component sizes instead of default estimates.
-            var placed = new List<(GhJsonComponent Component, IGH_DocumentObject Obj)>(document.Components.Count);
+            // Components whose instanceGuid already exists on the canvas skip
+            // instantiation entirely when UpdateExistingByInstanceGuid is enabled:
+            // same-type matches are updated in place, different-type matches produce a
+            // replacement object that keeps the existing instance GUID.
+            var placed = new List<(GhJsonComponent Component, IGH_DocumentObject Obj, IGH_DocumentObject? Replaces)>(document.Components.Count);
             for (int i = 0; i < document.Components.Count; i++)
             {
                 var component = document.Components[i];
-                var obj = ComponentInstantiator.Create(component, deserializationOptions);
+                var existing = FindUpdateTarget(component, ghDoc, options);
+
+                if (existing != null && IsSameComponentType(component, existing))
+                {
+                    // Same-type match: apply the incoming state onto the live object so
+                    // its identity, wiring, and position survive the update.
+                    if (updateUndoRecord == null)
+                    {
+                        updateUndoRecord = ghDoc.UndoUtil.CreateGenericObjectEvent(
+                            "[GhJSON] Update object(s)", existing);
+                    }
+                    else
+                    {
+                        existing.RecordUndoEvent(updateUndoRecord);
+                    }
+
+                    ObjectHandlerOrchestrator.Deserialize(component, existing);
+                    ObjectHandlerOrchestrator.PostPlacement(component, existing);
+
+                    result.UpdatedObjects.Add(existing);
+                    result.ComponentsUpdated++;
+
+                    if (component.Id.HasValue)
+                    {
+                        idToObject[component.Id.Value] = existing;
+                        result.IdToGuidMapping[component.Id.Value] = existing.InstanceGuid;
+                    }
+
+                    if (options.SelectPlacedObjects && existing.Attributes != null)
+                    {
+                        existing.Attributes.Selected = true;
+                    }
+
+                    continue;
+                }
+
+                var obj = ComponentInstantiator.Create(
+                    component,
+                    existing != null
+                        ? preserveGuidOptions ??= new DeserializationOptions
+                        {
+                            ApplyInternalizedData = deserializationOptions.ApplyInternalizedData,
+                            ApplyComponentState = deserializationOptions.ApplyComponentState,
+                            RegenerateInstanceGuids = false,
+                            SkipInvalidComponents = options.SkipInvalidComponents,
+                        }
+                        : deserializationOptions);
 
                 if (obj == null)
                 {
@@ -117,7 +170,33 @@ namespace GhJSON.Grasshopper.PutOperations
                     continue;
                 }
 
-                placed.Add((component, obj));
+                placed.Add((component, obj, existing));
+            }
+
+            // Replace pass: superseded objects are only removed after their
+            // replacements instantiated successfully, so a failed component never
+            // destroys the original. External wires are captured up front so they can
+            // be restored onto the replacements (which keep the same instance GUIDs).
+            var replacedObjects = placed
+                .Where(entry => entry.Replaces != null)
+                .Select(entry => entry.Replaces!)
+                .ToList();
+            var replacedPivots = replacedObjects.ToDictionary(
+                obj => obj.InstanceGuid,
+                obj => obj.Attributes?.Pivot);
+            var replacedConnections = new List<ConnectionInfo>();
+            if (replacedObjects.Count > 0)
+            {
+                ghDoc.UndoUtil.RecordRemoveObjectEvent(
+                    $"[GhJSON] Replace {replacedObjects.Count} object(s)", replacedObjects);
+                replacedConnections.AddRange(CanvasConnector.CaptureExternalConnections(
+                    replacedObjects.Select(obj => obj.InstanceGuid)));
+
+                foreach (var replaced in replacedObjects)
+                {
+                    replaced.IsolateObject();
+                    ghDoc.RemoveObject(replaced, false);
+                }
             }
 
             // Phase 2: calculate positions for components without pivots using dependency
@@ -127,12 +206,24 @@ namespace GhJSON.Grasshopper.PutOperations
                 : CalculateLayoutPositions(document, ghDoc, options.AutoOffsetSpacing, placed);
 
             // Phase 3: assign pivots and add the objects to the document.
-            foreach (var (component, obj) in placed)
+            foreach (var (component, obj, replaces) in placed)
             {
                 // Apply position: either from pivot + offset, or calculated layout position
                 if (obj.Attributes != null)
                 {
-                    if (component.Pivot != null)
+                    if (replaces != null)
+                    {
+                        // Replacements keep the document pivot verbatim (already applied
+                        // by PivotHandler during deserialization); when the document
+                        // omits a pivot the previous position is preserved.
+                        if (component.Pivot == null &&
+                            replacedPivots.TryGetValue(replaces.InstanceGuid, out var previousPivot) &&
+                            previousPivot.HasValue)
+                        {
+                            obj.Attributes.Pivot = previousPivot.Value;
+                        }
+                    }
+                    else if (component.Pivot != null)
                     {
                         // Use pivot with offset
                         obj.Attributes.Pivot = new PointF(
@@ -176,6 +267,23 @@ namespace GhJSON.Grasshopper.PutOperations
                 if (options.SelectPlacedObjects && obj.Attributes != null)
                 {
                     obj.Attributes.Selected = true;
+                }
+            }
+
+            // Restore external wires captured before replaced objects were removed.
+            // Replacements keep the original instance GUIDs, so surviving endpoints
+            // resolve; failures are surfaced as warnings rather than dropping silently.
+            foreach (var connection in replacedConnections)
+            {
+                if (!CanvasConnector.Connect(
+                        connection.SourceGuid,
+                        connection.TargetGuid,
+                        connection.SourceParamName,
+                        connection.TargetParamName))
+                {
+                    result.Warnings.Add(
+                        $"External connection from {connection.SourceGuid}.{connection.SourceParamName} " +
+                        $"to {connection.TargetGuid}.{connection.TargetParamName} could not be restored.");
                 }
             }
 
@@ -272,6 +380,13 @@ namespace GhJSON.Grasshopper.PutOperations
             {
                 result.Warnings.Add($"Connection from '{fromObj.Name}' ({connection.From.ParamName}) to '{toObj.Name}' ({connection.To.ParamName}) lost: parameter not found.");
                 return false;
+            }
+
+            if (targetParam.Sources.Contains(sourceParam))
+            {
+                // Already wired: happens when an in-place update kept the existing
+                // wire while the document still lists the connection.
+                return true;
             }
 
             targetParam.AddSource(sourceParam);
@@ -399,13 +514,13 @@ namespace GhJSON.Grasshopper.PutOperations
             GhJsonDocument document,
             GH_Document ghDoc,
             float spacing,
-            IReadOnlyList<(GhJsonComponent Component, IGH_DocumentObject Obj)> placed)
+            IReadOnlyList<(GhJsonComponent Component, IGH_DocumentObject Obj, IGH_DocumentObject? Replaces)> placed)
         {
             // Real bounds come from the freshly instantiated objects first; anything not
             // measurable there falls back to a live canvas lookup (e.g. objects sharing
             // instance GUIDs with the incoming document).
             var measuredByKey = new Dictionary<Guid, IGH_DocumentObject>(placed.Count);
-            foreach (var (component, obj) in placed)
+            foreach (var (component, obj, _) in placed)
             {
                 var key = Core.GhJson.GetLayoutKey(component);
                 if (key != Guid.Empty)
@@ -444,6 +559,51 @@ namespace GhJSON.Grasshopper.PutOperations
 
             // Offset positions to place below existing canvas content
             return OffsetPositionsBelowExistingContent(refinedPositions, ghDoc, spacing);
+        }
+
+        /// <summary>
+        /// Finds the live canvas object a component should update in place, or
+        /// <c>null</c> when the component introduces a new object. A target only
+        /// exists when <see cref="PutOptions.UpdateExistingByInstanceGuid"/> is
+        /// enabled and the component carries a non-empty <c>instanceGuid</c> that
+        /// matches an object already on the canvas.
+        /// </summary>
+        /// <param name="component">The incoming component definition.</param>
+        /// <param name="ghDoc">The Grasshopper document to search.</param>
+        /// <param name="options">The active put options.</param>
+        /// <returns>The matched canvas object, or <c>null</c>.</returns>
+        private static IGH_DocumentObject? FindUpdateTarget(
+            GhJsonComponent component,
+            GH_Document ghDoc,
+            PutOptions options)
+        {
+            if (!options.UpdateExistingByInstanceGuid ||
+                !component.InstanceGuid.HasValue ||
+                component.InstanceGuid.Value == Guid.Empty)
+            {
+                return null;
+            }
+
+            return CanvasReader.FindObject(ghDoc, component.InstanceGuid.Value);
+        }
+
+        /// <summary>
+        /// Determines whether an incoming component represents the same Grasshopper
+        /// type as an existing canvas object. An explicit <c>componentGuid</c> takes
+        /// precedence; otherwise the component is resolved through the shared
+        /// name-resolution chain and the resolved proxy GUID is compared.
+        /// </summary>
+        /// <param name="component">The incoming component definition.</param>
+        /// <param name="existing">The live canvas object matched by instance GUID.</param>
+        /// <returns><c>true</c> when the incoming component is the same type.</returns>
+        private static bool IsSameComponentType(GhJsonComponent component, IGH_DocumentObject existing)
+        {
+            if (component.ComponentGuid.HasValue && component.ComponentGuid.Value != Guid.Empty)
+            {
+                return component.ComponentGuid.Value == existing.ComponentGuid;
+            }
+
+            return ComponentInstantiator.Resolve(component)?.Guid == existing.ComponentGuid;
         }
 
         /// <summary>

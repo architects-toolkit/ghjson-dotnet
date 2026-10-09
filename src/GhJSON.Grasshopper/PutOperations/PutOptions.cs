@@ -55,6 +55,19 @@ namespace GhJSON.Grasshopper.PutOperations
         public bool RegenerateInstanceGuids { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets a value indicating whether components whose <c>instanceGuid</c>
+        /// matches an object already on the canvas are updated in place instead of
+        /// being placed as duplicates. The existing object keeps its identity and
+        /// wiring; document properties are applied onto it (including <c>pivot</c>
+        /// when present — omit <c>pivot</c> to preserve the current position).
+        /// When the incoming component resolves to a different component type, the
+        /// existing object is replaced in place preserving its instance GUID and,
+        /// when the document omits <c>pivot</c>, its position.
+        /// <c>Offset</c>/<c>AutoOffset</c> only apply to newly placed components.
+        /// </summary>
+        public bool UpdateExistingByInstanceGuid { get; set; } = false;
+
+        /// <summary>
         /// Gets or sets a value indicating whether to skip invalid components.
         /// </summary>
         public bool SkipInvalidComponents { get; set; } = true;

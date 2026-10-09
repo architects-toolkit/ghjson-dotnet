@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `PutOptions.UpdateExistingByInstanceGuid`: when enabled, components whose `instanceGuid` matches a live canvas object are updated in place (same component type) or replaced in place (different type) instead of being placed as duplicates; identity, position, and external wiring are preserved
+- `PutResult.ComponentsUpdated` and `PutResult.UpdatedObjects` for reporting in-place updates
+
+### Fixed
+
+- `Put` no longer adds a duplicate wire when a document connection already exists between the endpoints (e.g. after an in-place update)
+
 ## [1.2.0] - 2026-09-24
 
 ### Added

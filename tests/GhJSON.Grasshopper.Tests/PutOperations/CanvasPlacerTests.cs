@@ -68,6 +68,14 @@ namespace GhJSON.Grasshopper.Tests.PutOperations
         }
 
         [Fact]
+        public void PutOptions_UpdateExistingByInstanceGuid_DefaultsToFalse()
+        {
+            var options = new PutOptions();
+
+            Assert.False(options.UpdateExistingByInstanceGuid);
+        }
+
+        [Fact]
         public void CanvasPlacer_SupportsOptionsParameter()
         {
             var options = new PutOptions

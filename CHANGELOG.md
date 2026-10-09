@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `Put` no longer adds a duplicate wire when a document connection already exists between the endpoints (e.g. after an in-place update)
+- `internalizedData`/`runtimeData` on `outputSettings` is no longer ignored for Panels: items map to newline-separated user text (one item per line) since panels have no persistent parameter store
+- Panel `multiline` semantics clarified in docs: `true` emits the whole text as a single item, `false` emits one item per line
+- `docs/ARCHITECTURE.md` panel example now uses the correct `text` key
 
 ## [1.2.0] - 2026-09-24
 

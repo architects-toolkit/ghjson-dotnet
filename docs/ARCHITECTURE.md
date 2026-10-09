@@ -420,7 +420,7 @@ Extensions allow component handlers to add specialized properties without modify
 | Extension Key | Description |
 |---------------|-------------|
 | `gh.numberslider` | Slider value, rounding mode |
-| `gh.panel` | Panel text, font, alignment, bounds, multiline, wrap settings |
+| `gh.panel` | Panel text, font, alignment, bounds, multiline, wrap settings. `multiline` maps to GH's "Multiline Data": `true` emits the text as a single item, `false` (default) emits one item per line. Panel `outputSettings.internalizedData`/`runtimeData` map to newline-separated `text` |
 | `gh.scribble` | Scribble text, font, corners |
 | `gh.valuelist` | Value list items, list mode, selected indices |
 | `gh.button` | Button state |
@@ -444,7 +444,7 @@ Extensions allow component handlers to add specialized properties without modify
     "hidden": false,
     "extensions": {
       "gh.panel": {
-        "value": "Hello World",
+        "text": "Hello World",
         "multiline": true,
         "wrap": true,
         "alignment": 0,

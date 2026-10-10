@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Obsolete components are excluded from name/fuzzy resolution and require explicit GUIDs
 - Layout refinements moved to `GhJSON.Core` for headless use with custom metrics
 - Position clustering now uses tolerance-based grouping (≤1px difference)
+- `Release 2 - Tag on Release Preparation Merge` no longer mutates code: removed the post-release dev-version bump tail (`chore/bump-*` branch, bump PR, auto-merge). The release-prep PR remains the only validated place version files change; the next development version comes from the version-bump workflow
 
 ### Fixed
 - "Deconstruct Point" now resolves to Rhino 8's "Deconstruct" component via new aliases

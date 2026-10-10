@@ -7,19 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [Unreleased]
+
 ### Added
 
-- `GhJsonGrasshopper.ApplyParamData`: applies persistent (internalized) data from `GhJsonParameterSettings` to a live canvas parameter on the UI thread, so consumers can update param values without going through `Put` — useful for single-value edits from automation tools
-- `PutOptions.UpdateExistingByInstanceGuid`: when enabled, components whose `instanceGuid` matches a live canvas object are updated in place (same component type) or replaced in place (different type) instead of being placed as duplicates; identity, position, and external wiring are preserved
-- `PutResult.ComponentsUpdated` and `PutResult.UpdatedObjects` for reporting in-place updates
+- `GhJsonGrasshopper.ApplyParamData`: Apply persistent (internalized) data from `GhJsonParameterSettings` to a live canvas parameter, enabling single-value edits from automation tools
+- `PutOptions.UpdateExistingByInstanceGuid`: Update existing components in place by matching `instanceGuid`, preserving identity, position, and wiring
+- `PutResult.ComponentsUpdated` and `PutResult.UpdatedObjects` for tracking in-place updates
 
 ### Fixed
 
-- `tools/Change-SolutionVersion.ps1` `Parse-Version` now accepts the same-day dev sequence format (`X.Y.Z-dev.YYMMDD.N`, produced by `next-version`'s dev sequence) — previously release preparation failed with "Failed to parse current version" on versions like `1.3.0-dev.261010.1`
-- `Put` no longer adds a duplicate wire when a document connection already exists between the endpoints (e.g. after an in-place update)
-- `internalizedData`/`runtimeData` on `outputSettings` is no longer ignored for Panels: items map to newline-separated user text (one item per line) since panels have no persistent parameter store
-- Panel `multiline` semantics clarified in docs: `true` emits the whole text as a single item, `false` emits one item per line
-- `docs/ARCHITECTURE.md` panel example now uses the correct `text` key
+- `Put` no longer creates duplicate wires when a connection already exists between endpoints
+- Panel `outputSettings` now correctly maps `internalizedData`/`runtimeData` to newline-separated user text (one item per line)
+- Clarified Panel `multiline` semantics in documentation: `true` emits whole text as a single item, `false` emits one item per line
+- Fixed version parsing in `tools/Change-SolutionVersion.ps1` to support same-day dev sequence format (`X.Y.Z-dev.YYMMDD.N`)
+- Corrected `text` key usage in panel example in `docs/ARCHITECTURE.md`
+
+### New Contributors
 
 ## [1.2.0] - 2026-09-24
 

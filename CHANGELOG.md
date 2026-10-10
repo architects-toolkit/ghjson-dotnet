@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tools/Change-SolutionVersion.ps1` `Parse-Version` now accepts the same-day dev sequence format (`X.Y.Z-dev.YYMMDD.N`, produced by `next-version`'s dev sequence) — previously release preparation failed with "Failed to parse current version" on versions like `1.3.0-dev.261010.1`
 - `Put` no longer adds a duplicate wire when a document connection already exists between the endpoints (e.g. after an in-place update)
 - `internalizedData`/`runtimeData` on `outputSettings` is no longer ignored for Panels: items map to newline-separated user text (one item per line) since panels have no persistent parameter store
 - Panel `multiline` semantics clarified in docs: `true` emits the whole text as a single item, `false` emits one item per line

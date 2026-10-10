@@ -28,6 +28,7 @@ using GhJSON.Grasshopper.GetOperations;
 using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.PutOperations;
 using GhJSON.Grasshopper.Serialization;
+using GhJSON.Grasshopper.Serialization.ObjectHandlers;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper
@@ -370,6 +371,25 @@ namespace GhJSON.Grasshopper
         public static IReadOnlyList<ConnectionInfo> CaptureExternalConnections(IEnumerable<Guid> guids)
         {
             return CanvasConnector.CaptureExternalConnections(guids);
+        }
+
+        #endregion
+
+        #region Param Data (persistent values on live objects)
+
+        /// <summary>
+        /// Applies persistent (internalized) data to a live canvas parameter, replacing
+        /// its current persistent data. Only <see cref="GhJsonParameterSettings.InternalizedData"/>
+        /// is applied; other settings are ignored. Executes on the UI thread. Callers are
+        /// responsible for recording undo, expiring downstream objects, and triggering a
+        /// recompute or redraw afterwards.
+        /// </summary>
+        /// <param name="param">The parameter to mutate.</param>
+        /// <param name="settings">The parameter settings carrying the internalized data tree.</param>
+        /// <returns><c>true</c> if the persistent data was replaced; <c>false</c> if the parameter is not persistent or has no data to apply.</returns>
+        public static bool ApplyParamData(IGH_Param param, GhJsonParameterSettings settings)
+        {
+            return InternalizedDataHandler.ApplyParamData(param, settings);
         }
 
         #endregion

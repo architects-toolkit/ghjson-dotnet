@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `GhJsonGrasshopper.ApplyParamData`: applies persistent (internalized) data from `GhJsonParameterSettings` to a live canvas parameter on the UI thread, so consumers can update param values without going through `Put` — useful for single-value edits from automation tools
 - `PutOptions.UpdateExistingByInstanceGuid`: when enabled, components whose `instanceGuid` matches a live canvas object are updated in place (same component type) or replaced in place (different type) instead of being placed as duplicates; identity, position, and external wiring are preserved
 - `PutResult.ComponentsUpdated` and `PutResult.UpdatedObjects` for reporting in-place updates
 

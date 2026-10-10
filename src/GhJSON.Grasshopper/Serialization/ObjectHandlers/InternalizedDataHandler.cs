@@ -21,12 +21,14 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Special;
 using Grasshopper.Kernel.Types;
+using Rhino;
 
 namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 {
@@ -35,6 +37,8 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class InternalizedDataHandler : IObjectHandler
     {
+        private static readonly TimeSpan UiInvokeTimeout = TimeSpan.FromSeconds(30);
+
         /// <inheritdoc/>
         public int Priority => 1000;
 
@@ -299,17 +303,36 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             return null;
         }
 
-        private static void DeserializeParamData(GhJsonParameterSettings settings, IGH_Param param)
+        /// <summary>
+        /// Applies the persistent (internalized) data declared by <paramref name="settings"/>
+        /// to a parameter on the live canvas. Executes on the Rhino UI thread. Callers are
+        /// responsible for recording undo, expiring downstream objects, and triggering a
+        /// recompute or redraw afterwards.
+        /// </summary>
+        /// <param name="param">The live parameter to mutate.</param>
+        /// <param name="settings">The parameter settings; only <see cref="GhJsonParameterSettings.InternalizedData"/> is applied.</param>
+        /// <returns><c>true</c> if the persistent data was replaced; <c>false</c> otherwise.</returns>
+        internal static bool ApplyParamData(IGH_Param param, GhJsonParameterSettings settings)
         {
-            if (settings.InternalizedData == null || settings.InternalizedData.Count == 0)
+            var applied = false;
+            InvokeOnUiThreadAndWait(() =>
             {
-                return;
+                applied = DeserializeParamData(settings, param);
+            });
+            return applied;
+        }
+
+        internal static bool DeserializeParamData(GhJsonParameterSettings settings, IGH_Param param)
+        {
+            if (settings?.InternalizedData == null || settings.InternalizedData.Count == 0 || param == null)
+            {
+                return false;
             }
 
             var persistentParamBaseType = FindGenericBaseType(param.GetType(), typeof(global::Grasshopper.Kernel.GH_PersistentParam<>));
             if (persistentParamBaseType == null)
             {
-                return;
+                return false;
             }
 
             var gooType = persistentParamBaseType.GetGenericArguments()[0];
@@ -317,13 +340,13 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             var structure = Activator.CreateInstance(structureType);
             if (structure == null)
             {
-                return;
+                return false;
             }
 
             var appendMethod = structureType.GetMethod("Append", new[] { gooType, typeof(GH_Path) });
             if (appendMethod == null)
             {
-                return;
+                return false;
             }
 
             foreach (var pathEntry in settings.InternalizedData)
@@ -345,10 +368,51 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 null);
             if (setPersistentDataMethod == null)
             {
-                return;
+                return false;
             }
 
             setPersistentDataMethod.Invoke(param, new[] { structure });
+            return true;
+        }
+
+        private static void InvokeOnUiThreadAndWait(Action action)
+        {
+            if (RhinoApp.InvokeRequired == false)
+            {
+                action();
+                return;
+            }
+
+            Exception? captured = null;
+            using var done = new ManualResetEventSlim(false);
+
+            RhinoApp.InvokeOnUiThread(new Action(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    captured = ex;
+                }
+                finally
+                {
+                    done.Set();
+                }
+            }));
+
+            if (!done.Wait(UiInvokeTimeout))
+            {
+                throw new TimeoutException(
+                    $"Grasshopper UI thread did not process the call within {UiInvokeTimeout.TotalSeconds:n0} s.");
+            }
+
+            if (captured != null)
+            {
+                throw new InvalidOperationException(
+                    "Parameter data application on the Grasshopper UI thread failed.", captured);
+            }
         }
 
         private static Type? FindGenericBaseType(Type type, Type openGenericBaseType)

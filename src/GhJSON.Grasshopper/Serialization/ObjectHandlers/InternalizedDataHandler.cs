@@ -98,11 +98,12 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 #endif
 
                 // List is guaranteed to exist by orchestrator - find or create settings for this param
-                var settings = component.OutputSettings.FirstOrDefault(s => s.ParameterName == param.Name);
+                var outputSettings = component.OutputSettings!;
+                var settings = outputSettings.FirstOrDefault(s => s.ParameterName == param.Name);
                 if (settings == null)
                 {
                     settings = new GhJsonParameterSettings { ParameterName = param.Name };
-                    component.OutputSettings.Add(settings);
+                    outputSettings.Add(settings);
                 }
 
                 if (includeInternalized)
@@ -535,7 +536,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         private static void SerializeInternalizedData(
             IList<IGH_Param> parameters,
-            List<GhJsonParameterSettings> settings)
+            List<GhJsonParameterSettings>? settings)
         {
             if (parameters == null || settings == null)
             {
@@ -553,7 +554,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
         private static void SerializeRuntimeData(
             IList<IGH_Param> parameters,
-            List<GhJsonParameterSettings> settings)
+            List<GhJsonParameterSettings>? settings)
         {
             if (parameters == null || settings == null)
             {

@@ -57,5 +57,16 @@ namespace GhJSON.Core.SchemaModels
         /// </summary>
         [JsonProperty("members")]
         public List<int> Members { get; set; } = new List<int>();
+
+        /// <summary>
+        /// Creates a copy of this group with its own <see cref="Members"/> list.
+        /// </summary>
+        /// <returns>The copy.</returns>
+        internal GhJsonGroup ShallowCopy()
+        {
+            var copy = (GhJsonGroup)this.MemberwiseClone();
+            copy.Members = this.Members == null ? new List<int>() : new List<int>(this.Members);
+            return copy;
+        }
     }
 }

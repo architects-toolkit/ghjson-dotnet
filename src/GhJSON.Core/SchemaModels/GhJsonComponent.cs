@@ -119,5 +119,14 @@ namespace GhJSON.Core.SchemaModels
         public bool HasIssues =>
             (this.Warnings?.Any() == true) ||
             (this.Errors?.Any() == true);
+
+        /// <summary>
+        /// Creates a shallow copy of this component (nested objects are shared).
+        /// </summary>
+        /// <returns>The copy.</returns>
+        internal GhJsonComponent ShallowCopy()
+        {
+            return (GhJsonComponent)this.MemberwiseClone();
+        }
     }
 }

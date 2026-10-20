@@ -565,6 +565,45 @@ namespace GhJSON.Core.Tests.DiffOperations
             Assert.Equal(2, apply.Document.Components.First(c => c.Name == "B").Id);
         }
 
+        [Fact]
+        public void Diff_AddedComponent_DoesNotMutateRightDocument()
+        {
+            var addedGuid = Guid.NewGuid();
+            var left = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .Build();
+
+            var right = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "A", Id = 1 })
+                .AddComponent(new GhJsonComponent { Name = "B", Id = 2, InstanceGuid = addedGuid })
+                .Build();
+
+            var diff = GhJson.Diff(left, right);
+
+            var added = Assert.Single(diff.Patch.Patch.Components!.Add!);
+            Assert.Null(added.InstanceGuid);
+            Assert.NotSame(right.Components.First(c => c.Name == "B"), added);
+            Assert.Equal(addedGuid, right.Components.First(c => c.Name == "B").InstanceGuid);
+        }
+
+        [Fact]
+        public void Diff_AddedGroup_DoesNotMutateRightDocument()
+        {
+            var groupGuid = Guid.NewGuid();
+            var components = new[] { new GhJsonComponent { Name = "A", Id = 1 } };
+            var left = new GhJsonDocument("1.0", null, components, null, null);
+            var rightGroup = new GhJsonGroup { InstanceGuid = groupGuid, Id = 10, Name = "G", Members = new List<int> { 1 } };
+            var right = new GhJsonDocument("1.0", null, components, null, new[] { rightGroup });
+
+            var diff = GhJson.Diff(left, right);
+
+            var added = Assert.Single(diff.Patch.Patch.Groups!.Add!);
+            Assert.Null(added.InstanceGuid);
+            Assert.NotSame(rightGroup, added);
+            Assert.NotSame(rightGroup.Members, added.Members);
+            Assert.Equal(groupGuid, rightGroup.InstanceGuid);
+        }
+
         // ---- DiffOptions ----
 
         [Fact]

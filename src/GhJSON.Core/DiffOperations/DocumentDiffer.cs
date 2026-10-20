@@ -131,8 +131,10 @@ namespace GhJSON.Core.DiffOperations
                 {
                     // New components in a patch must not carry an instanceGuid;
                     // it is generated when the component is placed on the canvas.
-                    rightComp.InstanceGuid = null;
-                    add.Add(rightComp);
+                    // Strip it on a copy so the caller's right-hand document is not mutated.
+                    var added = rightComp.ShallowCopy();
+                    added.InstanceGuid = null;
+                    add.Add(added);
                 }
             }
 
@@ -436,8 +438,10 @@ namespace GhJSON.Core.DiffOperations
                 {
                     // New groups in a patch must not carry an instanceGuid;
                     // it is generated when the group is placed on the canvas.
-                    rightGroup.InstanceGuid = null;
-                    add.Add(rightGroup);
+                    // Strip it on a copy so the caller's right-hand document is not mutated.
+                    var added = rightGroup.ShallowCopy();
+                    added.InstanceGuid = null;
+                    add.Add(added);
                 }
             }
 

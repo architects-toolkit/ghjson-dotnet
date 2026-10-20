@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-20
+
 ### Fixed
 
-- `GhJson.Diff` no longer mutates the right-hand document: added components and groups are copied into the patch before their `instanceGuid` is stripped, so callers keep the original GUIDs (and patch entries no longer alias the input objects)
+- `GhJson.Diff` no longer mutates the right-hand document when stripping `instanceGuid` from added components and groups
 
 ## [1.3.0] - 2026-10-10
 

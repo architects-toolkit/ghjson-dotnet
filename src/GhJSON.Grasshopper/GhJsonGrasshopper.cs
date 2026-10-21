@@ -99,6 +99,7 @@ namespace GhJSON.Grasshopper
 
             foreach (var component in document.Components)
             {
+                var errorCount = component.Errors?.Count ?? 0;
                 var obj = ComponentInstantiator.Create(component, options);
 
                 if (obj == null)
@@ -111,14 +112,21 @@ namespace GhJSON.Grasshopper
                     }
 
                     result.FailedComponents.Add(component.Name ?? component.ComponentGuid?.ToString() ?? "unknown");
-                    continue;
+                }
+                else
+                {
+                    result.Objects.Add(obj);
+
+                    if (component.Id.HasValue)
+                    {
+                        result.IdToObjectMapping[component.Id.Value] = obj;
+                    }
                 }
 
-                result.Objects.Add(obj);
-
-                if (component.Id.HasValue)
+                // Surface handler failures recorded on the component during instantiation.
+                if ((component.Errors?.Count ?? 0) > errorCount)
                 {
-                    result.IdToObjectMapping[component.Id.Value] = obj;
+                    result.Warnings.AddRange(component.Errors!.Skip(errorCount));
                 }
             }
 

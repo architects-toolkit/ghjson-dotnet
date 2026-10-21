@@ -125,8 +125,10 @@ namespace GhJSON.Grasshopper.PutOperations
                         existing.RecordUndoEvent(updateUndoRecord);
                     }
 
+                    var updateErrorCount = component.Errors?.Count ?? 0;
                     ObjectHandlerOrchestrator.Deserialize(component, existing);
                     ObjectHandlerOrchestrator.PostPlacement(component, existing);
+                    AppendNewComponentErrors(result, component, updateErrorCount);
 
                     result.UpdatedObjects.Add(existing);
                     result.ComponentsUpdated++;
@@ -145,6 +147,7 @@ namespace GhJSON.Grasshopper.PutOperations
                     continue;
                 }
 
+                var errorCount = component.Errors?.Count ?? 0;
                 var obj = ComponentInstantiator.Create(
                     component,
                     existing != null
@@ -156,6 +159,7 @@ namespace GhJSON.Grasshopper.PutOperations
                             SkipInvalidComponents = options.SkipInvalidComponents,
                         }
                         : deserializationOptions);
+                AppendNewComponentErrors(result, component, errorCount);
 
                 if (obj == null)
                 {
@@ -251,7 +255,9 @@ namespace GhJSON.Grasshopper.PutOperations
                 ghDoc.AddObject(obj, false);
 
                 // Apply post-placement fixups for properties that get reset by AddedToDocument
+                var postErrorCount = component.Errors?.Count ?? 0;
                 ObjectHandlerOrchestrator.PostPlacement(component, obj);
+                AppendNewComponentErrors(result, component, postErrorCount);
 
                 result.PlacedObjects.Add(obj);
                 addedObjects.Add(obj);
@@ -358,6 +364,19 @@ namespace GhJSON.Grasshopper.PutOperations
 #endif
 
             return result;
+        }
+
+        /// <summary>
+        /// Appends component errors recorded since <paramref name="errorCount"/> was captured
+        /// to the result warnings, so per-handler deserialization failures stay visible even
+        /// though they no longer abort the operation.
+        /// </summary>
+        private static void AppendNewComponentErrors(PutResult result, GhJsonComponent component, int errorCount)
+        {
+            if (component.Errors != null && component.Errors.Count > errorCount)
+            {
+                result.Warnings.AddRange(component.Errors.Skip(errorCount));
+            }
         }
 
         private static bool CreateConnection(GhJsonConnection connection, Dictionary<int, IGH_DocumentObject> idToObject, GhJsonDocument document, PutResult result)

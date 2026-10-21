@@ -168,6 +168,11 @@ namespace GhJSON.Grasshopper.Serialization
         /// Applies all compatible handlers in priority order.
         /// Note: Deserialization reads from component, so no override protection needed.
         /// </summary>
+        /// <remarks>
+        /// A throwing handler is contained per-component: the failure is recorded on
+        /// <see cref="GhJsonComponent.Errors"/> and the remaining handlers still run, so a
+        /// single misbehaving handler cannot abort the whole-document deserialization.
+        /// </remarks>
         /// <param name="component">The component to deserialize.</param>
         /// <param name="obj">The document object to configure.</param>
         public static void Deserialize(GhJsonComponent component, IGH_DocumentObject obj)
@@ -179,10 +184,17 @@ namespace GhJSON.Grasshopper.Serialization
             var handlerCount = 0;
             foreach (var handler in ObjectHandlerRegistry.GetAll())
             {
-                if (handler.CanHandle(component))
+                try
                 {
-                    handler.Deserialize(component, obj);
-                    handlerCount++;
+                    if (handler.CanHandle(component))
+                    {
+                        handler.Deserialize(component, obj);
+                        handlerCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    RecordHandlerFailure(component, handler, "deserialization", ex);
                 }
             }
 
@@ -196,17 +208,51 @@ namespace GhJSON.Grasshopper.Serialization
         /// Must be called after the object has been added to the Grasshopper document, because some
         /// properties (e.g., <c>IScriptComponent</c> marshalling options) are reset by <c>AddedToDocument</c>.
         /// </summary>
+        /// <remarks>
+        /// Like <see cref="Deserialize"/>, a throwing handler is contained per-component and
+        /// recorded on <see cref="GhJsonComponent.Errors"/>.
+        /// </remarks>
         /// <param name="component">The source GhJSON component definition.</param>
         /// <param name="obj">The placed document object (already in the document).</param>
         public static void PostPlacement(GhJsonComponent component, IGH_DocumentObject obj)
         {
             foreach (var handler in ObjectHandlerRegistry.GetAll())
             {
-                if (handler is IPostPlacementHandler postHandler && handler.CanHandle(component))
+                try
                 {
-                    postHandler.PostPlacement(component, obj);
+                    if (handler is IPostPlacementHandler postHandler && handler.CanHandle(component))
+                    {
+                        postHandler.PostPlacement(component, obj);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    RecordHandlerFailure(component, handler, "post-placement", ex);
                 }
             }
+        }
+
+        /// <summary>
+        /// Records a deserialization-time handler failure on the component's
+        /// <see cref="GhJsonComponent.Errors"/> list so callers (results, telemetry) can
+        /// detect partial failures that would otherwise be invisible.
+        /// </summary>
+        private static void RecordHandlerFailure(GhJsonComponent component, IObjectHandler handler, string operation, Exception ex)
+        {
+            var handlerName = handler?.GetType().Name ?? "unknown";
+            var message = $"Handler '{handlerName}' failed during {operation} of '{component?.Name ?? "unknown"}': {ex.Message}";
+
+#if DEBUG
+            Debug.WriteLine($"[ObjectHandlerOrchestrator] {message}");
+#endif
+
+            if (component == null)
+            {
+                return;
+            }
+
+            component.Errors ??= new List<string>();
+            component.Errors.Add(message);
         }
     }
 }

@@ -47,60 +47,77 @@ namespace GhJSON.Grasshopper.Deserialization
         /// </summary>
         /// <param name="component">The component definition.</param>
         /// <param name="options">Deserialization options.</param>
-        /// <returns>The created document object, or null if creation failed.</returns>
+        /// <returns>The created document object, or null if creation failed. When creation
+        /// throws, the component's <see cref="GhJsonComponent.Errors"/> list records the
+        /// failure so callers can report it, and null is returned.</returns>
         public static IGH_DocumentObject? Create(GhJsonComponent component, DeserializationOptions options)
         {
 #if DEBUG
             Debug.WriteLine($"[ComponentInstantiator.Create] Creating component: {component.Name ?? "unknown"}, GUID: {component.ComponentGuid}");
 #endif
 
-            var proxy = Resolve(component);
-
-            IGH_DocumentObject? obj;
-
-            if (proxy == null)
+            try
             {
+                var proxy = Resolve(component);
+
+                IGH_DocumentObject? obj;
+
+                if (proxy == null)
+                {
 #if DEBUG
-                Debug.WriteLine($"[ComponentInstantiator.Create] Failed to resolve component: {component.Name ?? component.ComponentGuid?.ToString()}");
+                    Debug.WriteLine($"[ComponentInstantiator.Create] Failed to resolve component: {component.Name ?? component.ComponentGuid?.ToString()}");
 #endif
+                    return null;
+                }
+
+                obj = proxy.CreateInstance();
+                if (obj == null)
+                {
+#if DEBUG
+                    Debug.WriteLine($"[ComponentInstantiator.Create] Proxy resolved but CreateInstance() returned null for: {proxy.Desc.Name}");
+#endif
+                    return null;
+                }
+
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Created object: {obj.Name}, Type: {obj.GetType().Name}");
+#endif
+
+                // Preserve instance GUID when not regenerating
+                if (!options.RegenerateInstanceGuids &&
+                    component.InstanceGuid.HasValue &&
+                    component.InstanceGuid.Value != Guid.Empty)
+                {
+                    obj.NewInstanceGuid(component.InstanceGuid.Value);
+#if DEBUG
+                    Debug.WriteLine($"[ComponentInstantiator.Create] Preserved InstanceGuid: {component.InstanceGuid.Value}");
+#endif
+                }
+
+                // Create default attributes
+                obj.CreateAttributes();
+
+                // Apply properties using handlers
+                ObjectHandlerOrchestrator.Deserialize(component, obj);
+
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Finished deserializing properties for: {obj.Name}");
+#endif
+
+                return obj;
+            }
+            catch (Exception ex)
+            {
+                // A single misbehaving component (proxy creation, attribute or handler
+                // failure) must not abort deserialization of the remaining document.
+                // Record the failure on the component so callers can report it.
+#if DEBUG
+                Debug.WriteLine($"[ComponentInstantiator.Create] Failed to create '{component.Name ?? "unknown"}': {ex.Message}");
+#endif
+                component.Errors ??= new List<string>();
+                component.Errors.Add($"Component '{component.Name ?? "unknown"}' failed to instantiate: {ex.Message}");
                 return null;
             }
-
-            obj = proxy.CreateInstance();
-            if (obj == null)
-            {
-#if DEBUG
-                Debug.WriteLine($"[ComponentInstantiator.Create] Proxy resolved but CreateInstance() returned null for: {proxy.Desc.Name}");
-#endif
-                return null;
-            }
-
-#if DEBUG
-            Debug.WriteLine($"[ComponentInstantiator.Create] Created object: {obj.Name}, Type: {obj.GetType().Name}");
-#endif
-
-            // Preserve instance GUID when not regenerating
-            if (!options.RegenerateInstanceGuids &&
-                component.InstanceGuid.HasValue &&
-                component.InstanceGuid.Value != Guid.Empty)
-            {
-                obj.NewInstanceGuid(component.InstanceGuid.Value);
-#if DEBUG
-                Debug.WriteLine($"[ComponentInstantiator.Create] Preserved InstanceGuid: {component.InstanceGuid.Value}");
-#endif
-            }
-
-            // Create default attributes
-            obj.CreateAttributes();
-
-            // Apply properties using handlers
-            ObjectHandlerOrchestrator.Deserialize(component, obj);
-
-#if DEBUG
-            Debug.WriteLine($"[ComponentInstantiator.Create] Finished deserializing properties for: {obj.Name}");
-#endif
-
-            return obj;
         }
 
         /// <summary>

@@ -35,19 +35,21 @@ namespace GhJSON.Grasshopper.Query
         /// <param name="universe">All objects that may be reached (typically the full canvas).</param>
         /// <param name="seedGuids">Initial GUIDs to expand from.</param>
         /// <param name="depth">Number of connection hops.</param>
+        /// <param name="direction">Which way wires are followed: downstream (recipients), upstream (sources), or both.</param>
         /// <returns>All GUIDs reachable within <paramref name="depth"/>, including the seeds.</returns>
         public static HashSet<Guid> ExpandByDepth(
             IEnumerable<IGH_DocumentObject> universe,
             IEnumerable<Guid> seedGuids,
-            int depth)
+            int depth,
+            ConnectionDirection direction = ConnectionDirection.Both)
         {
             if (depth <= 0)
             {
                 return new HashSet<Guid>(seedGuids);
             }
 
-            // Build undirected adjacency from live parameter wiring
-            var adjacency = BuildAdjacency(universe);
+            // Build adjacency from live parameter wiring, in the requested direction
+            var adjacency = BuildAdjacency(universe, direction);
 
             var visited = new HashSet<Guid>(seedGuids);
             var frontier = new HashSet<Guid>(seedGuids);
@@ -133,21 +135,33 @@ namespace GhJSON.Grasshopper.Query
         }
 
         /// <summary>
-        /// Builds an undirected adjacency map from live parameter wiring.
-        /// Keys and values are top-level document-object GUIDs.
+        /// Builds an adjacency map from live parameter wiring.
+        /// Keys are top-level document-object GUIDs; values are their neighbors in
+        /// the requested direction — downstream neighbors for
+        /// <see cref="ConnectionDirection.Downstream"/>, upstream neighbors for
+        /// <see cref="ConnectionDirection.Upstream"/>, or both (undirected).
         /// </summary>
-        private static Dictionary<Guid, HashSet<Guid>> BuildAdjacency(IEnumerable<IGH_DocumentObject> objects)
+        private static Dictionary<Guid, HashSet<Guid>> BuildAdjacency(IEnumerable<IGH_DocumentObject> objects, ConnectionDirection direction)
         {
             var adjacency = new Dictionary<Guid, HashSet<Guid>>();
 
             foreach (var obj in objects)
             {
                 var guid = obj.InstanceGuid;
-                foreach (var neighbor in GetOutputNeighborGuids(obj))
+                if (direction != ConnectionDirection.Upstream)
                 {
-                    // Add both directions (undirected)
-                    GetOrCreate(adjacency, guid).Add(neighbor);
-                    GetOrCreate(adjacency, neighbor).Add(guid);
+                    foreach (var neighbor in GetOutputNeighborGuids(obj))
+                    {
+                        GetOrCreate(adjacency, guid).Add(neighbor);
+                    }
+                }
+
+                if (direction != ConnectionDirection.Downstream)
+                {
+                    foreach (var neighbor in GetInputNeighborGuids(obj))
+                    {
+                        GetOrCreate(adjacency, guid).Add(neighbor);
+                    }
                 }
             }
 
@@ -188,6 +202,41 @@ namespace GhJSON.Grasshopper.Query
             }
         }
 
+        /// <summary>
+        /// Returns the GUIDs of top-level document objects connected to the inputs of <paramref name="obj"/>
+        /// — the components and parameters feeding data into it.
+        /// </summary>
+        private static IEnumerable<Guid> GetInputNeighborGuids(IGH_DocumentObject obj)
+        {
+            IList<IGH_Param>? inputs = null;
+
+            if (obj is IGH_Component comp)
+            {
+                inputs = comp.Params.Input;
+            }
+            else if (obj is IGH_Param param)
+            {
+                inputs = new[] { param };
+            }
+
+            if (inputs == null)
+            {
+                yield break;
+            }
+
+            foreach (var input in inputs)
+            {
+                foreach (var source in input.Sources)
+                {
+                    var owner = source.Attributes?.GetTopLevel?.DocObject;
+                    if (owner != null)
+                    {
+                        yield return owner.InstanceGuid;
+                    }
+                }
+            }
+        }
+
         private static HashSet<Guid> GetOrCreate(Dictionary<Guid, HashSet<Guid>> dict, Guid key)
         {
             if (!dict.TryGetValue(key, out var set))
@@ -198,6 +247,21 @@ namespace GhJSON.Grasshopper.Query
 
             return set;
         }
+    }
+
+    /// <summary>
+    /// Direction in which connection expansion follows wires between canvas objects.
+    /// </summary>
+    public enum ConnectionDirection
+    {
+        /// <summary>Follow outputs toward the components consuming them.</summary>
+        Downstream,
+
+        /// <summary>Follow inputs toward the components feeding them (parents).</summary>
+        Upstream,
+
+        /// <summary>Follow connections in both directions.</summary>
+        Both,
     }
 
     /// <summary>

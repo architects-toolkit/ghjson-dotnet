@@ -49,6 +49,7 @@ namespace GhJSON.Grasshopper.Query
         private readonly List<Guid> _guidFilter = new List<Guid>();
         private RectangleF? _viewportBounds;
         private int _connectionDepth;
+        private ConnectionDirection _connectionDirection = ConnectionDirection.Both;
 
         private CanvasSelector(List<IGH_DocumentObject> source)
         {
@@ -176,7 +177,20 @@ namespace GhJSON.Grasshopper.Query
         /// <returns>This selector for chaining.</returns>
         public CanvasSelector WithConnected(int depth)
         {
+            return WithConnected(depth, ConnectionDirection.Both);
+        }
+
+        /// <summary>
+        /// After all filters are applied, expands the result set by walking connections
+        /// up to <paramref name="depth"/> hops in the requested direction.
+        /// </summary>
+        /// <param name="depth">Number of connection hops (0 = no expansion).</param>
+        /// <param name="direction">Follow downstream (recipients), upstream (sources/parents), or both.</param>
+        /// <returns>This selector for chaining.</returns>
+        public CanvasSelector WithConnected(int depth, ConnectionDirection direction)
+        {
             _connectionDepth = Math.Max(0, depth);
+            _connectionDirection = direction;
             return this;
         }
 
@@ -232,7 +246,7 @@ namespace GhJSON.Grasshopper.Query
             if (_connectionDepth > 0 && objects.Count > 0)
             {
                 var seedGuids = objects.Select(o => o.InstanceGuid);
-                var expandedGuids = ConnectionWalker.ExpandByDepth(_source, seedGuids, _connectionDepth);
+                var expandedGuids = ConnectionWalker.ExpandByDepth(_source, seedGuids, _connectionDepth, _connectionDirection);
                 var lookup = _source.ToDictionary(o => o.InstanceGuid, o => o);
                 objects = expandedGuids
                     .Select(g => lookup.TryGetValue(g, out var obj) ? obj : null)

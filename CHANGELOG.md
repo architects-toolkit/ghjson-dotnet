@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.3] - 2026-11-01
 
+### Added
+- `ConnectionDirection` enum (`Upstream`, `Downstream`, `Both`) and a `WithConnected(depth, direction)` overload plus a matching `ConnectionWalker.ExpandByDepth` parameter for directional connection expansion: upstream walks input `Sources` toward parent components, downstream walks output `Recipients`, and `Both` preserves the previous undirected traversal. The existing single-argument `WithConnected(depth)` remains undirected.
+
 ### Fixed
 - Deserialization now continues for the entire document even if a single component fails, with errors recorded in `DeserializationResult.Warnings` and `PutResult.Warnings`
 

@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [1.3.3] - 2026-11-01
 
-- Deserialization no longer aborts the whole document when a single component fails: `ComponentInstantiator.Create` now contains creation exceptions and records them on the component's `Errors` list, and `ObjectHandlerOrchestrator.Deserialize`/`PostPlacement` contain per-handler failures the same way. Newly recorded errors are surfaced through `DeserializationResult.Warnings` and `PutResult.Warnings`.
+### Fixed
+- Deserialization now continues for the entire document even if a single component fails, with errors recorded in `DeserializationResult.Warnings` and `PutResult.Warnings`
 
 ## [1.3.2] - 2026-10-20
 

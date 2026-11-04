@@ -370,6 +370,29 @@ namespace GhJSON.Grasshopper
         }
 
         /// <summary>
+        /// Disconnects two parameters on the active canvas by component GUID and parameter name,
+        /// reporting whether a wire was actually removed.
+        /// Executes on the UI thread and records a single undo event. Callers are responsible
+        /// for triggering a canvas redraw or solution recompute after batch operations.
+        /// </summary>
+        /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
+        /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
+        /// <param name="sourceParamName">NickName or Name of the source output parameter. If null or empty, the first output is used.</param>
+        /// <param name="targetParamName">NickName or Name of the target input parameter. If null or empty, the first input is used.</param>
+        /// <param name="removed"><c>true</c> when an existing wire was removed; <c>false</c> when the
+        /// resolved endpoints were not wired (no-op) or the call failed.</param>
+        /// <returns><c>true</c> if the connection did not exist or was removed.</returns>
+        public static bool Disconnect(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName,
+            string? targetParamName,
+            out bool removed)
+        {
+            return CanvasConnector.Disconnect(sourceGuid, targetGuid, sourceParamName, targetParamName, out removed);
+        }
+
+        /// <summary>
         /// Captures all wires that connect the given objects to objects outside the set.
         /// This is useful when replacing components: external connections can be restored
         /// after the new objects are placed.

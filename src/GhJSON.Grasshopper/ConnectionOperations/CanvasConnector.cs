@@ -113,11 +113,34 @@ namespace GhJSON.Grasshopper.ConnectionOperations
             string? sourceParamName = null,
             string? targetParamName = null)
         {
+            return Disconnect(sourceGuid, targetGuid, sourceParamName, targetParamName, out _);
+        }
+
+        /// <summary>
+        /// Disconnects two parameters on the active canvas by component instance GUID and
+        /// parameter name, reporting whether a wire was actually removed. Executes on the UI thread.
+        /// </summary>
+        /// <param name="sourceGuid">Instance GUID of the source component or parameter.</param>
+        /// <param name="targetGuid">Instance GUID of the target component or parameter.</param>
+        /// <param name="sourceParamName">NickName or Name of the source output parameter. If null or empty, the first output is used.</param>
+        /// <param name="targetParamName">NickName or Name of the target input parameter. If null or empty, the first input is used.</param>
+        /// <param name="removed"><c>true</c> when an existing wire was removed; <c>false</c> when the
+        /// resolved endpoints were not wired (no-op) or the call failed.</param>
+        /// <returns><c>true</c> if the connection did not exist or was removed.</returns>
+        public static bool Disconnect(
+            Guid sourceGuid,
+            Guid targetGuid,
+            string? sourceParamName,
+            string? targetParamName,
+            out bool removed)
+        {
             var success = false;
+            var didRemove = false;
 
             InvokeOnUiThreadAndWait(() =>
-                success = DisconnectOnUiThread(sourceGuid, targetGuid, sourceParamName, targetParamName));
+                success = DisconnectOnUiThread(sourceGuid, targetGuid, sourceParamName, targetParamName, out didRemove));
 
+            removed = didRemove;
             return success;
         }
 
@@ -125,8 +148,11 @@ namespace GhJSON.Grasshopper.ConnectionOperations
             Guid sourceGuid,
             Guid targetGuid,
             string? sourceParamName,
-            string? targetParamName)
+            string? targetParamName,
+            out bool removed)
         {
+            removed = false;
+
             var doc = CanvasReader.GetActiveDocument();
             if (doc == null)
             {
@@ -155,6 +181,7 @@ namespace GhJSON.Grasshopper.ConnectionOperations
 
             targetParam.RecordUndoEvent("[GhJSON] Disconnect");
             targetParam.RemoveSource(sourceParam);
+            removed = true;
 
             return true;
         }

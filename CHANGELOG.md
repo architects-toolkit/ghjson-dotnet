@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `GhJsonGrasshopper.Disconnect` / `CanvasConnector.Disconnect` overload with an `out bool removed` parameter so callers can distinguish a real wire removal from a no-op when the resolved endpoints were not connected. The existing `bool` overload keeps its idempotent contract (`true` when the connection did not exist or was removed).
+
 ## [1.3.3] - 2026-11-01
 
 ### Added

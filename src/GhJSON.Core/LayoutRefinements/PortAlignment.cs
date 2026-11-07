@@ -128,7 +128,7 @@ namespace GhJSON.Core.LayoutRefinements
         /// Vertical distance between the center of the target's input port receiving the
         /// connection and the center of the target node itself. For component targets this
         /// is the connected input port's delta; for floating parameter targets the input
-        /// grip is vertically centered on the param's own bounds. Returns false when the
+        /// grip uses its measured delta, falling back to the bounds center. Returns false when the
         /// target cannot supply a port position at all.
         /// </summary>
         internal static bool TryGetInputPortDelta(
@@ -156,8 +156,11 @@ namespace GhJSON.Core.LayoutRefinements
                 return true;
             }
 
-            // Floating parameters (panels, value params…) take wires at their left-edge
-            // input grip, which is vertically centered on the param's own bounds.
+            if (targetMetrics.Kind == LayoutNodeKind.Parameter && targetMetrics.InputPortDeltas.Count > 0)
+            {
+                delta = targetMetrics.InputPortDeltas[0];
+            }
+
             return targetMetrics.Kind == LayoutNodeKind.Parameter;
         }
 
@@ -165,19 +168,19 @@ namespace GhJSON.Core.LayoutRefinements
         /// Vertical distance between the center of the source's output port feeding the
         /// connection and the center of the source node itself. Component sources use the
         /// connected output port's delta; floating parameter sources emit from their
-        /// right-edge output grip, vertically centered on their own bounds. Returns 0 when
+        /// right-edge output grip, with a centered fallback when unmeasured. Returns 0 when
         /// the source cannot be measured so the connection still votes for the target port.
         /// </summary>
         internal static float GetOutputPortDelta(
             LayoutNodeMetrics? sourceMetrics,
             int? paramIndex)
         {
-            if (sourceMetrics == null || sourceMetrics.Kind != LayoutNodeKind.Component)
+            if (sourceMetrics == null || sourceMetrics.Kind == LayoutNodeKind.Other)
             {
                 return 0f;
             }
 
-            var index = paramIndex ?? -1;
+            var index = sourceMetrics.Kind == LayoutNodeKind.Parameter ? 0 : paramIndex ?? -1;
             if (index < 0 || index >= sourceMetrics.OutputPortDeltas.Count)
             {
                 return 0f;

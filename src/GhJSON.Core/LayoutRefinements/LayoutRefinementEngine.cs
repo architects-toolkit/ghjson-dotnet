@@ -26,8 +26,10 @@ namespace GhJSON.Core.LayoutRefinements
     /// <summary>
     /// Runs the measurement-aware refinement passes over a core
     /// <see cref="LayoutResult"/>: per-island bounds-aware spacing first, then an
-    /// iterated wire-clearance/port-alignment/collision loop that converges to whole
-    /// pixels. The engine is host-independent — it consumes measured node geometry
+    /// iterated wire-clearance/port-alignment/collision loop, then anchor fitting and
+    /// rigid alignment groups. Coarse positions round to pixels; final groups retain
+    /// fractional measured grip offsets rather than rounding nodes independently.
+    /// The engine is host-independent — it consumes measured node geometry
     /// through <see cref="LayoutRefinementOptions.NodeMetricsProvider"/> — so the same
     /// pipeline runs on a live Grasshopper canvas (via
     /// <c>GhJsonGrasshopper.ComputeLayout</c>) or on any other adapter that supplies
@@ -123,9 +125,12 @@ namespace GhJSON.Core.LayoutRefinements
                 }
             }
 
-            return options.FixedPositions != null
-                ? AnchoredPlacement.Apply(positions, document, options)
-                : positions;
+            if (options.FixedPositions != null)
+            {
+                positions = AnchoredPlacement.Apply(positions, document, options);
+            }
+
+            return options.AlignToPorts ? AlignmentConstraints.Apply(positions, document, options) : positions;
         }
 
         /// <summary>

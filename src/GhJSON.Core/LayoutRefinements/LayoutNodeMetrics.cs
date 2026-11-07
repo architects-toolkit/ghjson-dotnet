@@ -34,7 +34,11 @@ namespace GhJSON.Core.LayoutRefinements
     /// expressed as vertical deltas relative to the node's own bounds center: a wire
     /// entering input port <c>i</c> horizontally meets the node at
     /// <c>center.Y + InputPortDeltas[i]</c>. Deltas are indexed by the connection
-    /// endpoint's <c>ParamIndex</c>; out-of-range indices are treated as a zero delta.
+    /// endpoint's <c>ParamIndex</c>. Coarse alignment retains centered fallback votes;
+    /// grouped fitting does not infer constraints for unknown or invalid occupied ports.
+    /// Floating parameters may supply their single input/output grip offsets at index
+    /// zero; missing offsets retain the centered-grip fallback. Named endpoints resolve
+    /// through the optional index maps during grouped constraint fitting.
     /// </remarks>
     public sealed class LayoutNodeMetrics
     {
@@ -58,11 +62,31 @@ namespace GhJSON.Core.LayoutRefinements
             LayoutNodeKind kind,
             IReadOnlyList<float>? inputPortDeltas = null,
             IReadOnlyList<float>? outputPortDeltas = null)
+            : this(size, kind, inputPortDeltas, outputPortDeltas, null, null)
+        {
+        }
+
+        /// <summary>Initializes measured geometry with optional named-port lookup maps.</summary>
+        /// <param name="size">Measured bounds size, or null when unavailable.</param>
+        /// <param name="kind">Node classification used for port semantics.</param>
+        /// <param name="inputPortDeltas">Input grip offsets from the bounds center.</param>
+        /// <param name="outputPortDeltas">Output grip offsets from the bounds center.</param>
+        /// <param name="inputPortIndices">Unambiguous input names or aliases mapped to indices.</param>
+        /// <param name="outputPortIndices">Unambiguous output names or aliases mapped to indices.</param>
+        public LayoutNodeMetrics(
+            SizeF? size,
+            LayoutNodeKind kind,
+            IReadOnlyList<float>? inputPortDeltas,
+            IReadOnlyList<float>? outputPortDeltas,
+            IReadOnlyDictionary<string, int>? inputPortIndices,
+            IReadOnlyDictionary<string, int>? outputPortIndices)
         {
             this.Size = size;
             this.Kind = kind;
             this.InputPortDeltas = inputPortDeltas ?? Array.Empty<float>();
             this.OutputPortDeltas = outputPortDeltas ?? Array.Empty<float>();
+            this.InputPortIndices = inputPortIndices;
+            this.OutputPortIndices = outputPortIndices;
         }
 
         /// <summary>
@@ -90,6 +114,12 @@ namespace GhJSON.Core.LayoutRefinements
         /// indexed by output parameter index.
         /// </summary>
         public IReadOnlyList<float> OutputPortDeltas { get; }
+
+        /// <summary>Unambiguous input names or aliases mapped to measured port indices.</summary>
+        public IReadOnlyDictionary<string, int>? InputPortIndices { get; }
+
+        /// <summary>Unambiguous output names or aliases mapped to measured port indices.</summary>
+        public IReadOnlyDictionary<string, int>? OutputPortIndices { get; }
 
         /// <summary>
         /// Resolves metrics for a layout key through <paramref name="provider"/>,

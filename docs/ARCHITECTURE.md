@@ -87,6 +87,15 @@ ghjson-dotnet/
 
 **Purpose**: Platform-independent operations on GhJSON documents. No Grasshopper or Rhino dependencies.
 
+### Placement Layout Contract
+
+- `CalculateLayout` and `ComputeLayout` explicitly compute a fresh arrangement; their compact defaults are 28px horizontal/vertical edge gaps and 48px island separation.
+- Placement preserves supplied pivots, including `(0,0)`, and computes positions only for pivotless new objects. Existing objects updated without a pivot retain their position.
+- A mixed document's missing positions are relative to connected fixed bounds centers (`LayoutRefinementOptions.FixedPositions`). Single-anchor islands translate rigidly; multiple anchors blend translations by inverse graph distance. Collision avoidance adjusts only unfixed nodes. `UnanchoredOffset`/`AutoOffset` apply only to disconnected parts without anchors. `PutOptions.Offset` is an explicit caller-requested translation, not automatic layout.
+- Core/refinement spacing defaults share one definition; collision resolution consumes the configured vertical gap instead of a separate hard-coded padding.
+- Hosts stage the final positions before review and then place them verbatim. AI generators should omit pivots, while import/round-trip workflows preserve them.
+- Fixed nodes are graph boundaries: an anchor cannot influence a missing node through another fixed node. Incompatible authored geometry may prevent exact port alignment or preserve a wire crossing; collision avoidance takes priority without moving authored objects.
+
 ### Core Validation Responsibilities
 
 `GhJSON.Core` validation is responsible for:

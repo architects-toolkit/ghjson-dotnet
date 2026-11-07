@@ -39,6 +39,28 @@ namespace GhJSON.Grasshopper.Shared
     public static class PivotSemantics
     {
         /// <summary>
+        /// Returns the bounds center an object would have at the desired pivot,
+        /// without moving the object. Useful for measuring a proposed replacement
+        /// at an existing object's preserved position.
+        /// </summary>
+        /// <param name="obj">Object supplying the pivot-to-bounds offset.</param>
+        /// <param name="pivot">Desired pivot in canvas coordinates.</param>
+        /// <returns>The translated bounds center, or the pivot when bounds are unavailable.</returns>
+        public static PointF PivotToCenter(IGH_DocumentObject obj, PointF pivot)
+        {
+            var currentPivot = obj?.Attributes?.Pivot;
+            if (!currentPivot.HasValue)
+            {
+                return pivot;
+            }
+
+            var center = BoundsCenter(obj!);
+            return new PointF(
+                pivot.X + center.X - currentPivot.Value.X,
+                pivot.Y + center.Y - currentPivot.Value.Y);
+        }
+
+        /// <summary>
         /// Converts a desired bounds-center position into the pivot value that places
         /// the object's bounds center at that position.
         /// </summary>

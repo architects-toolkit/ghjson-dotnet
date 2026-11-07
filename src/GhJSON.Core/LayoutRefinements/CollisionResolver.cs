@@ -31,15 +31,10 @@ namespace GhJSON.Core.LayoutRefinements
     /// </summary>
     internal static class CollisionResolver
     {
-        /// <summary>
-        /// Minimum vertical gap left between stacked components in the same column so they do
-        /// not sit flush against each other.
-        /// </summary>
-        private const float VerticalPadding = 20f;
-
         public static Dictionary<Guid, PointF> AvoidCollisions(
             Dictionary<Guid, PointF> positions,
-            Func<Guid, LayoutNodeMetrics?>? metricsProvider = null)
+            Func<Guid, LayoutNodeMetrics?>? metricsProvider = null,
+            float spacingY = DependencyGraph.LayoutOptions.DefaultSpacingY)
         {
             var result = new Dictionary<Guid, PointF>(positions);
 
@@ -70,7 +65,7 @@ namespace GhJSON.Core.LayoutRefinements
                         top = lastBottom;
                     }
 
-                    lastBottom = top + height + VerticalPadding;
+                    lastBottom = top + height + spacingY;
                 }
             }
 

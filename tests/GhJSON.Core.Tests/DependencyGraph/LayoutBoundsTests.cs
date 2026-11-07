@@ -35,9 +35,9 @@ namespace GhJSON.Core.Tests.DependencyGraph
         {
             var options = LayoutOptions.Default;
 
-            Assert.Equal(80f, options.SpacingX);
+            Assert.Equal(28f, options.SpacingX);
             Assert.Equal(28f, options.SpacingY);
-            Assert.Equal(100f, options.IslandSpacingY);
+            Assert.Equal(48f, options.IslandSpacingY);
         }
 
         [Fact]
@@ -56,7 +56,7 @@ namespace GhJSON.Core.Tests.DependencyGraph
                 .Build();
 
             // A measures 500x40; B keeps the 100-wide default. Column pitch becomes
-            // 500 + SpacingX, so the pivots (centers) sit (500+100)/2 + 80 = 380 apart.
+            // 500 + SpacingX, so the pivots (centers) sit (500+100)/2 + 28 = 328 apart.
             var options = new LayoutOptions
             {
                 NodeSizeProvider = id => id == guid1 ? new SizeF(500f, 40f) : (SizeF?)null,
@@ -64,7 +64,7 @@ namespace GhJSON.Core.Tests.DependencyGraph
             var result = GhJson.CalculateLayout(doc, options);
 
             var dx = result.Positions[guid2].X - result.Positions[guid1].X;
-            Assert.Equal(380, dx);
+            Assert.Equal(328, dx);
         }
 
         [Fact]
@@ -85,8 +85,8 @@ namespace GhJSON.Core.Tests.DependencyGraph
             var options = new LayoutOptions { NodeSizeProvider = _ => null };
             var result = GhJson.CalculateLayout(doc, options);
 
-            // Both nodes at the 100-wide default: pivots sit 100 + 80 apart.
-            Assert.Equal(180, result.Positions[guid2].X - result.Positions[guid1].X);
+            // Both nodes at the 100-wide default: pivots sit 100 + 28 apart.
+            Assert.Equal(128, result.Positions[guid2].X - result.Positions[guid1].X);
         }
 
         [Fact]

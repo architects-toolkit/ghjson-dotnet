@@ -152,6 +152,14 @@ var result = GhJsonGrasshopper.Put(doc, new PutOptions
 
 A successful `Put` records all placed components and groups as one Grasshopper add-object undo event.
 
+Supplied component pivots are preserved, including `"0,0"`. New components without
+pivots receive compact automatic layout (28px edge gaps, 48px between islands).
+In mixed documents missing positions are computed relative to connected fixed
+objects, not below them. `AutoOffset` only places disconnected, unanchored parts
+below existing canvas content; it never shifts supplied pivots. `Offset`, when explicitly set by the caller, is
+still an intentional translation. AI-generated new definitions should omit pivots
+entirely; imported documents can retain their authored coordinates.
+
 Set `UpdateExistingByInstanceGuid` to update objects in place: when a component's
 `instanceGuid` matches an object already on the canvas, the incoming state is
 applied to that object instead of placing a duplicate. The object keeps its

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Compact layout is now the default: 28px horizontal/vertical edge gaps and 48px between islands. Refinement and collision passes use the same spacing as the dependency-graph layout.
+- `Put` preserves supplied pivots when `AutoOffset` is enabled. In mixed documents, pivotless new components are positioned relative to connected fixed anchors; multiple anchors blend relative translations by graph distance. Collision avoidance never moves fixed objects. Only disconnected, unanchored parts use automatic free-space offset. Explicit caller-supplied `Offset` remains an intentional translation.
 - Rewrote and reorganized `README.md` with a clear `GhJSON.Core` vs. `GhJSON.Grasshopper` package overview, quick-start examples (canvas Get/Put, pure-.NET build/validate/fix, diff/patch), and capability summaries linking to `docs/`.
 
 ## [1.3.4] - 2026-11-05

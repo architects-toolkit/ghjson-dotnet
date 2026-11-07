@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote and reorganized `README.md` with a clear `GhJSON.Core` vs. `GhJSON.Grasshopper` package overview, quick-start examples (canvas Get/Put, pure-.NET build/validate/fix, diff/patch), and capability summaries linking to `docs/`.
+
 ## [1.3.4] - 2026-11-05
 
 ### Added

@@ -6,224 +6,125 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-white?style=for-the-badge)](LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/architects-toolkit/ghjson-dotnet)
 
-.NET implementation of the [GhJSON specification](https://architects-toolkit.github.io/ghjson-spec/) for Grasshopper definition serialization.
+Official .NET implementation of the [GhJSON specification](https://architects-toolkit.github.io/ghjson-spec/) — a compact, human-readable JSON format for representing, diffing, and editing [Grasshopper 3D](https://discourse.mcneel.com/c/grasshopper) definitions.
 
-## Overview
+## Packages
 
-GhJSON is a JSON-based format for representing [Grasshopper](https://discourse.mcneel.com/c/grasshopper) definitions. This library provides:
+GhJSON.NET is split into two NuGet packages so you can work with `.ghjson` and `.ghpatch` files anywhere — inside Rhino or in a standalone .NET service, CLI, or AI pipeline:
 
-- **GhJSON.Core** - Platform-independent document model and operations (read, write, validate, fix, merge, migrate, diff/patch, name resolution, layout calculation)
-- **GhJSON.Grasshopper** - Grasshopper integration (serialize from canvas, place on canvas, automatic layout, data type serializers, object handlers)
-
-## Documentation
-
-See the [documentation index](./docs/index.md) for detailed guides and architecture.
-
-## Installation
+| Package | Dependencies | What it does |
+|---|---|---|
+| **`GhJSON.Core`** | None (platform-independent .NET) | Document model, fluent builder, schema & structural validation, auto-fix, merge, diff & `.ghpatch` application, fuzzy name resolution, and dependency-graph layout. |
+| **`GhJSON.Grasshopper`** | Rhino 8 / Grasshopper | Live canvas serialization (`Get`), placement and in-place updates (`Put`), fluent canvas queries (`CanvasSelector`), data-type serializers, and component state handlers. |
 
 ```bash
-# Core library (platform-independent)
+# Platform-independent core library (no Rhino/Grasshopper required)
 dotnet add package GhJSON.Core
 
-# Grasshopper integration (requires Rhino 8+)
+# Grasshopper canvas integration (requires Rhino 8+)
 dotnet add package GhJSON.Grasshopper
 ```
 
-## Quick Start
+## Quick start
 
-### Serialization (Grasshopper Canvas â†’ GhJSON)
+### 1. Read the Grasshopper canvas to GhJSON
 
 ```csharp
 using GhJSON.Core;
 using GhJSON.Grasshopper;
 
-// Serialize all objects from the active canvas
+// Serialize the entire active canvas (or use GhJsonGrasshopper.GetSelected())
 var document = GhJsonGrasshopper.Get();
-string json = GhJson.ToJson(document);
-
-// Or serialize only selected objects
-var selected = GhJsonGrasshopper.GetSelected();
+string json = GhJson.ToJson(document, indented: true);
 ```
 
-### Deserialization (GhJSON - Grasshopper Canvas)
+### 2. Place or update a GhJSON definition on the canvas
 
 ```csharp
 using GhJSON.Core;
 using GhJSON.Grasshopper;
 
-// Parse JSON and place on the active canvas
 var document = GhJson.FromJson(json);
 var result = GhJsonGrasshopper.Put(document);
 ```
 
-### Validation
-
-```csharp
-using GhJSON.Core;
-
-// Standard validation (offline, current schema version)
-var result = GhJson.Validate(json);
-if (!result.IsValid)
-{
-    foreach (var error in result.Errors)
-    {
-        Console.WriteLine(error.Message);
-    }
-}
-
-// Prefer online schema; falls back to embedded on failure
-var result = GhJson.Validate(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
-
-// Async validation
-var result = await GhJson.ValidateAsync(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
-
-// Or quick check
-bool isValid = GhJson.IsValid(json);
-bool isValid = await GhJson.IsValidAsync(json, ValidationLevel.Standard, schemaVersion: "1.0", preferOnline: true);
-
-// Patch validation
-var patchResult = GhJson.ValidatePatch(patchJson);
-var patchResult = GhJson.ValidatePatch(patchJson, preferOnline: true, schemaVersion: "1.0");
-```
-
-### Building Documents Programmatically
+### 3. Build, validate, and auto-repair in pure .NET (no Rhino required)
 
 ```csharp
 using GhJSON.Core;
 using GhJSON.Core.SchemaModels;
 
-var slider = new GhJsonComponent
-{
-    Name = "Number Slider",
-    Id = 1,
-    Pivot = new GhJsonPivot(100, 100),
-};
-
+// Build a document programmatically
 var doc = GhJson.CreateDocumentBuilder()
-    .AddComponent(slider)
+    .AddComponent(new GhJsonComponent
+    {
+        Name = "Number Slider",
+        Id = 1,
+        Pivot = new GhJsonPivot(100, 100),
+    })
     .Build();
+
+// Validate against the embedded v1.0 schema (or pass preferOnline: true)
+var validation = GhJson.Validate(doc);
+if (!validation.IsValid)
+{
+    foreach (var error in validation.Errors)
+    {
+        Console.WriteLine($"{error.Path}: {error.Message}");
+    }
+}
+
+// Auto-fix missing IDs, metadata, or instance GUIDs
+var fixedResult = GhJson.Fix(doc);
 ```
 
-## Supported Features
+### 4. Diff two definitions and apply a `.ghpatch`
 
-### Core Operations (GhJSON.Core)
+```csharp
+using GhJSON.Core;
 
-- **Read/Write** - Parse GhJSON from string, file, or stream; serialize back to JSON or file
-- **Document Builder** - Fluent API for programmatic document construction
-- **Validation** - Schema conformance, structural integrity (unique IDs, connection references, group membership), with online/offline schema loading and version selection
-- **Fix** - Auto-repair metadata, assign missing IDs, regenerate instance GUIDs
-- **Merge** - Combine two GhJSON documents with configurable conflict resolution
-- **Schema Migration** - Migrate documents between schema versions
-- **Diff/Patch** - Compare documents and apply `.ghpatch` changes with conflict tracking
-- **Name Resolution** - Fuzzy matching for component and parameter names (alias dictionaries + Levenshtein distance)
+// Compute a structural diff between two GhJSON documents
+var patch = GhJson.Diff(baseDoc, targetDoc);
+string patchJson = GhJson.ToPatchJson(patch, indented: true);
 
-### Grasshopper Integration (GhJSON.Grasshopper)
-
-- **Serialize** - Read objects from the Grasshopper canvas into GhJSON documents
-- **Deserialize** - Instantiate Grasshopper objects from GhJSON (without placing on canvas)
-- **Get** - Query the active canvas with filters (selection, GUIDs, viewport)
-- **Put** - Place GhJSON documents on the canvas with positioning and connection wiring
-- **Layout** - Automatic component positioning with dependency-graph layout and collision-aware refinements
-- **Delete** - Remove objects from the canvas by GUID with batch undo support
-- **Query** - Fluent `CanvasSelector` API with viewport, GUID, type, category, and attribute filters
-- **Grasshopper Validation** - Component existence checks, parameter matching, type compatibility
-
-### Supported Data Types
-
-All data types use a `prefix:value` string format for explicit type identification. The following serializers are registered by default:
-
-| Type | Prefix | Format | Example |
-|------|--------|--------|---------|
-| Text | `text` | `text:value` | `text:Hello World` |
-| Number | `number` | `number:value` | `number:3.14159` |
-| Integer | `integer` | `integer:value` | `integer:42` |
-| Boolean | `boolean` | `boolean:value` | `boolean:true` |
-| Color | `argb` | `argb:A,R,G,B` | `argb:255,128,64,255` |
-| Point3d | `pointXYZ` | `pointXYZ:x,y,z` | `pointXYZ:10.5,20.0,30.5` |
-| Vector3d | `vectorXYZ` | `vectorXYZ:x,y,z` | `vectorXYZ:1.0,0.0,0.0` |
-| Line | `line2p` | `line2p:x1,y1,z1;x2,y2,z2` | `line2p:0,0,0;10,10,10` |
-| Plane | `planeOXY` | `planeOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz` | `planeOXY:0,0,0;1,0,0;0,1,0` |
-| Circle | `circleCNRS` | `circleCNRS:cx,cy,cz;nx,ny,nz;r;sx,sy,sz` | `circleCNRS:0,0,0;0,0,1;5.0;5,0,0` |
-| Arc | `arc3P` | `arc3P:x1,y1,z1;x2,y2,z2;x3,y3,z3` | `arc3P:0,0,0;5,5,0;10,0,0` |
-| Box | `boxOXY` | `boxOXY:ox,oy,oz;xx,xy,xz;yx,yy,yz;x0,x1;y0,y1;z0,z1` | `boxOXY:0,0,0;1,0,0;0,1,0;-5,5;-5,5;0,10` |
-| Rectangle | `rectangleCXY` | `rectangleCXY:cx,cy,cz;xx,xy,xz;yx,yy,yz;w,h` | `rectangleCXY:0,0,0;1,0,0;0,1,0;10,5` |
-| Interval | `interval` | `interval:min<max` | `interval:0.0<10.0` |
-| Bounds | `bounds` | `bounds:WxH` | `bounds:100x200` |
-
-Custom data type serializers can be registered via `DataTypeRegistry.Register()`.
-
-### Supported Component Handlers
-
-Object handlers serialize and deserialize component-specific properties via the `componentState.extensions` mechanism:
-
-| Handler | Extension Key | Description |
-|---------|---------------|-------------|
-| Number Slider | `gh.numberslider` | Slider value and rounding mode |
-| Panel | `gh.panel` | Text, font, alignment, bounds, multiline, wrap settings |
-| Scribble | `gh.scribble` | Scribble text, font, corners |
-| Value List | `gh.valuelist` | List items, list mode, selected indices |
-| Button | `gh.button` | Button state |
-| Toggle | `gh.toggle` | Toggle state |
-| Colour Swatch | `gh.colourswatch` | Colour swatch value |
-| C# Script | `gh.csharp` | Script code, marshalling options |
-| Python 3 Script | `gh.python` | Script code, marshalling options |
-| IronPython Script | `gh.ironpython` | Script code, marshalling options |
-| GhPython Script | `gh.ghpython` | Legacy GhPython script code |
-| VB Script | `gh.vbscript` | VB script code sections (imports, script, additional) |
-| SmartHopper | `smarthopper.state` | Selected AI provider name and canvas object selections |
-
-Core handlers (applied to all objects):
-
-- **IdentificationHandler** - Component name, GUID, instance GUID
-- **PivotHandler** - Canvas position
-- **SelectedPropertyHandler** - Selection state
-- **LockedPropertyHandler** - Lock (disabled) state
-- **HiddenPropertyHandler** - Preview visibility state
-- **RuntimeMessagesHandler** - Error, warning, remark messages
-- **IOIdentificationHandler** - Input/output parameter identification
-- **IOModifiersHandler** - Data mapping, expressions, reverse, simplify, invert, reparameterize
-- **InternalizedDataHandler** - Persistent/internalized parameter data
-
-Custom object handlers can be registered via `ObjectHandlerRegistry.Register()`.
-
-## GhJSON Format
-
-See the [GhJSON Specification](https://architects-toolkit.github.io/ghjson-spec/) or the [ghjson-spec repo](https://github.com/architects-toolkit/ghjson-spec) for the complete format definition.
-
-### Example
-
-```json
+// Validate and apply the patch to a base document
+if (GhJson.ValidatePatch(patchJson).IsValid)
 {
-  "schema": "1.0",
-  "components": [
-    {
-      "name": "Number Slider",
-      "componentGuid": "57da07bd-ecab-415d-9d86-af36d7073abc",
-      "instanceGuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "id": 1,
-      "pivot": "100,200",
-      "componentState": {
-        "extensions": {
-          "gh.numberslider": {
-            "value": "5<0~10>"
-          }
-        }
-      }
-    }
-  ],
-  "connections": []
+    var applyResult = GhJson.ApplyPatch(baseDoc, patch);
 }
 ```
 
-## License
+## Key capabilities
 
-Apache-2.0
+### Core operations (`GhJSON.Core`)
 
-## Contributing
+- **Read & Write** — Parse and format `.ghjson` and `.ghpatch` documents from strings, files, or streams.
+- **Validation** — `Minimal`, `Standard`, and `Strict` validation levels covering JSON Schema conformance, unique IDs, valid wire endpoints, and group membership, with offline embedded schemas and optional online schema fetching.
+- **Auto-Fix** — Repair metadata counts, assign missing sequential IDs, and regenerate colliding instance GUIDs.
+- **Diff, Patch & Merge** — Generate `.ghpatch` diffs (matching components by `instanceGuid`, `id`, or structural fingerprint), apply patches with base-checksum verification, or merge documents with target-wins conflict resolution.
+- **Fuzzy Name Resolution** — Resolve informal or slightly misspelled component and parameter names via alias dictionaries and Levenshtein distance.
+- **Graph Layout** — Compute clean left-to-right canvas positions from the connection graph with collision-aware refinement.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+### Grasshopper integration (`GhJSON.Grasshopper`)
 
-## Related Projects
+- **Canvas Query (`Get` / `CanvasSelector`)** — Filter canvas objects by selection, instance GUIDs, viewport bounds, component type, category (`+Maths`, `-Script`), attributes (`error`, `warning`, `selected`, `enabled`, `previewon`), and upstream/downstream connection depth.
+- **Canvas Placement (`Put`)** — Instantiate components, restore state and internalized values, wire connections, create groups, and update existing components in place by `instanceGuid` with single-step Grasshopper undo.
+- **Prefixed Data Type Serializers** — 15 built-in `prefix:value` serializers (`text:`, `number:`, `integer:`, `boolean:`, `argb:`, `pointXYZ:`, `vectorXYZ:`, `line2p:`, `planeOXY:`, `circleCNRS:`, `arc3P:`, `boxOXY:`, `rectangleCXY:`, `interval:`, `bounds:`), extensible via `DataTypeRegistry.Register()`.
+- **Component State & Extension Handlers** — Built-in handlers for Number Slider (`gh.numberslider`), Panel (`gh.panel`), Scribble (`gh.scribble`), Value List (`gh.valuelist`), Button (`gh.button`), Boolean Toggle (`gh.toggle`), Colour Swatch (`gh.colourswatch`), C# / Python 3 / IronPython / GhPython / VB Script components, and SmartHopper state (`smarthopper.state`), plus 9 universal core handlers (identification, pivot, selection, lock, preview, runtime messages, parameter I/O, modifiers, and internalized data). Extensible via `ObjectHandlerRegistry.Register()`.
 
-- [ghjson-spec](https://github.com/architects-toolkit/ghjson-spec) - GhJSON format specification
-- [SmartHopper](https://github.com/architects-toolkit/SmartHopper) - AI-powered Grasshopper plugin (uses GhJSON)
+## Documentation
+
+- [**Documentation Index**](./docs/index.md) — Overview of all guides and references
+- [**Usage Guide**](./docs/Usage/index.md) — Reading, writing, validation, fixing, diff/patch, merging, and canvas operations
+  - [**Metadata**](./docs/Usage/metadata.md) — Document metadata options and auto-population
+  - [**Name Resolution**](./docs/Usage/name-resolution.md) — Fuzzy matching for component and parameter names
+- [**Architecture & Extensibility**](./docs/ARCHITECTURE.md) — Full API surface, data-type format table, extension handler schemas, and custom handler registration
+
+## Related projects
+
+- [**ghjson-spec**](https://github.com/architects-toolkit/ghjson-spec) — The GhJSON (`.ghjson`) and GhPatch (`.ghpatch`) format specifications and JSON Schemas
+- [**SmartHopper**](https://github.com/architects-toolkit/SmartHopper) — Open-source AI assistant and component plugin for Grasshopper 3D built on GhJSON
+
+## Contributing & license
+
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Licensed under [Apache-2.0](LICENSE).

@@ -95,6 +95,21 @@ ghjson-dotnet/
 - Core/refinement spacing defaults share one definition; collision resolution consumes the configured vertical gap instead of a separate hard-coded padding.
 - Hosts stage the final positions before review and then place them verbatim. AI generators should omit pivots, while import/round-trip workflows preserve them.
 - Fixed nodes are graph boundaries: an anchor cannot influence a missing node through another fixed node. Incompatible authored geometry may prevent exact port alignment or preserve a wire crossing; collision avoidance takes priority without moving authored objects.
+- Alignment refinement groups compatible port-to-port constraints after anchor
+  fitting. Singly connected input and output leaves receive priority; compatible
+  chains then move as rigid vertical groups so collision handling cannot
+  independently undo accepted alignments. Fixed pivots, measured object separation,
+  and unobstructed aligned-wire corridors take precedence over exact alignment.
+- Constraints use each document connection and its measured endpoint ports rather
+  than collapsing multiple wires between a component pair. Stable edge/group
+  ordering makes conflict resolution repeatable. This is a deterministic
+  feasibility heuristic, not a promise of a globally optimal layout or simultaneous
+  alignment of incompatible authored geometry.
+- The Grasshopper metrics adapter measures `InputGrip`/`OutputGrip` when available,
+  including floating parameters; custom attributes retain a bounds-based fallback.
+  Optional named-port index maps prefer full names over nicknames and reject
+  ambiguous aliases. Explicit indices always take precedence. The original
+  `LayoutNodeMetrics` constructor remains available.
 
 ### Core Validation Responsibilities
 

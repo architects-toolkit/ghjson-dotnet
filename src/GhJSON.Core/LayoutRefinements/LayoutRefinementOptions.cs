@@ -61,8 +61,8 @@ namespace GhJSON.Core.LayoutRefinements
         public Func<Guid, LayoutNodeMetrics?>? NodeMetricsProvider { get; set; }
 
         /// <summary>
-        /// Enables the port-alignment pass: each source is moved so its wire enters the
-        /// target's specific input port horizontally, using real port bounds deltas.
+        /// Aligns measured input/output leaves and compatible chains. Final alignment
+        /// groups preserve authored anchors, node separation and horizontal wire corridors.
         /// </summary>
         public bool AlignToPorts { get; set; } = true;
 

@@ -160,6 +160,12 @@ below existing canvas content; it never shifts supplied pivots. `Offset`, when e
 still an intentional translation. AI-generated new definitions should omit pivots
 entirely; imported documents can retain their authored coordinates.
 
+Measured single-connection input/output leaves align to their occupied wire grips.
+Compatible chains retain alignment as rigid vertical groups after fixed anchors
+are fitted. Node separation, fixed pivots, and clear horizontal-wire corridors
+take priority when exact alignment is impossible. Hosts may provide named-port
+index maps through `LayoutNodeMetrics`; explicit parameter indices take precedence.
+
 Set `UpdateExistingByInstanceGuid` to update objects in place: when a component's
 `instanceGuid` matches an object already on the canvas, the incoming state is
 applied to that object instead of placing a duplicate. The object keeps its

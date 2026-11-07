@@ -108,20 +108,27 @@ namespace GhJSON.Grasshopper.LayoutRefinements
                 var kind = LayoutNodeKind.Other;
                 IReadOnlyList<float>? inputDeltas = null;
                 IReadOnlyList<float>? outputDeltas = null;
+                IReadOnlyDictionary<string, int>? inputIndices = null;
+                IReadOnlyDictionary<string, int>? outputIndices = null;
 
                 if (obj is IGH_Component component)
                 {
                     kind = LayoutNodeKind.Component;
                     var centerY = PivotSemantics.BoundsCenter(obj.Attributes.Bounds).Y;
-                    inputDeltas = PortDeltas(component.Params.Input, centerY);
-                    outputDeltas = PortDeltas(component.Params.Output, centerY);
+                    inputDeltas = PortDeltas(component.Params.Input, centerY, true);
+                    outputDeltas = PortDeltas(component.Params.Output, centerY, false);
+                    inputIndices = PortIndices(component.Params.Input);
+                    outputIndices = PortIndices(component.Params.Output);
                 }
-                else if (obj is IGH_Param)
+                else if (obj is IGH_Param parameter)
                 {
                     kind = LayoutNodeKind.Parameter;
+                    var centerY = PivotSemantics.BoundsCenter(obj.Attributes.Bounds).Y;
+                    inputDeltas = new[] { PortDelta(parameter, centerY, true) };
+                    outputDeltas = new[] { PortDelta(parameter, centerY, false) };
                 }
 
-                return new LayoutNodeMetrics(size, kind, inputDeltas, outputDeltas);
+                return new LayoutNodeMetrics(size, kind, inputDeltas, outputDeltas, inputIndices, outputIndices);
             }
             catch
             {
@@ -131,22 +138,73 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         }
 
         /// <summary>
-        /// Vertical offset from the node's bounds center to each port's bounds center,
+        /// Vertical offset from the node's bounds center to each occupied wire grip,
         /// in the same order as the component's parameter list. Ports without rendered
         /// attributes contribute a zero delta, matching the refinement contract.
         /// </summary>
-        private static IReadOnlyList<float> PortDeltas(IList<IGH_Param> parameters, float centerY)
+        private static IReadOnlyList<float> PortDeltas(IList<IGH_Param> parameters, float centerY, bool input)
         {
             var deltas = new float[parameters.Count];
             for (var i = 0; i < parameters.Count; i++)
             {
-                var param = parameters[i];
-                deltas[i] = param?.Attributes != null
-                    ? PivotSemantics.BoundsCenter(param.Attributes.Bounds).Y - centerY
-                    : 0f;
+                deltas[i] = PortDelta(parameters[i], centerY, input);
             }
 
             return deltas;
+        }
+
+        /// <summary>Measures actual wire grips, retaining bounds-based fallback for custom attributes.</summary>
+        private static float PortDelta(IGH_Param? parameter, float centerY, bool input)
+        {
+            var attributes = parameter?.Attributes;
+            if (attributes == null)
+            {
+                return 0f;
+            }
+
+            if (input ? attributes.HasInputGrip : attributes.HasOutputGrip)
+            {
+                return (input ? attributes.InputGrip.Y : attributes.OutputGrip.Y) - centerY;
+            }
+
+            return PivotSemantics.BoundsCenter(attributes.Bounds).Y - centerY;
+        }
+
+        /// <summary>Prefers full names, then unambiguous nicknames, without guessing aliases.</summary>
+        private static IReadOnlyDictionary<string, int> PortIndices(IList<IGH_Param> parameters)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var fullNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (var pass = 0; pass < 2; pass++)
+            {
+                for (var i = 0; i < parameters.Count; i++)
+                {
+                    var name = pass == 0 ? parameters[i]?.Name : parameters[i]?.NickName;
+                    if (string.IsNullOrEmpty(name) || ambiguous.Contains(name) ||
+                        (pass == 1 && fullNames.Contains(name)))
+                    {
+                        continue;
+                    }
+
+                    if (pass == 0)
+                    {
+                        fullNames.Add(name);
+                    }
+
+                    if (result.TryGetValue(name, out var previous) && previous != i)
+                    {
+                        result.Remove(name);
+                        ambiguous.Add(name);
+                    }
+                    else
+                    {
+                        result[name] = i;
+                    }
+                }
+            }
+
+            return result;
         }
 
         private static IGH_DocumentObject? ResolveProvidedObject(

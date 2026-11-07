@@ -70,27 +70,9 @@ namespace GhJSON.Grasshopper.PutOperations
                 SkipInvalidComponents = options.SkipInvalidComponents
             };
 
-            // Calculate effective offset
+            // Only an explicitly requested translation may change authored pivots.
+            // AutoOffset applies exclusively to components without a pivot.
             var effectiveOffset = options.Offset;
-            var hasPivots = document.Components.Any(c => c.Pivot != null);
-
-            if (hasPivots && options.AutoOffset && options.Offset.X == 0 && options.Offset.Y == 0)
-            {
-                var autoOffset = CalculateAutoOffset(document.Components, ghDoc, options.AutoOffsetSpacing);
-                if (autoOffset != PointF.Empty)
-                {
-                    effectiveOffset = autoOffset;
-#if DEBUG
-                    Debug.WriteLine($"[CanvasPlacer.Put] Using auto-calculated offset: ({effectiveOffset.X:F2}, {effectiveOffset.Y:F2})");
-#endif
-                }
-            }
-#if DEBUG
-            else if (options.Offset.X != 0 || options.Offset.Y != 0)
-            {
-                Debug.WriteLine($"[CanvasPlacer.Put] Using explicit offset: ({effectiveOffset.X:F2}, {effectiveOffset.Y:F2})");
-            }
-#endif
 
             // Place components
             var idToObject = new Dictionary<int, IGH_DocumentObject>();
@@ -205,9 +187,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
             // Phase 2: calculate positions for components without pivots using dependency
             // graph layout, measured against the freshly instantiated objects' bounds.
-            var layoutPositions = hasPivots
-                ? new Dictionary<Guid, PointF>()
-                : CalculateLayoutPositions(document, ghDoc, options.AutoOffsetSpacing, placed);
+            var layoutPositions = CalculateLayoutPositions(document, ghDoc, options, placed, replacedPivots);
 
             // Phase 3: assign pivots and add the objects to the document.
             foreach (var (component, obj, replaces) in placed)
@@ -244,7 +224,9 @@ namespace GhJSON.Grasshopper.PutOperations
                         // Layout positions are bounds centers; convert to this object's
                         // pivot semantics (components pivot at center, sliders/panels at
                         // their top-left corner).
-                        obj.Attributes.Pivot = PivotSemantics.CenterToPivot(obj, calculatedPosition);
+                        obj.Attributes.Pivot = PivotSemantics.CenterToPivot(
+                            obj,
+                            new PointF(calculatedPosition.X + effectiveOffset.X, calculatedPosition.Y + effectiveOffset.Y));
 #if DEBUG
                         Debug.WriteLine($"[CanvasPlacer.Put] Applied layout position for '{component.Name}': ({calculatedPosition.X:F2}, {calculatedPosition.Y:F2})");
 #endif
@@ -526,15 +508,26 @@ namespace GhJSON.Grasshopper.PutOperations
         /// </summary>
         /// <param name="document">The GhJSON document.</param>
         /// <param name="ghDoc">The Grasshopper document.</param>
-        /// <param name="spacing">Vertical spacing to add below existing content.</param>
+        /// <param name="options">Placement options, including automatic offset for missing pivots.</param>
         /// <param name="placed">Freshly instantiated (not yet added) objects, measured for real bounds.</param>
+        /// <param name="replacedPivots">Preserved pivots of objects being replaced in place.</param>
         /// <returns>Dictionary mapping instance GUID to calculated position.</returns>
         private static Dictionary<Guid, PointF> CalculateLayoutPositions(
             GhJsonDocument document,
             GH_Document ghDoc,
-            float spacing,
-            IReadOnlyList<(GhJsonComponent Component, IGH_DocumentObject Obj, IGH_DocumentObject? Replaces)> placed)
+            PutOptions options,
+            IReadOnlyList<(GhJsonComponent Component, IGH_DocumentObject Obj, IGH_DocumentObject? Replaces)> placed,
+            IReadOnlyDictionary<Guid, PointF?> replacedPivots)
         {
+            var unpositioned = placed
+                .Where(entry => entry.Component.Pivot == null && entry.Replaces == null)
+                .Select(entry => entry.Component)
+                .ToList();
+            if (unpositioned.Count == 0)
+            {
+                return new Dictionary<Guid, PointF>();
+            }
+
             // Real bounds come from the freshly instantiated objects first; anything not
             // measurable there falls back to a live canvas lookup (e.g. objects sharing
             // instance GUIDs with the incoming document).
@@ -570,14 +563,34 @@ namespace GhJSON.Grasshopper.PutOperations
             // collision avoidance). The same measured-bounds and object providers feed
             // every stage so freshly instantiated objects — not yet on the canvas —
             // still contribute their real geometry.
-            var refinedPositions = GhJsonGrasshopper.ComputeLayout(document, new CanvasLayoutOptions
+            var fixedPositions = new Dictionary<Guid, PointF>();
+            foreach (var component in document.Components.Where(c => !unpositioned.Contains(c)))
+            {
+                var key = Core.GhJson.GetLayoutKey(component);
+                var obj = objectProvider(key);
+                if (obj != null)
+                {
+                    fixedPositions[key] = component.Pivot == null &&
+                                          replacedPivots.TryGetValue(obj.InstanceGuid, out var previousPivot) &&
+                                          previousPivot.HasValue
+                        ? PivotSemantics.PivotToCenter(obj, previousPivot.Value)
+                        : PivotSemantics.BoundsCenter(obj);
+                }
+            }
+
+            var startY = options.AutoOffset
+                ? CanvasBoundsCalculator.CalculateBottomStartY(ghDoc.ActiveObjects(), options.AutoOffsetSpacing)
+                : 0f;
+            return GhJsonGrasshopper.ComputeLayout(document, new CanvasLayoutOptions
             {
                 NodeSizeProvider = sizeProvider,
                 ObjectProvider = objectProvider,
+                Refinements = new LayoutRefinementOptions
+                {
+                    FixedPositions = fixedPositions,
+                    UnanchoredOffset = new PointF(0f, startY),
+                },
             });
-
-            // Offset positions to place below existing canvas content
-            return OffsetPositionsBelowExistingContent(refinedPositions, ghDoc, spacing);
         }
 
         /// <summary>
@@ -625,84 +638,5 @@ namespace GhJSON.Grasshopper.PutOperations
             return ComponentInstantiator.Resolve(component)?.Guid == existing.ComponentGuid;
         }
 
-        /// <summary>
-        /// Offsets calculated positions to place them below existing canvas content.
-        /// </summary>
-        private static Dictionary<Guid, PointF> OffsetPositionsBelowExistingContent(
-            Dictionary<Guid, PointF> positions,
-            GH_Document ghDoc,
-            float spacing)
-        {
-            var existingObjects = ghDoc.ActiveObjects().ToList();
-            float startY = CanvasBoundsCalculator.CalculateBottomStartY(existingObjects, spacing);
-
-            var offsetPositions = new Dictionary<Guid, PointF>(positions.Count);
-            foreach (var kvp in positions)
-            {
-                offsetPositions[kvp.Key] = new PointF(kvp.Value.X, kvp.Value.Y + startY);
-            }
-
-#if DEBUG
-            Debug.WriteLine($"[CanvasPlacer.CalculateLayoutPositions] Calculated {offsetPositions.Count} positions starting at Y={startY:F2}");
-#endif
-
-            return offsetPositions;
-        }
-
-        /// <summary>
-        /// Calculates automatic offset to place new components below existing canvas content.
-        /// </summary>
-        /// <param name="components">The components to be placed.</param>
-        /// <param name="ghDoc">The Grasshopper document.</param>
-        /// <param name="spacing">Vertical spacing between existing content and new components.</param>
-        /// <returns>The calculated offset, or PointF.Empty if canvas is empty or no pivots exist.</returns>
-        private static PointF CalculateAutoOffset(
-            IReadOnlyList<GhJsonComponent> components,
-            GH_Document ghDoc,
-            float spacing)
-        {
-            // Find components that have pivots
-            var componentsWithPivots = components.Where(c => c.Pivot != null).ToList();
-            if (componentsWithPivots.Count == 0)
-            {
-#if DEBUG
-                Debug.WriteLine("[CanvasPlacer.CalculateAutoOffset] No components with pivots, skipping auto-offset");
-#endif
-                return PointF.Empty;
-            }
-
-            // Calculate bounds of existing canvas content
-            var existingObjects = ghDoc.ActiveObjects().ToList();
-            var bounds = CanvasBoundsCalculator.CalculateBounds(existingObjects);
-            
-            if (bounds.IsEmpty)
-            {
-#if DEBUG
-                Debug.WriteLine("[CanvasPlacer.CalculateAutoOffset] Canvas is empty, no offset needed");
-#endif
-                return PointF.Empty;
-            }
-
-            float lowestY = bounds.LowestY + spacing;
-
-            // Find the topmost Y coordinate among new components
-            float minComponentY = float.MaxValue;
-            foreach (var component in componentsWithPivots)
-            {
-                if (component.Pivot!.Y < minComponentY)
-                {
-                    minComponentY = (float)component.Pivot.Y;
-                }
-            }
-
-            // Calculate offset to align topmost new component with lowestY
-            float offsetY = lowestY - minComponentY;
-
-#if DEBUG
-            Debug.WriteLine($"[CanvasPlacer.CalculateAutoOffset] Calculated offset: (0, {offsetY:F2}) - lowestY={lowestY:F2}, minComponentY={minComponentY:F2}, spacing={spacing}");
-#endif
-
-            return new PointF(0, offsetY);
-        }
     }
 }

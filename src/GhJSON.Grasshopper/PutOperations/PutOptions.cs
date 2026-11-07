@@ -73,9 +73,9 @@ namespace GhJSON.Grasshopper.PutOperations
         public bool SkipInvalidComponents { get; set; } = true;
 
         /// <summary>
-        /// Gets or sets a value indicating whether to automatically calculate offset
-        /// to place new components below existing canvas content.
-        /// When true and Offset is (0,0), the offset will be calculated automatically.
+        /// Gets or sets whether disconnected parts without fixed anchors are placed
+        /// below existing canvas content. Connected pivotless components are laid out
+        /// relative to their fixed neighbors. Supplied pivots are never changed.
         /// </summary>
         public bool AutoOffset { get; set; } = true;
 

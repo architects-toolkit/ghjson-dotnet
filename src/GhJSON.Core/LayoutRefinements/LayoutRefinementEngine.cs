@@ -110,7 +110,8 @@ namespace GhJSON.Core.LayoutRefinements
                     {
                         positions = CollisionResolver.AvoidCollisions(
                             positions,
-                            options.NodeMetricsProvider);
+                            options.NodeMetricsProvider,
+                            options.SpacingY);
                     }
 
                     positions = Round(positions);
@@ -122,7 +123,9 @@ namespace GhJSON.Core.LayoutRefinements
                 }
             }
 
-            return positions;
+            return options.FixedPositions != null
+                ? AnchoredPlacement.Apply(positions, document, options)
+                : positions;
         }
 
         /// <summary>

@@ -16,6 +16,8 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Drawing;
 
 namespace GhJSON.Core.LayoutRefinements
 {
@@ -28,11 +30,23 @@ namespace GhJSON.Core.LayoutRefinements
     /// The options are host-independent: every measurement-based pass resolves node
     /// geometry through <see cref="NodeMetricsProvider"/>. Hosts supply the provider —
     /// GhJSON.Grasshopper composes one from canvas objects; headless callers can feed
-    /// metrics computed by any other means. With no provider set the passes degrade to
-    /// no-ops.
+    /// metrics computed by any other means. With no provider set, measurement-based
+    /// passes are no-ops; optional anchor fitting can still use default node sizes.
     /// </remarks>
     public class LayoutRefinementOptions
     {
+        /// <summary>
+        /// Optional fixed bounds centers for placement. Connected pivotless nodes are
+        /// positioned relative to these anchors; explicit tidy-up leaves this unset.
+        /// </summary>
+        public IReadOnlyDictionary<Guid, PointF>? FixedPositions { get; set; }
+
+        /// <summary>
+        /// Placement origin for disconnected subgraphs without a fixed anchor.
+        /// Never translates fixed objects or their connected neighbors.
+        /// </summary>
+        public PointF UnanchoredOffset { get; set; }
+
         /// <summary>
         /// Enables the per-island re-spacing pass that sizes each column and row from
         /// its members' measured bounds.
@@ -62,13 +76,13 @@ namespace GhJSON.Core.LayoutRefinements
         /// Horizontal gap between a column's right edge and the next column's left edge.
         /// Mirrors <see cref="GhJSON.Core.DependencyGraph.LayoutOptions.SpacingX"/>.
         /// </summary>
-        public float SpacingX { get; set; } = 80f;
+        public float SpacingX { get; set; } = DependencyGraph.LayoutOptions.DefaultSpacingX;
 
         /// <summary>
         /// Vertical gap between consecutive rows: the bottom edge of a row's tallest node
         /// to the top edge of the next row's nodes.
         /// </summary>
-        public float SpacingY { get; set; } = 28f;
+        public float SpacingY { get; set; } = DependencyGraph.LayoutOptions.DefaultSpacingY;
 
         /// <summary>
         /// Reserves a clear corridor around wires that skip one or more columns so they

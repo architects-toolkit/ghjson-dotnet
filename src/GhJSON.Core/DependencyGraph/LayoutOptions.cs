@@ -23,23 +23,29 @@ namespace GhJSON.Core.DependencyGraph
 {
     public sealed class LayoutOptions
     {
+        /// <summary>Shared horizontal edge gap for layout and refinements.</summary>
+        internal const float DefaultSpacingX = 28f;
+
+        /// <summary>Shared vertical edge gap for layout and refinements.</summary>
+        internal const float DefaultSpacingY = 28f;
+
         public LayoutAlgorithm Algorithm { get; set; } = LayoutAlgorithm.Sugiyama;
 
         /// <summary>
         /// Horizontal gap between a column's right edge and the next column's left edge.
         /// </summary>
-        public float SpacingX { get; set; } = 80f;
+        public float SpacingX { get; set; } = DefaultSpacingX;
 
         /// <summary>
         /// Vertical gap between consecutive rows: the bottom edge of a row's tallest node
         /// to the top edge of the next row's nodes.
         /// </summary>
-        public float SpacingY { get; set; } = 28f;
+        public float SpacingY { get; set; } = DefaultSpacingY;
 
         /// <summary>
         /// Vertical gap between shelves when packing disconnected islands.
         /// </summary>
-        public float IslandSpacingY { get; set; } = 100f;
+        public float IslandSpacingY { get; set; } = 48f;
 
         public bool PreserveIslandOrder { get; set; } = false;
 

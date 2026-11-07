@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using GhJSON.Core.DependencyGraph;
 using GhJSON.Core.LayoutRefinements;
 using GhJSON.Core.SchemaModels;
 using Xunit;
@@ -30,6 +31,46 @@ namespace GhJSON.Core.Tests.LayoutRefinements
     /// </summary>
     public class LayoutRefinementEngineTests
     {
+        [Fact]
+        public void DefaultSpacing_IsSharedWithCoreLayout()
+        {
+            Assert.Equal(LayoutOptions.Default.SpacingX, LayoutRefinementOptions.Default.SpacingX);
+            Assert.Equal(LayoutOptions.Default.SpacingY, LayoutRefinementOptions.Default.SpacingY);
+        }
+
+        [Fact]
+        public void CompactChain_UsesShortGapsAndAlignsPortsDeterministically()
+        {
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Input", Id = 1 })
+                .AddComponent(new GhJsonComponent { Name = "Operation", Id = 2 })
+                .AddComponent(new GhJsonComponent { Name = "Output", Id = 3 })
+                .AddConnection(Connect(1, 0, 2, 0))
+                .AddConnection(Connect(2, 0, 3, 0))
+                .Build();
+            var input = GhJson.GetLayoutKey(doc.Components[0]);
+            var operation = GhJson.GetLayoutKey(doc.Components[1]);
+            var output = GhJson.GetLayoutKey(doc.Components[2]);
+            var metrics = MetricsProviders.Of(new Dictionary<Guid, LayoutNodeMetrics>
+            {
+                [input] = MetricsProviders.Parameter(140f, 60f),
+                [operation] = MetricsProviders.Component(80f, 100f, new[] { -20f }, new[] { -10f }),
+                [output] = MetricsProviders.Parameter(140f, 60f),
+            });
+            var options = new LayoutOptions { NodeSizeProvider = key => metrics(key)?.Size };
+            var refinements = new LayoutRefinementOptions { NodeMetricsProvider = metrics };
+
+            var first = LayoutRefinementEngine.ApplyRefinements(GhJson.CalculateLayout(doc, options), doc, refinements);
+            var repeated = LayoutRefinementEngine.ApplyRefinements(GhJson.CalculateLayout(doc, options), doc, refinements);
+
+            Assert.Equal(28f, first[operation].X - 40f - (first[input].X + 70f));
+            Assert.Equal(28f, first[output].X - 70f - (first[operation].X + 40f));
+            Assert.Equal(first[operation].Y - 20f, first[input].Y);
+            Assert.Equal(first[operation].Y - 10f, first[output].Y);
+            Assert.Equal(first, repeated);
+            Assert.All(doc.Components, component => Assert.Null(component.Pivot));
+        }
+
         private static GhJsonConnection Connect(int fromId, int outIndex, int toId, int inIndex)
         {
             return new GhJsonConnection

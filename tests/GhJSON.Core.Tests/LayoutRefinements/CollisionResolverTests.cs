@@ -47,7 +47,7 @@ namespace GhJSON.Core.Tests.LayoutRefinements
         public void AvoidCollisions_OverlappingColumn_PushesLowerNodeDown()
         {
             // g1 occupies -50..50; g2 (50 tall) starts at y=60 so its top (35) overlaps.
-            // g2 moves to top = 50 + 20 padding → center 70 + 25 = 95.
+            // g2 moves to top = 50 + 28 padding → center 78 + 25 = 103.
             var g1 = Guid.NewGuid();
             var g2 = Guid.NewGuid();
             var positions = new Dictionary<Guid, PointF>
@@ -64,7 +64,7 @@ namespace GhJSON.Core.Tests.LayoutRefinements
             var result = CollisionResolver.AvoidCollisions(positions, metrics);
 
             Assert.Equal(0f, result[g1].Y);
-            Assert.Equal(95f, result[g2].Y);
+            Assert.Equal(103f, result[g2].Y);
         }
 
         [Fact]
@@ -90,7 +90,30 @@ namespace GhJSON.Core.Tests.LayoutRefinements
             var result = CollisionResolver.AvoidCollisions(positions, metrics);
 
             Assert.Equal(40f, result[ghost].Y);
-            Assert.Equal(95f, result[g2].Y);
+            Assert.Equal(103f, result[g2].Y);
+        }
+
+        [Theory]
+        [InlineData(8f)]
+        [InlineData(28f)]
+        public void AvoidCollisions_UsesConfiguredSpacing(float spacing)
+        {
+            var first = Guid.NewGuid();
+            var second = Guid.NewGuid();
+            var metrics = MetricsProviders.Of(new Dictionary<Guid, LayoutNodeMetrics>
+            {
+                [first] = MetricsProviders.Component(100f, 60f),
+                [second] = MetricsProviders.Component(100f, 60f),
+            });
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [first] = new PointF(0f, 0f),
+                [second] = new PointF(0f, 10f),
+            };
+
+            var result = CollisionResolver.AvoidCollisions(positions, metrics, spacing);
+
+            Assert.Equal(60f + spacing, result[second].Y - result[first].Y);
         }
 
         [Fact]

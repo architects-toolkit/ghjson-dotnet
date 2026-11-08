@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An additive `LayoutNodeMetrics` overload and optional named-port index maps for
   host-independent constraint fitting. The original constructor remains available.
 
+### Fixed
+
+- Off-canvas objects reported Grasshopper's stock (0,0,150,20) attribute bounds:
+  components only compute real bounds and grip positions during a layout pass.
+  `CanvasNodeSizeProvider` now runs `PerformLayout()` before measuring, so
+  spacing and port alignment reflect the rendered object.
+
 ## [1.3.4] - 2026-11-05
 
 ### Added

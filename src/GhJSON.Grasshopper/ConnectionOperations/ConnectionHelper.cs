@@ -18,6 +18,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using GhJSON.Core.NameResolution;
+using GhJSON.Core.SchemaModels;
 using Grasshopper.Kernel;
 
 namespace GhJSON.Grasshopper.ConnectionOperations
@@ -141,6 +143,52 @@ namespace GhJSON.Grasshopper.ConnectionOperations
             if (paramIndex.HasValue && paramIndex.Value >= 0 && paramIndex.Value < parameters.Count)
             {
                 return parameters[paramIndex.Value];
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves a connection endpoint to its concrete parameter on an object:
+        /// floating parameters resolve to themselves; components resolve by index,
+        /// then name/nickname, then the fuzzy name resolver.
+        /// </summary>
+        /// <param name="obj">The document object owning the parameter.</param>
+        /// <param name="endpoint">The connection endpoint carrying index and/or name.</param>
+        /// <param name="input">True to resolve an input parameter; false for output.</param>
+        /// <returns>The resolved parameter, or null when it cannot be identified.</returns>
+        public static IGH_Param? ResolveEndpointParam(IGH_DocumentObject obj, GhJsonConnectionEndpoint endpoint, bool input)
+        {
+            if (obj is IGH_Param param)
+            {
+                return param;
+            }
+
+            if (obj is not IGH_Component comp)
+            {
+                return null;
+            }
+
+            var parameters = input ? comp.Params.Input : comp.Params.Output;
+            if (parameters == null || parameters.Count == 0)
+            {
+                return null;
+            }
+
+            var matched = FindParamByIndexNameOrNickName(parameters, endpoint.ParamName, endpoint.ParamIndex);
+            if (matched != null)
+            {
+                return matched;
+            }
+
+            if (!string.IsNullOrEmpty(endpoint.ParamName))
+            {
+                var resolved = ParameterNameResolver.Resolve(endpoint.ParamName, parameters.Select(p => p.Name));
+                if (resolved != null)
+                {
+                    return parameters.FirstOrDefault(p =>
+                        p.Name.Equals(resolved, StringComparison.OrdinalIgnoreCase));
+                }
             }
 
             return null;

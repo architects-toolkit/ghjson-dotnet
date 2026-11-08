@@ -409,6 +409,23 @@ namespace GhJSON.Core.Tests.LayoutRefinements
             Assert.Equal(first, second);
         }
 
+        [Fact]
+        public void AsymmetricLeafHeights_OutputLeafStillAlignsToItsPort()
+        {
+            // Live canvas geometry: Panel(195x34) -> Addition(65x44, two inputs) -> Panel(195x55).
+            var f = new Fixture(3);
+            f.Metrics[f.Key(1)] = MetricsProviders.Parameter(195f, 34f);
+            f.Metrics[f.Key(2)] = MetricsProviders.Component(65f, 44f, new[] { -11f, 11f }, new[] { 0f });
+            f.Metrics[f.Key(3)] = MetricsProviders.Parameter(195f, 55f);
+            f.Connect(1, 2);
+            f.Connect(2, 3);
+
+            var result = f.Pipeline();
+
+            Assert.Equal(result[f.Key(2)].Y - 11f, result[f.Key(1)].Y);
+            Assert.Equal(result[f.Key(2)].Y, result[f.Key(3)].Y);
+        }
+
         /// <summary>Supplies stable keys, measured nodes, authored anchors and real document edges.</summary>
         private sealed class Fixture
         {

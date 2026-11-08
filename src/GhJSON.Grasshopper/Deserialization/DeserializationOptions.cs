@@ -46,5 +46,20 @@ namespace GhJSON.Grasshopper.Deserialization
         /// Gets or sets a value indicating whether to skip invalid components.
         /// </summary>
         public bool SkipInvalidComponents { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the declared connections are wired
+        /// between the returned (off-canvas) objects. Wired floating parameters render
+        /// taller than unwired ones, so measurement consumers that need placement-time
+        /// fidelity should enable this.
+        /// </summary>
+        public bool WireConnections { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether <c>Attributes.PerformLayout()</c>
+        /// runs on each returned object so <c>Bounds</c> and port grips reflect real
+        /// geometry instead of Grasshopper's stock attribute rectangle.
+        /// </summary>
+        public bool PerformLayout { get; set; } = false;
     }
 }

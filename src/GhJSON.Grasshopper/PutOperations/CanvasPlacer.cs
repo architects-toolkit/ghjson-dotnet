@@ -396,46 +396,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
         private static IGH_Param? GetParameter(IGH_DocumentObject obj, GhJsonConnectionEndpoint endpoint, bool isInput)
         {
-            IList<IGH_Param>? parameters = null;
-
-            if (obj is IGH_Component comp)
-            {
-                parameters = isInput ? comp.Params.Input : comp.Params.Output;
-            }
-            else if (obj is IGH_Param param)
-            {
-                // For floating parameters, return the param itself
-                return param;
-            }
-
-            if (parameters == null || parameters.Count == 0)
-            {
-                return null;
-            }
-
-            // Try index first, then name/nickname via shared helper
-            var matchedParam = ConnectionHelper.FindParamByIndexNameOrNickName(parameters, endpoint.ParamName, endpoint.ParamIndex);
-            if (matchedParam != null)
-            {
-                return matchedParam;
-            }
-
-            // Fuzzy name resolution fallback
-            if (!string.IsNullOrEmpty(endpoint.ParamName))
-            {
-                var knownNames = parameters.Select(p => p.Name);
-                var resolvedName = ParameterNameResolver.Resolve(endpoint.ParamName, knownNames);
-                if (resolvedName != null)
-                {
-#if DEBUG
-                    Debug.WriteLine($"[CanvasPlacer.GetParameter] Fuzzy resolved param '{endpoint.ParamName}' \u2192 '{resolvedName}'");
-#endif
-                    return parameters.FirstOrDefault(p =>
-                        p.Name.Equals(resolvedName, StringComparison.OrdinalIgnoreCase));
-                }
-            }
-
-            return null;
+            return ConnectionHelper.ResolveEndpointParam(obj, endpoint, isInput);
         }
 
         private static GH_Group? CreateGroup(GhJsonGroup groupDef, Dictionary<int, IGH_DocumentObject> idToObject, GH_Document ghDoc)
@@ -538,6 +499,42 @@ namespace GhJSON.Grasshopper.PutOperations
                 if (key != Guid.Empty)
                 {
                     measuredByKey[key] = obj;
+                }
+            }
+
+            // Mirror the declared wiring on the placed (not yet added) objects so
+            // measured bounds reflect the connected state — a wired floating
+            // parameter renders taller than an unwired one. The real wiring pass
+            // deduplicates already-linked sources.
+            var placedById = new Dictionary<int, IGH_DocumentObject>(placed.Count);
+            foreach (var (component, obj, _) in placed)
+            {
+                if (component.Id.HasValue)
+                {
+                    placedById[component.Id.Value] = obj;
+                }
+            }
+
+            foreach (var connection in document.Connections ?? Enumerable.Empty<GhJsonConnection>())
+            {
+                try
+                {
+                    if (!placedById.TryGetValue(connection.From.Id, out var fromObj) ||
+                        !placedById.TryGetValue(connection.To.Id, out var toObj))
+                    {
+                        continue;
+                    }
+
+                    var sourceParam = GetParameter(fromObj, connection.From, isInput: false);
+                    var targetParam = GetParameter(toObj, connection.To, isInput: true);
+                    if (sourceParam != null && targetParam != null && !targetParam.Sources.Contains(sourceParam))
+                    {
+                        targetParam.AddSource(sourceParam);
+                    }
+                }
+                catch
+                {
+                    // Measure wiring is best-effort; unresolved endpoints are skipped.
                 }
             }
 

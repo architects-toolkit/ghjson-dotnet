@@ -108,6 +108,12 @@ namespace GhJSON.Grasshopper.LayoutRefinements
         {
             try
             {
+                // Objects that have never been added to a document keep Grasshopper's
+                // stock (0,0,150,20) attribute bounds: components only compute real
+                // bounds during a layout pass. Force one so measurement reflects the
+                // rendered size; the call is idempotent for live objects.
+                obj?.Attributes?.PerformLayout();
+
                 var bounds = obj?.Attributes?.Bounds;
                 if (bounds.HasValue && bounds.Value.Width > 0f && bounds.Value.Height > 0f)
                 {

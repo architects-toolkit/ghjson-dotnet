@@ -130,6 +130,52 @@ namespace GhJSON.Grasshopper
                 }
             }
 
+            // Mirror the declared wiring on the off-canvas objects so attribute
+            // bounds and grips reflect the connected state — a wired floating
+            // parameter renders taller than an unwired one.
+            if (options.WireConnections && document.Connections != null)
+            {
+                foreach (var connection in document.Connections)
+                {
+                    try
+                    {
+                        if (!result.IdToObjectMapping.TryGetValue(connection.From.Id, out var fromObj) ||
+                            !result.IdToObjectMapping.TryGetValue(connection.To.Id, out var toObj))
+                        {
+                            continue;
+                        }
+
+                        var source = ConnectionHelper.ResolveEndpointParam(fromObj, connection.From, input: false);
+                        var target = ConnectionHelper.ResolveEndpointParam(toObj, connection.To, input: true);
+                        if (source != null && target != null && !target.Sources.Contains(source))
+                        {
+                            target.AddSource(source);
+                        }
+                    }
+                    catch
+                    {
+                        // Measure wiring is best-effort; unresolved endpoints are skipped.
+                    }
+                }
+            }
+
+            // Off-canvas objects keep Grasshopper's stock attribute bounds until a
+            // layout pass runs; materialize real bounds and grip positions.
+            if (options.PerformLayout)
+            {
+                foreach (var obj in result.Objects)
+                {
+                    try
+                    {
+                        obj.Attributes?.PerformLayout();
+                    }
+                    catch
+                    {
+                        // Objects without a fully initialized UI keep their stock bounds.
+                    }
+                }
+            }
+
             return result;
         }
 

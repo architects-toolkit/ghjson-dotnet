@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   components only compute real bounds and grip positions during a layout pass.
   `CanvasNodeSizeProvider` now runs `PerformLayout()` before measuring, so
   spacing and port alignment reflect the rendered object.
+- Layout measurement now mirrors the declared wiring before computing positions:
+  `CanvasPlacer` wires placed objects, and `GhJsonGrasshopper.Deserialize`
+  exposes opt-in `WireConnections`/`PerformLayout` flags, so connected floating
+  parameters are measured at their rendered size — a wired panel renders taller
+  than an unwired one. Endpoint resolution is shared through
+  `ConnectionHelper.ResolveEndpointParam`.
 
 ## [1.3.4] - 2026-11-05
 

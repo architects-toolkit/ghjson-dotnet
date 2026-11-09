@@ -40,6 +40,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Measurement also applies the same connected-panel row reservation placement
   uses (`PanelHandler.ReserveDataRows`), so a wired output-leaf panel's port
   lands aligned instead of half a row below its source port.
+- `PivotHandler` now keeps attribute bounds consistent with a pivot it applies:
+  floating parameters store `Bounds` independently of `Pivot`, so a pivot
+  assigned off-canvas left the rectangle behind and every bounds-center lookup
+  resolved to the stale location — connected pivotless components then anchored
+  to the origin instead of the authored pivot.
+- Connection endpoints that only carry a `paramName` now resolve through the
+  component's declared `inputSettings`/`outputSettings` (name, then nickname)
+  when the core dependency graph assigns port indices; endpoints that still
+  resolve to nothing fall back to distinct declaration-order slots. Sibling
+  sources feeding different ports no longer collapse to identical positions,
+  which previously stacked them in arbitrary key order and produced crossing
+  wires.
 
 ## [1.3.4] - 2026-11-05
 

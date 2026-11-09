@@ -56,6 +56,20 @@ namespace GhJSON.Core.DependencyGraph.Internal
                 }
             }
 
+            var componentById = new Dictionary<int, GhJsonComponent>();
+            foreach (var c in document.Components)
+            {
+                if (c.Id.HasValue && !componentById.ContainsKey(c.Id.Value))
+                {
+                    componentById[c.Id.Value] = c;
+                }
+            }
+
+            // When neither a declared index nor a settings match resolves a port, the
+            // connection's declaration order supplies each sibling endpoint a distinct
+            // slot — the only ordering signal an id-and-name-only document carries.
+            var inputSlots = new Dictionary<int, int>();
+            var outputSlots = new Dictionary<int, int>();
             foreach (var conn in document.Connections)
             {
                 if (idToGuidMap.TryGetValue(conn.From.Id, out var fromGuid) &&
@@ -64,10 +78,17 @@ namespace GhJSON.Core.DependencyGraph.Internal
                     if (nodeByKey.TryGetValue(toGuid, out var toNode) &&
                         nodeByKey.TryGetValue(fromGuid, out var fromNode))
                     {
-                        int inputIndex = conn.To.ParamIndex ?? -1;
+                        componentById.TryGetValue(conn.To.Id, out var toComponent);
+                        componentById.TryGetValue(conn.From.Id, out var fromComponent);
+
+                        int inputIndex = conn.To.ParamIndex
+                            ?? ResolveParamIndex(toComponent?.InputSettings, conn.To.ParamName)
+                            ?? NextSlot(inputSlots, conn.To.Id);
                         toNode.Parents[fromGuid] = inputIndex;
 
-                        int outputIndex = conn.From.ParamIndex ?? -1;
+                        int outputIndex = conn.From.ParamIndex
+                            ?? ResolveParamIndex(fromComponent?.OutputSettings, conn.From.ParamName)
+                            ?? NextSlot(outputSlots, conn.From.Id);
                         fromNode.Children[toGuid] = outputIndex;
                     }
                 }
@@ -84,6 +105,45 @@ namespace GhJSON.Core.DependencyGraph.Internal
             }
 
             return nodes;
+        }
+
+        /// <summary>
+        /// Resolves a connection endpoint's <c>paramName</c> to its position in the
+        /// component's declared parameter settings. Matches <c>parameterName</c> first,
+        /// then <c>nickName</c>, so documents that only carry names still feed the
+        /// port-aware ordering passes real indices instead of -1.
+        /// </summary>
+        private static int? ResolveParamIndex(IReadOnlyList<GhJsonParameterSettings>? settings, string? name)
+        {
+            if (settings == null || string.IsNullOrEmpty(name))
+            {
+                return null;
+            }
+
+            for (var i = 0; i < settings.Count; i++)
+            {
+                var setting = settings[i];
+                if (setting != null &&
+                    (string.Equals(setting.ParameterName, name, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(setting.NickName, name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return i;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the next unassigned port slot for a component id, in connection
+        /// declaration order. Distinct sibling endpoints get distinct slots so the
+        /// crossing minimizer can still rank their sources.
+        /// </summary>
+        private static int NextSlot(Dictionary<int, int> slots, int componentId)
+        {
+            slots.TryGetValue(componentId, out var next);
+            slots[componentId] = next + 1;
+            return next;
         }
 
         /// <summary>

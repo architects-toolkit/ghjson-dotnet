@@ -58,7 +58,30 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         {
             if (component.Pivot != null && obj.Attributes != null)
             {
-                obj.Attributes.Pivot = component.Pivot.ToPointF();
+                var boundsBefore = obj.Attributes.Bounds;
+                var pivotBefore = obj.Attributes.Pivot;
+                var newPivot = component.Pivot.ToPointF();
+                obj.Attributes.Pivot = newPivot;
+
+                // Some attribute types (floating parameters such as Param_Number) keep
+                // Bounds independent of Pivot: assigning the pivot leaves the stored
+                // rectangle where it was, so bounds-center measurements on off-canvas
+                // objects resolve to the stale location instead of the authored one.
+                // Re-anchor the stored bounds with the object's own pivot-to-center
+                // offset, which is consistent on a freshly instantiated object.
+                var boundsAfter = obj.Attributes.Bounds;
+                if (boundsBefore.Width > 0f && boundsBefore.Height > 0f &&
+                    (newPivot.X != pivotBefore.X || newPivot.Y != pivotBefore.Y) &&
+                    boundsAfter.Location == boundsBefore.Location)
+                {
+                    var centerOffsetX = (boundsBefore.Left + (boundsBefore.Width / 2f)) - pivotBefore.X;
+                    var centerOffsetY = (boundsBefore.Top + (boundsBefore.Height / 2f)) - pivotBefore.Y;
+                    obj.Attributes.Bounds = new RectangleF(
+                        (newPivot.X + centerOffsetX) - (boundsBefore.Width / 2f),
+                        (newPivot.Y + centerOffsetY) - (boundsBefore.Height / 2f),
+                        boundsBefore.Width,
+                        boundsBefore.Height);
+                }
             }
         }
     }

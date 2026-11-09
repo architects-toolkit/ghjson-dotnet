@@ -245,6 +245,48 @@ namespace GhJSON.Core.Tests.DependencyGraph
         }
 
         [Fact]
+        public void CalculateLayout_MergeNicknamesOrderSourcesByPort()
+        {
+            // Exact live repro: three Numbers feeding a Merge's D1/D2/D3 inputs via
+            // nickName-only endpoints, with InputSettings declaring real names.
+            var guidD1Src = Guid.NewGuid();
+            var guidD2Src = Guid.NewGuid();
+            var guidD3Src = Guid.NewGuid();
+            var guidMerge = Guid.NewGuid();
+            var guidPanel = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 1, InstanceGuid = guidD2Src })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 2, InstanceGuid = guidD1Src })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 3, InstanceGuid = guidD3Src })
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Merge",
+                    Id = 4,
+                    InstanceGuid = guidMerge,
+                    InputSettings = new System.Collections.Generic.List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings { ParameterName = "Data 1", NickName = "D1" },
+                        new GhJsonParameterSettings { ParameterName = "Data 2", NickName = "D2" },
+                        new GhJsonParameterSettings { ParameterName = "Data 3", NickName = "D3" },
+                        new GhJsonParameterSettings { ParameterName = "Data 4", NickName = "D4" },
+                    },
+                })
+                .AddComponent(new GhJsonComponent { Name = "Panel", Id = 5, InstanceGuid = guidPanel })
+                .AddConnection(ConnectByName(1, 0, 4, "D2"))
+                .AddConnection(ConnectByName(2, 0, 4, "D1"))
+                .AddConnection(ConnectByName(3, 0, 4, "D3"))
+                .AddConnection(Connect(4, 0, 5, 0))
+                .Build();
+
+            var result = GhJson.CalculateLayout(doc);
+
+            Assert.True(
+                result.Positions[guidD1Src].Y < result.Positions[guidD2Src].Y &&
+                result.Positions[guidD2Src].Y < result.Positions[guidD3Src].Y,
+                $"D1's source must sit above D2's and D3's (D1={result.Positions[guidD1Src].Y}, D2={result.Positions[guidD2Src].Y}, D3={result.Positions[guidD3Src].Y})");
+        }
+
+        [Fact]
         public void CalculateLayout_SkipEdgePreservesPortRowsThroughDummy()
         {
             // A -> B -> C plus a skip edge A.out1 -> C.in1 (spanning two layers). The

@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameters are measured at their rendered size — a wired panel renders taller
   than an unwired one. Endpoint resolution is shared through
   `ConnectionHelper.ResolveEndpointParam`.
+- Measurement also applies the same connected-panel row reservation placement
+  uses (`PanelHandler.ReserveDataRows`), so a wired output-leaf panel's port
+  lands aligned instead of half a row below its source port.
 
 ## [1.3.4] - 2026-11-05
 

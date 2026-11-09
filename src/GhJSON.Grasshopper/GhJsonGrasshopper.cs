@@ -30,6 +30,7 @@ using GhJSON.Grasshopper.PutOperations;
 using GhJSON.Grasshopper.Serialization;
 using GhJSON.Grasshopper.Serialization.ObjectHandlers;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
 
 namespace GhJSON.Grasshopper
 {
@@ -155,6 +156,16 @@ namespace GhJSON.Grasshopper
                     catch
                     {
                         // Measure wiring is best-effort; unresolved endpoints are skipped.
+                    }
+                }
+
+                // Placement grows wired panels to fit streamed data rows; apply the
+                // same reservation so measured bounds match the placed result.
+                foreach (var obj in result.Objects)
+                {
+                    if (obj is GH_Panel panel)
+                    {
+                        PanelHandler.ReserveDataRows(panel);
                     }
                 }
             }

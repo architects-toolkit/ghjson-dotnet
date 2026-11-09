@@ -538,6 +538,16 @@ namespace GhJSON.Grasshopper.PutOperations
                 }
             }
 
+            // Placement grows wired panels to fit streamed data rows; apply the same
+            // reservation so measured bounds match the placed result.
+            foreach (var (_, obj, _) in placed)
+            {
+                if (obj is GH_Panel panel)
+                {
+                    PanelHandler.ReserveDataRows(panel);
+                }
+            }
+
             var canvasProvider = CanvasNodeSizeProvider.Create(ghDoc);
             Func<Guid, SizeF?> sizeProvider = guid =>
             {

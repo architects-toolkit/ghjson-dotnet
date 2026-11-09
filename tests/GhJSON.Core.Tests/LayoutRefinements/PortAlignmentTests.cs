@@ -39,6 +39,17 @@ namespace GhJSON.Core.Tests.LayoutRefinements
             };
         }
 
+        private static GhJsonConnection ConnectByName(int fromId, int toId, string inputName, string? outputName = null)
+        {
+            return new GhJsonConnection
+            {
+                From = outputName == null
+                    ? new GhJsonConnectionEndpoint { Id = fromId, ParamIndex = 0 }
+                    : new GhJsonConnectionEndpoint { Id = fromId, ParamName = outputName },
+                To = new GhJsonConnectionEndpoint { Id = toId, ParamName = inputName },
+            };
+        }
+
         [Fact]
         public void AlignToPorts_NoProvider_KeepsPositions()
         {
@@ -189,6 +200,150 @@ namespace GhJSON.Core.Tests.LayoutRefinements
             {
                 [source] = MetricsProviders.Parameter(80f, 20f),
                 [target] = MetricsProviders.Component(100f, 60f, inputDeltas: new[] { -12f, 12f }),
+            });
+
+            var result = PortAlignment.AlignToPorts(positions, doc, metrics);
+
+            Assert.Equal(100f, result[source].Y);
+        }
+
+        [Fact]
+        public void AlignToPorts_NamedInput_ResolvesPortDelta()
+        {
+            // A name-only endpoint resolves through the measured name→index map, so
+            // the source lands on its own port instead of voting for the target center.
+            var source = Guid.NewGuid();
+            var target = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "S", Id = 1, InstanceGuid = source })
+                .AddComponent(new GhJsonComponent { Name = "T", Id = 2, InstanceGuid = target })
+                .AddConnection(ConnectByName(1, 2, "D3"))
+                .Build();
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [source] = new PointF(0f, 50f),
+                [target] = new PointF(300f, 100f),
+            };
+            var metrics = MetricsProviders.Of(new Dictionary<Guid, LayoutNodeMetrics>
+            {
+                [source] = MetricsProviders.Parameter(80f, 20f),
+                [target] = MetricsProviders.Component(
+                    100f, 60f,
+                    inputDeltas: new[] { -21f, 0f, 21f },
+                    outputDeltas: null,
+                    inputIndices: new Dictionary<string, int> { ["D1"] = 0, ["D2"] = 1, ["D3"] = 2 },
+                    outputIndices: null),
+            });
+
+            var result = PortAlignment.AlignToPorts(positions, doc, metrics);
+
+            Assert.Equal(121f, result[source].Y);
+        }
+
+        [Fact]
+        public void AlignToPorts_NamedSources_KeepPortOrder()
+        {
+            // The live Merge repro: three sources declared in scrambled order feed
+            // D2/D1/D3 by name; each must land at its own port's height, not stack.
+            var sourceD1 = Guid.NewGuid();
+            var sourceD2 = Guid.NewGuid();
+            var sourceD3 = Guid.NewGuid();
+            var merge = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "S2", Id = 1, InstanceGuid = sourceD2 })
+                .AddComponent(new GhJsonComponent { Name = "S1", Id = 2, InstanceGuid = sourceD1 })
+                .AddComponent(new GhJsonComponent { Name = "S3", Id = 3, InstanceGuid = sourceD3 })
+                .AddComponent(new GhJsonComponent { Name = "M", Id = 4, InstanceGuid = merge })
+                .AddConnection(ConnectByName(1, 4, "D2"))
+                .AddConnection(ConnectByName(2, 4, "D1"))
+                .AddConnection(ConnectByName(3, 4, "D3"))
+                .Build();
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [sourceD2] = new PointF(0f, 50f),
+                [sourceD1] = new PointF(0f, 60f),
+                [sourceD3] = new PointF(0f, 70f),
+                [merge] = new PointF(300f, 100f),
+            };
+            var metrics = MetricsProviders.Of(new Dictionary<Guid, LayoutNodeMetrics>
+            {
+                [sourceD1] = MetricsProviders.Parameter(80f, 20f),
+                [sourceD2] = MetricsProviders.Parameter(80f, 20f),
+                [sourceD3] = MetricsProviders.Parameter(80f, 20f),
+                [merge] = MetricsProviders.Component(
+                    100f, 120f,
+                    inputDeltas: new[] { -33f, -11f, 11f, 33f },
+                    outputDeltas: new[] { 0f },
+                    inputIndices: new Dictionary<string, int> { ["D1"] = 0, ["D2"] = 1, ["D3"] = 2, ["D4"] = 3 },
+                    outputIndices: new Dictionary<string, int> { ["R"] = 0 }),
+            });
+
+            var result = PortAlignment.AlignToPorts(positions, doc, metrics);
+
+            Assert.Equal(67f, result[sourceD1].Y);
+            Assert.Equal(89f, result[sourceD2].Y);
+            Assert.Equal(111f, result[sourceD3].Y);
+        }
+
+        [Fact]
+        public void AlignToPorts_NamedOutput_ResolvesPortDelta()
+        {
+            // A name-only source endpoint resolves through OutputPortIndices the
+            // same way indices do.
+            var source = Guid.NewGuid();
+            var target = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "S", Id = 1, InstanceGuid = source })
+                .AddComponent(new GhJsonComponent { Name = "T", Id = 2, InstanceGuid = target })
+                .AddConnection(ConnectByName(1, 2, "A", outputName: "False"))
+                .Build();
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [source] = new PointF(0f, 50f),
+                [target] = new PointF(300f, 100f),
+            };
+            var metrics = MetricsProviders.Of(new Dictionary<Guid, LayoutNodeMetrics>
+            {
+                [source] = MetricsProviders.Component(
+                    100f, 60f,
+                    inputDeltas: new[] { -10f, 10f },
+                    outputDeltas: new[] { -10f, 10f },
+                    inputIndices: null,
+                    outputIndices: new Dictionary<string, int> { ["True"] = 0, ["False"] = 1 }),
+                [target] = MetricsProviders.Component(100f, 60f, inputDeltas: new[] { 0f }),
+            });
+
+            var result = PortAlignment.AlignToPorts(positions, doc, metrics);
+
+            Assert.Equal(90f, result[source].Y);
+        }
+
+        [Fact]
+        public void AlignToPorts_UnresolvableName_VotesCentered()
+        {
+            // A name the measured map cannot resolve keeps the centered fallback
+            // vote, matching the unknown-index behavior.
+            var source = Guid.NewGuid();
+            var target = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "S", Id = 1, InstanceGuid = source })
+                .AddComponent(new GhJsonComponent { Name = "T", Id = 2, InstanceGuid = target })
+                .AddConnection(ConnectByName(1, 2, "Nope"))
+                .Build();
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [source] = new PointF(0f, 50f),
+                [target] = new PointF(300f, 100f),
+            };
+            var metrics = MetricsProviders.Of(new Dictionary<Guid, LayoutNodeMetrics>
+            {
+                [source] = MetricsProviders.Parameter(80f, 20f),
+                [target] = MetricsProviders.Component(
+                    100f, 60f,
+                    inputDeltas: new[] { -12f, 12f },
+                    outputDeltas: null,
+                    inputIndices: new Dictionary<string, int> { ["D1"] = 0, ["D2"] = 1 },
+                    outputIndices: null),
             });
 
             var result = PortAlignment.AlignToPorts(positions, doc, metrics);

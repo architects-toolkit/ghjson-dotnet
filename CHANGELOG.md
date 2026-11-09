@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sources feeding different ports no longer collapse to identical positions,
   which previously stacked them in arbitrary key order and produced crossing
   wires.
+- `PortAlignment` and `WireClearance` resolve named endpoints through the
+  measured name→index maps the same way the constraint pass does. Previously a
+  `paramName`-only connection voted for the node center, so several sources
+  named for different ports collapsed to one height and restacked in arbitrary
+  order instead of entering their own ports.
 
 ## [1.3.4] - 2026-11-05
 

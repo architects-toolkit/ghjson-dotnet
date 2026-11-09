@@ -35,7 +35,7 @@ namespace GhJSON.Core.LayoutRefinements
         /// source <em>would need</em> so its wire enters the target's specific input port
         /// horizontally, then moves each source to the median of all such desired positions.
         /// Wires are aligned port-to-port: the target's input port offset and the source's
-        /// output port offset (via <c>conn.From.ParamIndex</c>) are both accounted for, so
+        /// output port offset (via each endpoint's index or resolvable name) are both accounted for, so
         /// multi-output sources (e.g. Deconstruct, larger-than) can satisfy several ports at
         /// once. Floating parameter targets (panels, params) contribute through their own
         /// bounds, and floating parameter sources through their right-edge output grip.
@@ -87,13 +87,13 @@ namespace GhJSON.Core.LayoutRefinements
                     }
 
                     var targetMetrics = LayoutNodeMetrics.Resolve(metricsProvider, toGuid);
-                    if (!TryGetInputPortDelta(targetMetrics, conn.To.ParamIndex, out var targetDelta))
+                    if (!TryGetInputPortDelta(targetMetrics, conn.To, out var targetDelta))
                     {
                         continue;
                     }
 
                     var sourceMetrics = LayoutNodeMetrics.Resolve(metricsProvider, fromGuid);
-                    var sourceDelta = GetOutputPortDelta(sourceMetrics, conn.From.ParamIndex);
+                    var sourceDelta = GetOutputPortDelta(sourceMetrics, conn.From);
 
                     // The wire is horizontal when
                     // sourcePivotY + sourceDelta == targetPivotY + targetDelta.
@@ -126,14 +126,14 @@ namespace GhJSON.Core.LayoutRefinements
 
         /// <summary>
         /// Vertical distance between the center of the target's input port receiving the
-        /// connection and the center of the target node itself. For component targets this
-        /// is the connected input port's delta; for floating parameter targets the input
-        /// grip uses its measured delta, falling back to the bounds center. Returns false when the
-        /// target cannot supply a port position at all.
+        /// connection and the center of the target node itself. For component targets the
+        /// endpoint's index or resolvable name picks the connected input port's delta; for
+        /// floating parameter targets the input grip uses its measured delta, falling back
+        /// to the bounds center. Returns false when the target cannot supply a port at all.
         /// </summary>
         internal static bool TryGetInputPortDelta(
             LayoutNodeMetrics? targetMetrics,
-            int? paramIndex,
+            GhJsonConnectionEndpoint endpoint,
             out float delta)
         {
             delta = 0f;
@@ -145,7 +145,7 @@ namespace GhJSON.Core.LayoutRefinements
 
             if (targetMetrics.Kind == LayoutNodeKind.Component)
             {
-                var index = paramIndex ?? -1;
+                var index = ResolvePortIndex(targetMetrics.InputPortIndices, endpoint);
                 if (index >= 0 && index < targetMetrics.InputPortDeltas.Count)
                 {
                     delta = targetMetrics.InputPortDeltas[index];
@@ -167,26 +167,53 @@ namespace GhJSON.Core.LayoutRefinements
         /// <summary>
         /// Vertical distance between the center of the source's output port feeding the
         /// connection and the center of the source node itself. Component sources use the
-        /// connected output port's delta; floating parameter sources emit from their
+        /// endpoint's index or resolvable name to pick the connected output port's delta; floating parameter sources emit from their
         /// right-edge output grip, with a centered fallback when unmeasured. Returns 0 when
         /// the source cannot be measured so the connection still votes for the target port.
         /// </summary>
         internal static float GetOutputPortDelta(
             LayoutNodeMetrics? sourceMetrics,
-            int? paramIndex)
+            GhJsonConnectionEndpoint endpoint)
         {
             if (sourceMetrics == null || sourceMetrics.Kind == LayoutNodeKind.Other)
             {
                 return 0f;
             }
 
-            var index = sourceMetrics.Kind == LayoutNodeKind.Parameter ? 0 : paramIndex ?? -1;
+            var index = sourceMetrics.Kind == LayoutNodeKind.Parameter
+                ? 0
+                : ResolvePortIndex(sourceMetrics.OutputPortIndices, endpoint);
             if (index < 0 || index >= sourceMetrics.OutputPortDeltas.Count)
             {
                 return 0f;
             }
 
             return sourceMetrics.OutputPortDeltas[index];
+        }
+
+        /// <summary>
+        /// Resolves the endpoint's port index: an explicit <see cref="GhJsonConnectionEndpoint.ParamIndex"/>
+        /// wins; otherwise the endpoint's <see cref="GhJsonConnectionEndpoint.ParamName"/> looks up the
+        /// measured name→index map (full names and unambiguous nicknames). Returns -1 when the
+        /// endpoint carries neither a usable index nor a resolvable name.
+        /// </summary>
+        private static int ResolvePortIndex(
+            IReadOnlyDictionary<string, int>? indices,
+            GhJsonConnectionEndpoint endpoint)
+        {
+            if (endpoint.ParamIndex.HasValue)
+            {
+                return endpoint.ParamIndex.Value;
+            }
+
+            if (!string.IsNullOrEmpty(endpoint.ParamName) &&
+                indices != null &&
+                indices.TryGetValue(endpoint.ParamName!, out var resolved))
+            {
+                return resolved;
+            }
+
+            return -1;
         }
 
         private static float Median(List<float> values)

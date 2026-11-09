@@ -142,9 +142,9 @@ namespace GhJSON.Core.LayoutRefinements
                     }
 
                     var fromPort = GetOutputPortPoint(
-                        metrics[fromGuid], conn.From.ParamIndex, result[fromGuid]);
+                        metrics[fromGuid], conn.From, result[fromGuid]);
                     var toPort = GetInputPortPoint(
-                        metrics[toGuid], conn.To.ParamIndex, result[toGuid]);
+                        metrics[toGuid], conn.To, result[toGuid]);
                     if (fromPort == null || toPort == null)
                     {
                         continue;
@@ -205,7 +205,7 @@ namespace GhJSON.Core.LayoutRefinements
         /// </summary>
         private static PointF? GetOutputPortPoint(
             LayoutNodeMetrics? metrics,
-            int? paramIndex,
+            GhJsonConnectionEndpoint endpoint,
             PointF center)
         {
             var size = metrics?.Size;
@@ -214,7 +214,7 @@ namespace GhJSON.Core.LayoutRefinements
                 return null;
             }
 
-            var y = center.Y + PortAlignment.GetOutputPortDelta(metrics, paramIndex);
+            var y = center.Y + PortAlignment.GetOutputPortDelta(metrics, endpoint);
             return new PointF(center.X + size.Value.Width / 2f, y);
         }
 
@@ -224,7 +224,7 @@ namespace GhJSON.Core.LayoutRefinements
         /// </summary>
         private static PointF? GetInputPortPoint(
             LayoutNodeMetrics? metrics,
-            int? paramIndex,
+            GhJsonConnectionEndpoint endpoint,
             PointF center)
         {
             var size = metrics?.Size;
@@ -234,7 +234,7 @@ namespace GhJSON.Core.LayoutRefinements
             }
 
             var y = center.Y;
-            if (PortAlignment.TryGetInputPortDelta(metrics, paramIndex, out var delta))
+            if (PortAlignment.TryGetInputPortDelta(metrics, endpoint, out var delta))
             {
                 y += delta;
             }

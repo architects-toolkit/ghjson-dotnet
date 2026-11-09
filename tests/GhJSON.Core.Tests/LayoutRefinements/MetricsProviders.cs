@@ -59,5 +59,23 @@ namespace GhJSON.Core.Tests.LayoutRefinements
                 inputDeltas,
                 outputDeltas);
         }
+
+        /// <summary>Component metrics with port deltas plus measured name→index maps.</summary>
+        public static LayoutNodeMetrics Component(
+            float width,
+            float height,
+            IReadOnlyList<float>? inputDeltas,
+            IReadOnlyList<float>? outputDeltas,
+            IReadOnlyDictionary<string, int>? inputIndices,
+            IReadOnlyDictionary<string, int>? outputIndices)
+        {
+            return new LayoutNodeMetrics(
+                new SizeF(width, height),
+                LayoutNodeKind.Component,
+                inputDeltas,
+                outputDeltas,
+                inputIndices,
+                outputIndices);
+        }
     }
 }

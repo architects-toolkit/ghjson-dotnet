@@ -122,6 +122,128 @@ namespace GhJSON.Core.Tests.DependencyGraph
             Assert.Equal(result.Positions[guidB].Y, result.Positions[guidC].Y);
         }
 
+        private static GhJsonConnection ConnectByName(int fromId, int outIndex, int toId, string inName)
+        {
+            return new GhJsonConnection
+            {
+                From = new GhJsonConnectionEndpoint { Id = fromId, ParamIndex = outIndex },
+                To = new GhJsonConnectionEndpoint { Id = toId, ParamName = inName },
+            };
+        }
+
+        private static GhJsonConnection ConnectNamedOutput(int fromId, string outName, int toId, int inIndex)
+        {
+            return new GhJsonConnection
+            {
+                From = new GhJsonConnectionEndpoint { Id = fromId, ParamName = outName },
+                To = new GhJsonConnectionEndpoint { Id = toId, ParamIndex = inIndex },
+            };
+        }
+
+        [Fact]
+        public void CalculateLayout_NamedInputConnectionsOrderSourcesByPort()
+        {
+            // Three same-column sources feed X/Y/Z inputs declared only by name.
+            // Resolving paramName through inputSettings must give each endpoint a
+            // real index so the sources stack in port order; before the resolution
+            // every endpoint scored identically and the column fell back to key order.
+            var guidX = Guid.NewGuid();
+            var guidY = Guid.NewGuid();
+            var guidZ = Guid.NewGuid();
+            var guidSink = Guid.NewGuid();
+
+            // Ids are scrambled so synthesized key order (Z < X < Y) differs from
+            // port order (X < Y < Z): only real port indices can order the column.
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Construct Point",
+                    Id = 4,
+                    InstanceGuid = guidSink,
+                    InputSettings = new System.Collections.Generic.List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings { ParameterName = "X" },
+                        new GhJsonParameterSettings { ParameterName = "Y" },
+                        new GhJsonParameterSettings { ParameterName = "Z" },
+                    },
+                })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 1, InstanceGuid = guidZ })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 2, InstanceGuid = guidX })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 3, InstanceGuid = guidY })
+                .AddConnection(ConnectByName(1, 0, 4, "Z"))
+                .AddConnection(ConnectByName(2, 0, 4, "X"))
+                .AddConnection(ConnectByName(3, 0, 4, "Y"))
+                .Build();
+
+            var result = GhJson.CalculateLayout(doc);
+
+            Assert.True(
+                result.Positions[guidX].Y < result.Positions[guidY].Y &&
+                result.Positions[guidY].Y < result.Positions[guidZ].Y,
+                $"Sources must stack in input port order (X={result.Positions[guidX].Y}, Y={result.Positions[guidY].Y}, Z={result.Positions[guidZ].Y})");
+        }
+
+        [Fact]
+        public void CalculateLayout_NamedOutputConnectionsOrderTargetsByPort()
+        {
+            // A dispatch-style source feeds two sinks from outputs named "T" and "F".
+            // The sink wired to the upper output must land above the lower one.
+            var guidSource = Guid.NewGuid();
+            var guidUpper = Guid.NewGuid();
+            var guidLower = Guid.NewGuid();
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent
+                {
+                    Name = "Dispatch",
+                    Id = 1,
+                    InstanceGuid = guidSource,
+                    OutputSettings = new System.Collections.Generic.List<GhJsonParameterSettings>
+                    {
+                        new GhJsonParameterSettings { ParameterName = "List A" },
+                        new GhJsonParameterSettings { ParameterName = "List B" },
+                    },
+                })
+                .AddComponent(new GhJsonComponent { Name = "Panel", Id = 2, InstanceGuid = guidLower })
+                .AddComponent(new GhJsonComponent { Name = "Panel", Id = 3, InstanceGuid = guidUpper })
+                .AddConnection(ConnectNamedOutput(1, "List B", 2, 0))
+                .AddConnection(ConnectNamedOutput(1, "List A", 3, 0))
+                .Build();
+
+            var result = GhJson.CalculateLayout(doc);
+
+            Assert.True(
+                result.Positions[guidUpper].Y < result.Positions[guidLower].Y,
+                $"The upper output's target should sit higher (A={result.Positions[guidUpper].Y}, B={result.Positions[guidLower].Y})");
+        }
+
+        [Fact]
+        public void CalculateLayout_UnresolvableNamesOrderByDeclaration()
+        {
+            // Names that match no declared settings still need distinct slots — the
+            // only ordering signal left is connection declaration order, so sibling
+            // endpoints must not collapse to the same -1 position.
+            var guidFirstDeclared = Guid.NewGuid();
+            var guidSecondDeclared = Guid.NewGuid();
+            var guidSink = Guid.NewGuid();
+
+            // The first-declared connection's source carries the larger id, so key
+            // order alone would stack it below — only distinct declaration-order
+            // slots put it on top.
+            var doc = GhJson.CreateDocumentBuilder()
+                .AddComponent(new GhJsonComponent { Name = "Merge", Id = 3, InstanceGuid = guidSink })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 1, InstanceGuid = guidSecondDeclared })
+                .AddComponent(new GhJsonComponent { Name = "Number", Id = 2, InstanceGuid = guidFirstDeclared })
+                .AddConnection(ConnectByName(2, 0, 3, "D1"))
+                .AddConnection(ConnectByName(1, 0, 3, "D2"))
+                .Build();
+
+            var result = GhJson.CalculateLayout(doc);
+
+            Assert.True(
+                result.Positions[guidFirstDeclared].Y < result.Positions[guidSecondDeclared].Y,
+                $"Declaration order should keep the first sibling above the second (first={result.Positions[guidFirstDeclared].Y}, second={result.Positions[guidSecondDeclared].Y})");
+        }
+
         [Fact]
         public void CalculateLayout_SkipEdgePreservesPortRowsThroughDummy()
         {

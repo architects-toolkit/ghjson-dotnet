@@ -139,5 +139,26 @@ namespace GhJSON.Core.Tests.SchemaModels
             Assert.Equal(100, pivot!.X);
             Assert.Equal(200, pivot.Y);
         }
+
+        [Fact]
+        public void Deserialize_PivotObjectForm_RoundsFloatCoordinates()
+        {
+            var json = "{\"components\":[{\"name\":\"Panel\",\"pivot\":{\"x\":100.4,\"y\":199.6}}]}";
+
+            var doc = GhJson.FromJson(json);
+
+            var pivot = doc.Components[0].Pivot;
+            Assert.NotNull(pivot);
+            Assert.Equal(100, pivot!.X);
+            Assert.Equal(200, pivot.Y);
+        }
+
+        [Fact]
+        public void Deserialize_PivotObjectForm_RejectsNonNumericCoordinates()
+        {
+            var json = "{\"components\":[{\"name\":\"Panel\",\"pivot\":{\"x\":\"100\",\"y\":200}}]}";
+
+            Assert.Throws<Newtonsoft.Json.JsonSerializationException>(() => GhJson.FromJson(json));
+        }
     }
 }

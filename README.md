@@ -123,6 +123,7 @@ if (GhJson.ValidatePatch(patchJson).IsValid)
 ## Related projects
 
 - [**ghjson-spec**](https://github.com/architects-toolkit/ghjson-spec) — The GhJSON (`.ghjson`) and GhPatch (`.ghpatch`) format specifications and JSON Schemas
+- [**ghjson-graph**](https://github.com/architects-toolkit/ghjson-graph) — Zero-dependency TypeScript library for parsing GhJSON documents into dependency graphs — stats, validation, and SVG topology thumbnails
 - [**SmartHopper**](https://github.com/architects-toolkit/SmartHopper) — Open-source AI assistant and component plugin for Grasshopper 3D built on GhJSON
 
 ## Contributing & license

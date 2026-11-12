@@ -23,8 +23,8 @@ using Newtonsoft.Json.Linq;
 namespace GhJSON.Core.Serialization
 {
     /// <summary>
-    /// JSON converter for <see cref="GhJsonPivot"/> that supports both compact string format
-    /// and object format as defined in the schema.
+    /// JSON converter for <see cref="GhJsonPivot"/> that supports the compact string format,
+    /// the object format, and the [x,y] array format defined in the schema.
     /// </summary>
     public sealed class PivotConverter : JsonConverter<GhJsonPivot>
     {
@@ -61,8 +61,25 @@ namespace GhJSON.Core.Serialization
                 return new GhJsonPivot(xToken.Value<int>(), yToken.Value<int>());
             }
 
+            if (reader.TokenType == JsonToken.StartArray)
+            {
+                var array = JArray.Load(reader);
+                if (array.Count != 2 ||
+                    (array[0].Type != JTokenType.Integer && array[0].Type != JTokenType.Float) ||
+                    (array[1].Type != JTokenType.Integer && array[1].Type != JTokenType.Float))
+                {
+                    throw new JsonSerializationException(
+                        "Pivot array must contain exactly two numeric coordinates: [x, y].");
+                }
+
+                return new GhJsonPivot(
+                    (int)Math.Round(array[0].Value<double>()),
+                    (int)Math.Round(array[1].Value<double>()));
+            }
+
             throw new JsonSerializationException(
-                $"Unexpected token type {reader.TokenType} when parsing pivot");
+                $"Unexpected token type {reader.TokenType} when parsing pivot. " +
+                "Expected null, \"x,y\" string, {x,y} object, or [x,y] array.");
         }
 
         /// <inheritdoc/>

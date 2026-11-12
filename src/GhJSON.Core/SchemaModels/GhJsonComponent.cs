@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using GhJSON.Core.Serialization;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace GhJSON.Core.SchemaModels
 {
@@ -111,6 +112,15 @@ namespace GhJSON.Core.SchemaModels
         /// </summary>
         [JsonProperty("remarks", NullValueHandling = NullValueHandling.Ignore)]
         public List<string>? Remarks { get; set; }
+
+        /// <summary>
+        /// Gets or sets unrecognized top-level members captured during deserialization.
+        /// Component state belongs under <see cref="ComponentState"/>; emitters sometimes
+        /// place invented fields (e.g. <c>userText</c>) at this level. They are ignored
+        /// for placement but preserved here so consumers can surface them as warnings.
+        /// </summary>
+        [JsonExtensionData]
+        public IDictionary<string, JToken>? ExtensionData { get; set; }
 
         /// <summary>
         /// Gets a value indicating whether the component has any validation errors or warnings.

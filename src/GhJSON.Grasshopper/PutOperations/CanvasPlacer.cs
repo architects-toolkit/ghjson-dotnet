@@ -143,6 +143,14 @@ namespace GhJSON.Grasshopper.PutOperations
                         : deserializationOptions);
                 AppendNewComponentErrors(result, component, errorCount);
 
+                if (component.ExtensionData?.Count > 0)
+                {
+                    result.Warnings.Add(
+                        $"Component '{component.Name ?? component.ComponentGuid?.ToString() ?? "unknown"}' " +
+                        $"carries unrecognized top-level properties ({string.Join(", ", component.ExtensionData.Keys)}) — " +
+                        "ignored. Component state belongs under componentState.extensions.");
+                }
+
                 if (obj == null)
                 {
                     if (!options.SkipInvalidComponents)

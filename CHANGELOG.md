@@ -7,56 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [1.3.5] - 2026-11-12
 
-- Singly connected input/output leaves and compatible chains now align
-  port-to-port after anchor fitting. Rigid alignment groups move together around
-  measured object and horizontal-wire obstacles; incompatible constraints relax
-  without moving authored pivots. Stable ordering makes the result deterministic.
-- Grasshopper measurements use actual input/output grips, including non-centered
-  floating parameters, and resolve named ports as well as explicit indices. Every
-  compatible parallel wire contributes its own corridor.
-- Compact layout is now the default: 28px horizontal/vertical edge gaps and 48px between islands. Refinement and collision passes use the same spacing as the dependency-graph layout.
-- `Put` preserves supplied pivots when `AutoOffset` is enabled. In mixed documents, pivotless new components are positioned relative to connected fixed anchors; multiple anchors blend relative translations by graph distance. Collision avoidance never moves fixed objects. Only disconnected, unanchored parts use automatic free-space offset. Explicit caller-supplied `Offset` remains an intentional translation.
-- Rewrote and reorganized `README.md` with a clear `GhJSON.Core` vs. `GhJSON.Grasshopper` package overview, quick-start examples (canvas Get/Put, pure-.NET build/validate/fix, diff/patch), and capability summaries linking to `docs/`.
+### Changed
+- Improved wire routing: connected ports now align precisely after anchor fitting, with stable deterministic results
+- Grasshopper measurements now use actual input/output grips, including floating parameters and named ports
+- Compact layout is now the default with consistent 28px/48px spacing between elements
+- `Put` operations preserve supplied pivots when `AutoOffset` is enabled, with collision avoidance respecting fixed objects
+- Reorganized `README.md` with clearer package overviews, quick-start examples, and capability summaries
 
 ### Added
-
-- An additive `LayoutNodeMetrics` overload and optional named-port index maps for
-  host-independent constraint fitting. The original constructor remains available.
+- New `LayoutNodeMetrics` overload with optional named-port index maps for host-independent constraint fitting
 
 ### Fixed
-
-- Off-canvas objects reported Grasshopper's stock (0,0,150,20) attribute bounds:
-  components only compute real bounds and grip positions during a layout pass.
-  `CanvasNodeSizeProvider` now runs `PerformLayout()` before measuring, so
-  spacing and port alignment reflect the rendered object.
-- Layout measurement now mirrors the declared wiring before computing positions:
-  `CanvasPlacer` wires placed objects, and `GhJsonGrasshopper.Deserialize`
-  exposes opt-in `WireConnections`/`PerformLayout` flags, so connected floating
-  parameters are measured at their rendered size — a wired panel renders taller
-  than an unwired one. Endpoint resolution is shared through
-  `ConnectionHelper.ResolveEndpointParam`.
-- Measurement also applies the same connected-panel row reservation placement
-  uses (`PanelHandler.ReserveDataRows`), so a wired output-leaf panel's port
-  lands aligned instead of half a row below its source port.
-- `PivotHandler` now keeps attribute bounds consistent with a pivot it applies:
-  floating parameters store `Bounds` independently of `Pivot`, so a pivot
-  assigned off-canvas left the rectangle behind and every bounds-center lookup
-  resolved to the stale location — connected pivotless components then anchored
-  to the origin instead of the authored pivot.
-- Connection endpoints that only carry a `paramName` now resolve through the
-  component's declared `inputSettings`/`outputSettings` (name, then nickname)
-  when the core dependency graph assigns port indices; endpoints that still
-  resolve to nothing fall back to distinct declaration-order slots. Sibling
-  sources feeding different ports no longer collapse to identical positions,
-  which previously stacked them in arbitrary key order and produced crossing
-  wires.
-- `PortAlignment` and `WireClearance` resolve named endpoints through the
-  measured name→index maps the same way the constraint pass does. Previously a
-  `paramName`-only connection voted for the node center, so several sources
-  named for different ports collapsed to one height and restacked in arbitrary
-  order instead of entering their own ports.
+- Off-canvas objects now report accurate bounds instead of default values
+- Layout measurement now accounts for wiring state, ensuring wired panels render at correct sizes
+- Wired output-leaf panels now align properly with their source ports
+- `PivotHandler` now maintains consistency between attribute bounds and applied pivots
+- Connection endpoints with only `paramName` now resolve through component's declared input/output settings
+- `PortAlignment` and `WireClearance` now correctly resolve named endpoints, preventing wire stacking
 
 ## [1.3.4] - 2026-11-05
 

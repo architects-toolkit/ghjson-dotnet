@@ -112,5 +112,32 @@ namespace GhJSON.Core.Tests.SchemaModels
             Assert.Equal(3, pivot.X);
             Assert.Equal(5, pivot.Y);
         }
+
+        [Fact]
+        public void Deserialize_PivotArrayForm_ParsesCoordinates()
+        {
+            var json = "{\"components\":[{\"name\":\"Panel\",\"pivot\":[100,200]}]}";
+
+            var doc = GhJson.FromJson(json);
+
+            Assert.NotNull(doc);
+            var pivot = doc.Components[0].Pivot;
+            Assert.NotNull(pivot);
+            Assert.Equal(100, pivot!.X);
+            Assert.Equal(200, pivot.Y);
+        }
+
+        [Fact]
+        public void Deserialize_PivotArrayForm_RoundsFloatCoordinates()
+        {
+            var json = "{\"components\":[{\"name\":\"Panel\",\"pivot\":[100.4,199.6]}]}";
+
+            var doc = GhJson.FromJson(json);
+
+            var pivot = doc.Components[0].Pivot;
+            Assert.NotNull(pivot);
+            Assert.Equal(100, pivot!.X);
+            Assert.Equal(200, pivot.Y);
+        }
     }
 }

@@ -18,8 +18,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using GhJSON.Grasshopper.GetOperations;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Rhino;
 
@@ -35,8 +35,6 @@ namespace GhJSON.Grasshopper.ConnectionOperations
     /// </summary>
     internal static class CanvasConnector
     {
-        private static readonly TimeSpan UiInvokeTimeout = TimeSpan.FromSeconds(30);
-
         /// <summary>
         /// Connects two parameters on the active canvas by component instance GUID and
         /// parameter name. Executes on the UI thread.
@@ -54,7 +52,7 @@ namespace GhJSON.Grasshopper.ConnectionOperations
         {
             var success = false;
 
-            InvokeOnUiThreadAndWait(() =>
+            UiThreadDispatcher.RunAndWait(() =>
                 success = ConnectOnUiThread(sourceGuid, targetGuid, sourceParamName, targetParamName));
 
             return success;
@@ -137,7 +135,7 @@ namespace GhJSON.Grasshopper.ConnectionOperations
             var success = false;
             var didRemove = false;
 
-            InvokeOnUiThreadAndWait(() =>
+            UiThreadDispatcher.RunAndWait(() =>
                 success = DisconnectOnUiThread(sourceGuid, targetGuid, sourceParamName, targetParamName, out didRemove));
 
             removed = didRemove;
@@ -197,7 +195,7 @@ namespace GhJSON.Grasshopper.ConnectionOperations
         {
             var result = new List<ConnectionInfo>();
 
-            InvokeOnUiThreadAndWait(() =>
+            UiThreadDispatcher.RunAndWait(() =>
                 result = CaptureExternalConnectionsOnUiThread(guids));
 
             return result;
@@ -339,46 +337,6 @@ namespace GhJSON.Grasshopper.ConnectionOperations
             }
 
             return result;
-        }
-
-        private static void InvokeOnUiThreadAndWait(Action action)
-        {
-            if (RhinoApp.InvokeRequired == false)
-            {
-                action();
-                return;
-            }
-
-            Exception? captured = null;
-            using var done = new ManualResetEventSlim(false);
-
-            RhinoApp.InvokeOnUiThread(new Action(() =>
-            {
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    captured = ex;
-                }
-                finally
-                {
-                    done.Set();
-                }
-            }));
-
-            if (!done.Wait(UiInvokeTimeout))
-            {
-                throw new TimeoutException(
-                    $"Grasshopper UI thread did not process the connection within {UiInvokeTimeout.TotalSeconds:n0} s.");
-            }
-
-            if (captured != null)
-            {
-                throw new InvalidOperationException(
-                    "Connection on the Grasshopper UI thread failed.", captured);
-            }
         }
 
     }

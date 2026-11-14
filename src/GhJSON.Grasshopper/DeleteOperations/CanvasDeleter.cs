@@ -18,8 +18,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using GhJSON.Grasshopper.GetOperations;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Rhino;
@@ -43,13 +43,6 @@ namespace GhJSON.Grasshopper.DeleteOperations
     /// </summary>
     internal static class CanvasDeleter
     {
-        /// <summary>
-        /// Maximum time the caller will wait for the UI-thread deletion callback to finish.
-        /// Protects against deadlocks when the UI thread is unresponsive; in practice the
-        /// callback completes in milliseconds.
-        /// </summary>
-        private static readonly TimeSpan UiInvokeTimeout = TimeSpan.FromSeconds(30);
-
         /// <summary>
         /// Deletes specific objects from the canvas by their GUIDs.
         /// </summary>
@@ -94,7 +87,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
                 return result;
             }
 
-            InvokeOnUiThreadAndWait(() =>
+            UiThreadDispatcher.RunAndWait(() =>
                 DeleteBatch(doc, objectsToDelete, "[GhJSON] Delete Object", "[GhJSON] Delete Objects", options, result));
 
             return result;
@@ -125,7 +118,7 @@ namespace GhJSON.Grasshopper.DeleteOperations
                 return result;
             }
 
-            InvokeOnUiThreadAndWait(() =>
+            UiThreadDispatcher.RunAndWait(() =>
                 DeleteBatch(doc, objectsToDelete, "[GhJSON] Clear Canvas", "[GhJSON] Clear Canvas", options, result));
 
             return result;
@@ -179,51 +172,6 @@ namespace GhJSON.Grasshopper.DeleteOperations
                 }
 
                 result.Deleted.Clear();
-            }
-        }
-
-        /// <summary>
-        /// Queues <paramref name="action"/> on the Rhino UI thread and blocks until it
-        /// returns (or <see cref="UiInvokeTimeout"/> elapses). If we are already on the UI
-        /// thread the action runs inline.
-        /// </summary>
-        private static void InvokeOnUiThreadAndWait(Action action)
-        {
-            if (RhinoApp.InvokeRequired == false)
-            {
-                action();
-                return;
-            }
-
-            Exception? captured = null;
-            using var done = new ManualResetEventSlim(false);
-
-            RhinoApp.InvokeOnUiThread(new Action(() =>
-            {
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    captured = ex;
-                }
-                finally
-                {
-                    done.Set();
-                }
-            }));
-
-            if (!done.Wait(UiInvokeTimeout))
-            {
-                throw new TimeoutException(
-                    $"Grasshopper UI thread did not process the deletion within {UiInvokeTimeout.TotalSeconds:n0} s.");
-            }
-
-            if (captured != null)
-            {
-                throw new InvalidOperationException(
-                    "Deletion on the Grasshopper UI thread failed.", captured);
             }
         }
 

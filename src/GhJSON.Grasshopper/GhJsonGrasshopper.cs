@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using GhJSON.Core.DataEditing;
 using GhJSON.Core.DependencyGraph;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.ConnectionOperations;
@@ -478,6 +479,44 @@ namespace GhJSON.Grasshopper
         public static bool ApplyParamData(IGH_Param param, GhJsonParameterSettings settings)
         {
             return InternalizedDataHandler.ApplyParamData(param, settings);
+        }
+
+        #endregion
+
+        #region Data Editing (surgical replacements inside live data trees)
+
+        /// <summary>
+        /// Applies surgical replacements inside a live parameter's persistent data tree.
+        /// Each edit addresses a branch (<c>{a;b;c}</c>) or a single item
+        /// (<c>{a;b;c}(i)</c>) and supplies the GhJSON-encoded value(s) to store there.
+        /// All edits are parsed, validated, and decoded before anything mutates — a failed
+        /// request leaves the parameter untouched. Values decode through the shared
+        /// <see cref="DataTypeRegistry"/> contract, and untouched native data is preserved
+        /// in place. Executes on the UI thread. Callers are responsible for recording undo,
+        /// expiring downstream objects, and triggering a recompute or redraw afterwards.
+        /// </summary>
+        /// <param name="param">The persistent parameter to mutate.</param>
+        /// <param name="edits">The replacement edits.</param>
+        /// <returns>The operation outcome, including the resulting tree shape.</returns>
+        public static GhJsonDataEditResult EditParamData(IGH_Param param, IReadOnlyList<GhJsonDataEdit> edits)
+        {
+            return EditOperations.DataTreeEditor.EditParamData(param, edits);
+        }
+
+        /// <summary>
+        /// Applies surgical replacements to a live panel's text lines. In list mode
+        /// (<c>Properties.Multiline == false</c>) each line is one item of the flat
+        /// <c>{0}</c> branch; in item mode the whole text is a single item. Values must be
+        /// <c>text:</c>-encoded; a list-mode replacement cannot contain line breaks.
+        /// Executes on the UI thread. Callers are responsible for recording undo,
+        /// expiring downstream objects, and triggering a recompute or redraw afterwards.
+        /// </summary>
+        /// <param name="panel">The panel to mutate.</param>
+        /// <param name="edits">The replacement edits.</param>
+        /// <returns>The operation outcome, including the resulting line count.</returns>
+        public static GhJsonDataEditResult EditPanelData(GH_Panel panel, IReadOnlyList<GhJsonDataEdit> edits)
+        {
+            return EditOperations.DataTreeEditor.EditPanelData(panel, edits);
         }
 
         #endregion

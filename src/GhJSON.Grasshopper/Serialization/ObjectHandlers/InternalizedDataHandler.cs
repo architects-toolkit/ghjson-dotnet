@@ -21,7 +21,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
@@ -37,8 +36,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
     /// </summary>
     internal sealed class InternalizedDataHandler : IObjectHandler
     {
-        private static readonly TimeSpan UiInvokeTimeout = TimeSpan.FromSeconds(30);
-
         /// <inheritdoc/>
         public int Priority => 1000;
 
@@ -316,7 +313,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
         internal static bool ApplyParamData(IGH_Param param, GhJsonParameterSettings settings)
         {
             var applied = false;
-            InvokeOnUiThreadAndWait(() =>
+            UiThreadDispatcher.RunAndWait(() =>
             {
                 applied = DeserializeParamData(settings, param);
             });
@@ -330,7 +327,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 return false;
             }
 
-            var persistentParamBaseType = FindGenericBaseType(param.GetType(), typeof(global::Grasshopper.Kernel.GH_PersistentParam<>));
+            var persistentParamBaseType = GooFactory.FindGenericBaseType(param.GetType(), typeof(global::Grasshopper.Kernel.GH_PersistentParam<>));
             if (persistentParamBaseType == null)
             {
                 return false;
@@ -356,7 +353,7 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
                 foreach (var item in OrderItemsByIndex(pathEntry.Value))
                 {
                     var deserialized = DataTypeRegistry.Deserialize(item.Value);
-                    var goo = CreateGoo(gooType, deserialized);
+                    var goo = GooFactory.Create(gooType, deserialized);
                     appendMethod.Invoke(structure, new object?[] { goo, path });
                 }
             }
@@ -374,62 +371,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
 
             setPersistentDataMethod.Invoke(param, new[] { structure });
             return true;
-        }
-
-        private static void InvokeOnUiThreadAndWait(Action action)
-        {
-            if (RhinoApp.InvokeRequired == false)
-            {
-                action();
-                return;
-            }
-
-            Exception? captured = null;
-            using var done = new ManualResetEventSlim(false);
-
-            RhinoApp.InvokeOnUiThread(new Action(() =>
-            {
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    captured = ex;
-                }
-                finally
-                {
-                    done.Set();
-                }
-            }));
-
-            if (!done.Wait(UiInvokeTimeout))
-            {
-                throw new TimeoutException(
-                    $"Grasshopper UI thread did not process the call within {UiInvokeTimeout.TotalSeconds:n0} s.");
-            }
-
-            if (captured != null)
-            {
-                throw new InvalidOperationException(
-                    "Parameter data application on the Grasshopper UI thread failed.", captured);
-            }
-        }
-
-        private static Type? FindGenericBaseType(Type type, Type openGenericBaseType)
-        {
-            var current = type;
-            while (current != null)
-            {
-                if (current.IsGenericType && current.GetGenericTypeDefinition() == openGenericBaseType)
-                {
-                    return current;
-                }
-
-                current = current.BaseType;
-            }
-
-            return null;
         }
 
         private static IEnumerable<KeyValuePair<string, string>> OrderItemsByIndex(Dictionary<string, string> items)
@@ -490,49 +431,6 @@ namespace GhJSON.Grasshopper.Serialization.ObjectHandlers
             return indices.Count > 0 ? new GH_Path(indices.ToArray()) : new GH_Path(0);
         }
 
-        private static object? CreateGoo(Type gooType, object? value)
-        {
-            if (value == null)
-            {
-                return null;
-            }
-
-            try
-            {
-                // Try the (object) constructor first
-                var constructor = gooType.GetConstructor(new[] { value.GetType() });
-                if (constructor != null)
-                {
-                    return constructor.Invoke(new[] { value });
-                }
-
-                // Try a string constructor for text values
-                if (value is string strValue)
-                {
-                    constructor = gooType.GetConstructor(new[] { typeof(string) });
-                    if (constructor != null)
-                    {
-                        return constructor.Invoke(new object?[] { strValue });
-                    }
-                }
-
-                // Try parameterless constructor and set Value property
-                constructor = gooType.GetConstructor(Type.EmptyTypes);
-                if (constructor != null)
-                {
-                    var goo = constructor.Invoke(Array.Empty<object>());
-                    var valueProperty = gooType.GetProperty("Value");
-                    valueProperty?.SetValue(goo, value);
-                    return goo;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[InternalizedDataHandler.CreateGoo] Error creating {gooType.Name}: {ex.Message}");
-            }
-
-            return null;
-        }
 
         private static void SerializeInternalizedData(
             IList<IGH_Param> parameters,

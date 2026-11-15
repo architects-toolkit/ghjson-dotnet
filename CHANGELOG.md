@@ -7,13 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-11-15
+
 ### Added
-- New surgical data-editing API: `GhJsonGrasshopper.EditParamData` and `GhJsonGrasshopper.EditPanelData` replace a single item (`{a;b;c}(i)`) or a whole branch (`{a;b;c}`) inside live persistent data trees using GhJSON-encoded values (`text:`, `number:`, `pointXYZ:`, …). All edits are validated and staged before anything mutates — a failed request leaves the target untouched — and untouched native data is preserved in place
-- New `GhJSON.Core.DataEditing` primitives: `GhJsonDataPosition` (position parser), `GhJsonDataEdit`, and `GhJsonDataEditResult`
+- New surgical data-editing API: `GhJsonGrasshopper.EditParamData` and `GhJsonGrasshopper.EditPanelData` for validated, staged edits of live persistent data trees using GhJSON-encoded values
+- New `GhJSON.Core.DataEditing` primitives: `GhJsonDataPosition`, `GhJsonDataEdit`, and `GhJsonDataEditResult`
 
 ### Changed
-- UI-thread dispatch for canvas mutations is now centralized in an internal `UiThreadDispatcher` shared by `CanvasConnector`, `CanvasDeleter`, `InternalizedDataHandler`, and the new data editing engine; a queued callback that survives the caller timeout can no longer apply a mutation after failure was already reported
-- Goo conversion is consolidated in `GooFactory`: a missing or rejecting `Value` setter now yields `null` instead of a default-valued goo, so incompatible typed assignments surface as failures rather than silently storing wrong values
+- Improved UI-thread dispatch for canvas mutations to prevent failed operations from applying after timeout
+- Consolidated Goo conversion in `GooFactory`: incompatible typed assignments now fail instead of silently storing default values
 
 ## [1.3.5] - 2026-11-12
 

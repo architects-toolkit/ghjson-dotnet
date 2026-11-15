@@ -17,6 +17,8 @@
 
 using System;
 using System.Threading;
+using System.Threading.Tasks;
+using GhJSON.Core.Hosting;
 using Rhino;
 
 namespace GhJSON.Grasshopper.Shared
@@ -24,11 +26,35 @@ namespace GhJSON.Grasshopper.Shared
     /// <summary>
     /// Marshals canvas mutations onto the Rhino UI thread. Centralizes the
     /// blocking-invoke contract — including its late-execution guard — so each
-    /// operation does not grow its own copy.
+    /// operation does not grow its own copy. The asynchronous path delegates to
+    /// <see cref="BoundedUiPost"/>, the shared host-independent ownership machine.
     /// </summary>
     internal static class UiThreadDispatcher
     {
         private static readonly TimeSpan UiInvokeTimeout = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Queues <paramref name="work"/> on the Rhino UI thread through
+        /// <see cref="BoundedUiPost"/>: the queued-start budget bounds admission only,
+        /// an expired callback never runs, and a started callback owns its outcome.
+        /// </summary>
+        /// <typeparam name="T">The work's result type.</typeparam>
+        /// <param name="work">The work to run on the UI thread.</param>
+        /// <param name="queuedStartBudget">Maximum time the work may sit unclaimed in the UI queue.</param>
+        /// <param name="cancellationToken">Cancels the post while still queued.</param>
+        /// <returns>A task completing with the post's terminal state.</returns>
+        internal static Task<UiPostResult<T>> PostAsync<T>(
+            Func<T> work,
+            TimeSpan queuedStartBudget,
+            CancellationToken cancellationToken)
+        {
+            return BoundedUiPost.PostAsync(
+                callback => RhinoApp.InvokeOnUiThread(callback),
+                () => RhinoApp.InvokeRequired == false,
+                work,
+                queuedStartBudget,
+                cancellationToken);
+        }
 
         /// <summary>
         /// Queues <paramref name="action"/> on the Rhino UI thread and blocks until it

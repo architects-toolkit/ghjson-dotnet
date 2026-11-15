@@ -19,8 +19,11 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using GhJSON.Core.DataEditing;
 using GhJSON.Core.DependencyGraph;
+using GhJSON.Core.Hosting;
 using GhJSON.Core.SchemaModels;
 using GhJSON.Grasshopper.ConnectionOperations;
 using GhJSON.Grasshopper.DeleteOperations;
@@ -30,6 +33,7 @@ using GhJSON.Grasshopper.LayoutRefinements;
 using GhJSON.Grasshopper.PutOperations;
 using GhJSON.Grasshopper.Serialization;
 using GhJSON.Grasshopper.Serialization.ObjectHandlers;
+using GhJSON.Grasshopper.Shared;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
 
@@ -286,6 +290,30 @@ namespace GhJSON.Grasshopper
         public static Func<Guid, SizeF?> CreateNodeSizeProvider(GH_Document? document = null)
         {
             return CanvasNodeSizeProvider.Create(document);
+        }
+
+        /// <summary>
+        /// Queues <paramref name="work"/> on the Rhino UI thread with explicit
+        /// admission ownership: the queued-start budget bounds only the time the
+        /// work may sit unclaimed; a callback that claims its slot after expiry
+        /// never runs; a started callback owns its outcome and the caller waits for
+        /// the real result. Use this instead of raw
+        /// <c>RhinoApp.InvokeOnUiThread</c> whenever a caller must know whether the
+        /// work actually ran — reporting <see cref="UiPostState.BusyNotStarted"/> or
+        /// <see cref="UiPostState.CancelledNotStarted"/> never hides an in-flight
+        /// mutation.
+        /// </summary>
+        /// <typeparam name="T">The work's result type.</typeparam>
+        /// <param name="work">The work to run on the UI thread.</param>
+        /// <param name="queuedStartBudget">Maximum time the work may sit unclaimed in the UI queue.</param>
+        /// <param name="cancellationToken">Cancels the post while still queued.</param>
+        /// <returns>A task completing with the post's terminal state.</returns>
+        public static Task<UiPostResult<T>> PostToUiThreadAsync<T>(
+            Func<T> work,
+            TimeSpan queuedStartBudget,
+            CancellationToken cancellationToken)
+        {
+            return UiThreadDispatcher.PostAsync(work, queuedStartBudget, cancellationToken);
         }
 
         #endregion

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New host-independent `GhJSON.Core.Hosting.BoundedUiPost` primitive: asynchronous UI-thread posts with an explicit queued → started ownership contract. An expired queued callback becomes a no-op (late UI passes can never mutate after a reported failure), a started callback owns its outcome, and cancellation reaches only pre-start posts
+- New `UiThreadDispatcher.PostAsync` adapter exposing bounded posts on `RhinoApp.InvokeOnUiThread`
+- New `GhJsonGrasshopper` facade methods for active-document/object lookup, node-size providers, layout computation, and bounded UI posting so hosts reuse the same ownership contract instead of reimplementing it
+
 ## [1.3.6] - 2026-11-15
 
 ### Added

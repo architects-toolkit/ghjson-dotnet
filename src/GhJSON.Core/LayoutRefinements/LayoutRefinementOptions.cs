@@ -43,9 +43,20 @@ namespace GhJSON.Core.LayoutRefinements
 
         /// <summary>
         /// Placement origin for disconnected subgraphs without a fixed anchor.
-        /// Never translates fixed objects or their connected neighbors.
+        /// Never translates fixed objects or their connected neighbors. The offset is
+        /// additive: the X component shifts every unanchored node while the Y
+        /// component is the target top edge of the whole unanchored pack.
         /// </summary>
         public PointF UnanchoredOffset { get; set; }
+
+        /// <summary>
+        /// Optional rendered top-left corner for the whole unanchored pack. When set,
+        /// every disconnected unanchored node is translated so the pack's rendered
+        /// left edge lands on <c>X</c> and its rendered top edge on <c>Y</c>; all
+        /// islands keep their internal spacing and move as one compact pack. When
+        /// <c>null</c>, the additive <see cref="UnanchoredOffset"/> semantics apply.
+        /// </summary>
+        public PointF? UnanchoredTargetTopLeft { get; set; }
 
         /// <summary>
         /// Enables the per-island re-spacing pass that sizes each column and row from

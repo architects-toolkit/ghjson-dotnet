@@ -42,7 +42,9 @@ namespace GhJSON.Grasshopper.PutOperations
     internal static class CanvasPlacer
     {
         /// <summary>
-        /// Places a GhJSON document on the canvas.
+        /// Places a GhJSON document on the canvas. Composes
+        /// <see cref="Prepare"/> and <see cref="Apply"/>: standalone callers keep the
+        /// historical single-call behavior, including the synchronous solution.
         /// </summary>
         /// <param name="document">The document to place.</param>
         /// <param name="options">Put options.</param>
@@ -50,34 +52,44 @@ namespace GhJSON.Grasshopper.PutOperations
         public static PutResult Put(GhJsonDocument document, PutOptions? options = null)
         {
             options ??= PutOptions.Default;
-            var result = new PutResult { Success = true };
-
             var ghDoc = CanvasReader.GetActiveDocument();
             if (ghDoc == null)
             {
-                result.Success = false;
-                result.ErrorMessage = "No active Grasshopper document";
-                return result;
+                return new PutResult { Success = false, ErrorMessage = "No active Grasshopper document" };
             }
 
-#if DEBUG
-            Debug.WriteLine($"[CanvasPlacer.Put] Starting placement of {document.Components?.Count ?? 0} components");
-#endif
+            using var prepared = Prepare(document, options, ghDoc);
+            return Apply(prepared);
+        }
 
+        /// <summary>
+        /// Prepares a placement against a specific <paramref name="ghDoc"/> without
+        /// mutating the canvas: resolves update targets, instantiates off-document
+        /// prototypes, measures real bounds, and computes layout positions. The
+        /// returned <see cref="PreparedPut"/> owns the prototypes; dispose it when
+        /// the plan is refused or pass it to <see cref="Apply"/>.
+        /// </summary>
+        /// <param name="document">The document to place.</param>
+        /// <param name="options">Put options.</param>
+        /// <param name="ghDoc">The document the plan binds to.</param>
+        /// <returns>The prepared placement handle.</returns>
+        public static PreparedPut Prepare(GhJsonDocument document, PutOptions? options, GH_Document ghDoc)
+        {
+            options ??= PutOptions.Default;
+            var prepared = new PreparedPut
+            {
+                Document = ghDoc,
+                Model = document,
+                Options = options,
+                EffectiveOffset = options.Offset,
+            };
+
+            var result = new PutResult { Success = true };
             var deserializationOptions = new DeserializationOptions
             {
                 RegenerateInstanceGuids = options.RegenerateInstanceGuids,
                 SkipInvalidComponents = options.SkipInvalidComponents
             };
-
-            // Only an explicitly requested translation may change authored pivots.
-            // AutoOffset applies exclusively to components without a pivot.
-            var effectiveOffset = options.Offset;
-
-            // Place components
-            var idToObject = new Dictionary<int, IGH_DocumentObject>();
-            var addedObjects = new List<IGH_DocumentObject>();
-            GH_UndoRecord? updateUndoRecord = null;
             DeserializationOptions? preserveGuidOptions = null;
 
             // Phase 1: instantiate every component up front. Created objects carry real
@@ -85,9 +97,9 @@ namespace GhJSON.Grasshopper.PutOperations
             // pass below measure actual component sizes instead of default estimates.
             // Components whose instanceGuid already exists on the canvas skip
             // instantiation entirely when UpdateExistingByInstanceGuid is enabled:
-            // same-type matches are updated in place, different-type matches produce a
-            // replacement object that keeps the existing instance GUID.
-            var placed = new List<(GhJsonComponent Component, IGH_DocumentObject Obj, IGH_DocumentObject? Replaces)>(document.Components.Count);
+            // same-type matches are bound for a later in-place update, different-type
+            // matches produce a replacement prototype that keeps the existing
+            // instance GUID.
             for (int i = 0; i < document.Components.Count; i++)
             {
                 var component = document.Components[i];
@@ -95,37 +107,7 @@ namespace GhJSON.Grasshopper.PutOperations
 
                 if (existing != null && IsSameComponentType(component, existing))
                 {
-                    // Same-type match: apply the incoming state onto the live object so
-                    // its identity, wiring, and position survive the update.
-                    if (updateUndoRecord == null)
-                    {
-                        updateUndoRecord = ghDoc.UndoUtil.CreateGenericObjectEvent(
-                            "[GhJSON] Update object(s)", existing);
-                    }
-                    else
-                    {
-                        existing.RecordUndoEvent(updateUndoRecord);
-                    }
-
-                    var updateErrorCount = component.Errors?.Count ?? 0;
-                    ObjectHandlerOrchestrator.Deserialize(component, existing);
-                    ObjectHandlerOrchestrator.PostPlacement(component, existing);
-                    AppendNewComponentErrors(result, component, updateErrorCount);
-
-                    result.UpdatedObjects.Add(existing);
-                    result.ComponentsUpdated++;
-
-                    if (component.Id.HasValue)
-                    {
-                        idToObject[component.Id.Value] = existing;
-                        result.IdToGuidMapping[component.Id.Value] = existing.InstanceGuid;
-                    }
-
-                    if (options.SelectPlacedObjects && existing.Attributes != null)
-                    {
-                        existing.Attributes.Selected = true;
-                    }
-
+                    prepared.Entries.Add(new PreparedPut.Entry { Component = component, Existing = existing });
                     continue;
                 }
 
@@ -141,11 +123,11 @@ namespace GhJSON.Grasshopper.PutOperations
                             SkipInvalidComponents = options.SkipInvalidComponents,
                         }
                         : deserializationOptions);
-                AppendNewComponentErrors(result, component, errorCount);
+                AppendNewComponentErrorsTo(prepared.Warnings, component, errorCount);
 
                 if (component.ExtensionData?.Count > 0)
                 {
-                    result.Warnings.Add(
+                    prepared.Warnings.Add(
                         $"Component '{component.Name ?? component.ComponentGuid?.ToString() ?? "unknown"}' " +
                         $"carries unrecognized top-level properties ({string.Join(", ", component.ExtensionData.Keys)}) — " +
                         "ignored. Component state belongs under componentState.extensions.");
@@ -155,29 +137,170 @@ namespace GhJSON.Grasshopper.PutOperations
                 {
                     if (!options.SkipInvalidComponents)
                     {
-                        result.Success = false;
-                        result.ErrorMessage = $"Failed to create component: {component.Name ?? component.ComponentGuid?.ToString()}";
-                        return result;
+                        prepared.PrepareFailure = new PutResult
+                        {
+                            Success = false,
+                            ErrorMessage = $"Failed to create component: {component.Name ?? component.ComponentGuid?.ToString()}",
+                            FailedComponents = prepared.FailedComponents,
+                            Warnings = prepared.Warnings,
+                        };
+                        prepared.FailedComponents = new List<string>();
+                        prepared.Warnings = new List<string>();
+                        return prepared;
                     }
 
-                    result.FailedComponents.Add(component.Name ?? component.ComponentGuid?.ToString() ?? "unknown");
+                    prepared.FailedComponents.Add(component.Name ?? component.ComponentGuid?.ToString() ?? "unknown");
                     continue;
                 }
 
-                placed.Add((component, obj, existing));
+                prepared.Entries.Add(new PreparedPut.Entry { Component = component, Prototype = obj, Existing = existing });
+            }
+
+            // Replaced pivots are captured at preparation so a pivotless replacement
+            // can preserve the previous position without a second canvas read at
+            // apply time.
+            foreach (var entry in prepared.Entries)
+            {
+                if (entry.Existing != null && entry.Prototype != null)
+                {
+                    prepared.ReplacedPivots[entry.Existing.InstanceGuid] = entry.Existing.Attributes?.Pivot;
+                }
+            }
+
+            // Phase 2: calculate positions for components without pivots using dependency
+            // graph layout, measured against the freshly instantiated objects' bounds.
+            prepared.LayoutPositions = CalculateLayoutPositions(document, ghDoc, options, prepared.Entries, prepared.ReplacedPivots);
+            return prepared;
+        }
+
+        /// <summary>
+        /// Applies a <see cref="PreparedPut"/> to its bound document in one pass:
+        /// revalidates the bound targets, performs updates/removals/placements, seals
+        /// undo records, and requests a solution only when the options ask for it.
+        /// </summary>
+        /// <param name="prepared">The prepared placement handle (consumed by the call).</param>
+        /// <returns>The put result.</returns>
+        public static PutResult Apply(PreparedPut prepared)
+        {
+            if (prepared.PrepareFailure != null)
+            {
+                var failure = prepared.PrepareFailure;
+                prepared.Dispose();
+                return failure;
+            }
+
+            var result = new PutResult { Success = true };
+            if (!prepared.TryConsume())
+            {
+                result.Success = false;
+                result.ErrorMessage = "The prepared placement was already consumed or disposed.";
+                return result;
+            }
+
+            var ghDoc = prepared.Document;
+            var document = prepared.Model;
+            var options = prepared.Options;
+            var effectiveOffset = prepared.EffectiveOffset;
+            result.FailedComponents.AddRange(prepared.FailedComponents);
+            result.Warnings.AddRange(prepared.Warnings);
+
+            // Revalidate the bound targets before touching anything: a target deleted
+            // between preparation and apply must fail the plan rather than silently
+            // retargeting a switched or stale document.
+            try
+            {
+                foreach (var entry in prepared.Entries)
+                {
+                    if (entry.Existing != null &&
+                        ghDoc.FindObject(entry.Existing.InstanceGuid, false) == null)
+                    {
+                        result.Success = false;
+                        result.ErrorMessage = "A prepared update/replacement target is no longer on the bound document.";
+                        return result;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = $"The bound document is no longer usable: {ex.Message}";
+                return result;
+            }
+
+            // Never mutate from inside a running solve: a synchronous solution owns
+            // the document, so the commit is rejected rather than interleaved.
+            if (ghDoc.SolutionDepth > 0)
+            {
+                result.Success = false;
+                result.ErrorMessage = "The bound document is solving; the placement was not applied.";
+                return result;
+            }
+
+#if DEBUG
+            Debug.WriteLine($"[CanvasPlacer.Apply] Applying {prepared.Entries.Count} prepared entries");
+#endif
+
+            var idToObject = new Dictionary<int, IGH_DocumentObject>();
+            var addedObjects = new List<IGH_DocumentObject>();
+            GH_UndoRecord? updateUndoRecord = null;
+
+            // Updates in place: document order, one sealed undo record shared by all
+            // same-type targets so the whole update undoes as a single step.
+            foreach (var entry in prepared.Entries)
+            {
+                if (entry.Existing == null || entry.Prototype != null)
+                {
+                    continue;
+                }
+
+                var component = entry.Component;
+                var existing = entry.Existing;
+                if (updateUndoRecord == null)
+                {
+                    updateUndoRecord = ghDoc.UndoUtil.CreateGenericObjectEvent(
+                        "[GhJSON] Update object(s)", existing);
+                }
+                else
+                {
+                    existing.RecordUndoEvent(updateUndoRecord);
+                }
+
+                var updateErrorCount = component.Errors?.Count ?? 0;
+                ObjectHandlerOrchestrator.Deserialize(component, existing);
+                ObjectHandlerOrchestrator.PostPlacement(component, existing);
+                AppendNewComponentErrors(result, component, updateErrorCount);
+
+                result.UpdatedObjects.Add(existing);
+                result.ComponentsUpdated++;
+
+                if (component.Id.HasValue)
+                {
+                    idToObject[component.Id.Value] = existing;
+                    result.IdToGuidMapping[component.Id.Value] = existing.InstanceGuid;
+                }
+
+                if (options.SelectPlacedObjects && existing.Attributes != null)
+                {
+                    existing.Attributes.Selected = true;
+                }
+            }
+
+            // Seal the shared update record before later mutations are recorded so
+            // undo order mirrors apply order: adds/removals undo first, updates last.
+            if (updateUndoRecord != null)
+            {
+                ghDoc.UndoUtil.RecordEvent(updateUndoRecord);
             }
 
             // Replace pass: superseded objects are only removed after their
-            // replacements instantiated successfully, so a failed component never
-            // destroys the original. External wires are captured up front so they can
-            // be restored onto the replacements (which keep the same instance GUIDs).
-            var replacedObjects = placed
-                .Where(entry => entry.Replaces != null)
-                .Select(entry => entry.Replaces!)
+            // replacements instantiated successfully during preparation, so a failed
+            // component never destroys the original. External wires are captured
+            // here — the freshest live state — so they can be restored onto the
+            // replacements (which keep the same instance GUIDs).
+            var replacedObjects = prepared.Entries
+                .Where(entry => entry.Existing != null && entry.Prototype != null)
+                .Select(entry => entry.Existing!)
                 .ToList();
-            var replacedPivots = replacedObjects.ToDictionary(
-                obj => obj.InstanceGuid,
-                obj => obj.Attributes?.Pivot);
             var replacedConnections = new List<ConnectionInfo>();
             if (replacedObjects.Count > 0)
             {
@@ -193,13 +316,17 @@ namespace GhJSON.Grasshopper.PutOperations
                 }
             }
 
-            // Phase 2: calculate positions for components without pivots using dependency
-            // graph layout, measured against the freshly instantiated objects' bounds.
-            var layoutPositions = CalculateLayoutPositions(document, ghDoc, options, placed, replacedPivots);
-
-            // Phase 3: assign pivots and add the objects to the document.
-            foreach (var (component, obj, replaces) in placed)
+            // Assign pivots and add the prepared prototypes to the document.
+            foreach (var entry in prepared.Entries)
             {
+                if (entry.Prototype == null)
+                {
+                    continue;
+                }
+
+                var component = entry.Component;
+                var obj = entry.Prototype;
+                var replaces = entry.Existing;
                 // Apply position: either from pivot + offset, or calculated layout position
                 if (obj.Attributes != null)
                 {
@@ -209,7 +336,7 @@ namespace GhJSON.Grasshopper.PutOperations
                         // by PivotHandler during deserialization); when the document
                         // omits a pivot the previous position is preserved.
                         if (component.Pivot == null &&
-                            replacedPivots.TryGetValue(replaces.InstanceGuid, out var previousPivot) &&
+                            prepared.ReplacedPivots.TryGetValue(replaces.InstanceGuid, out var previousPivot) &&
                             previousPivot.HasValue)
                         {
                             obj.Attributes.Pivot = previousPivot.Value;
@@ -224,7 +351,7 @@ namespace GhJSON.Grasshopper.PutOperations
                     }
                     else if (Core.GhJson.GetLayoutKey(component) is var layoutKey &&
                              layoutKey != Guid.Empty &&
-                             layoutPositions.TryGetValue(layoutKey, out var calculatedPosition))
+                             prepared.LayoutPositions.TryGetValue(layoutKey, out var calculatedPosition))
                     {
                         // Use dependency graph calculated position for components without pivots.
                         // Use the same stable key as the layout engine so id-only components
@@ -346,8 +473,22 @@ namespace GhJSON.Grasshopper.PutOperations
                 ghDoc.UndoUtil.RecordAddObjectEvent($"[GhJSON] Place {addedObjects.Count} object(s)", addedObjects);
             }
 
-            // Expire solution
-            ghDoc.NewSolution(true);
+            // Request a solution only when the caller asked for one — a host-managed
+            // apply selects false and schedules the downstream solve itself so the
+            // acknowledgement is not blocked by arbitrary computation. A put invoked
+            // from inside a running solution cannot re-enter NewSolution, so the
+            // solve is deferred to the scheduler instead.
+            if (options.RequestSolution)
+            {
+                if (ghDoc.SolutionDepth == 0)
+                {
+                    ghDoc.NewSolution(true);
+                }
+                else
+                {
+                    ghDoc.ScheduleSolution(5);
+                }
+            }
 
 #if DEBUG
             Debug.WriteLine($"[CanvasPlacer.Put] Placement complete: {result.ComponentsPlaced} components, {result.ConnectionsCreated} connections, {result.GroupsCreated} groups");
@@ -363,9 +504,19 @@ namespace GhJSON.Grasshopper.PutOperations
         /// </summary>
         private static void AppendNewComponentErrors(PutResult result, GhJsonComponent component, int errorCount)
         {
+            AppendNewComponentErrorsTo(result.Warnings, component, errorCount);
+        }
+
+        /// <summary>
+        /// Appends component errors recorded since <paramref name="errorCount"/> was
+        /// captured to the given warning list — used during preparation where no
+        /// <see cref="PutResult"/> exists yet.
+        /// </summary>
+        private static void AppendNewComponentErrorsTo(List<string> warnings, GhJsonComponent component, int errorCount)
+        {
             if (component.Errors != null && component.Errors.Count > errorCount)
             {
-                result.Warnings.AddRange(component.Errors.Skip(errorCount));
+                warnings.AddRange(component.Errors.Skip(errorCount));
             }
         }
 
@@ -382,14 +533,18 @@ namespace GhJSON.Grasshopper.PutOperations
                 return false;
             }
 
-            var sourceParam = GetParameter(fromObj, connection.From, isInput: false);
-            var targetParam = GetParameter(toObj, connection.To, isInput: true);
+            var sourceResolution = ConnectionHelper.TryResolveEndpointParam(fromObj, connection.From, input: false);
+            var targetResolution = ConnectionHelper.TryResolveEndpointParam(toObj, connection.To, input: true);
 
-            if (sourceParam == null || targetParam == null)
+            if (!sourceResolution.Resolved || !targetResolution.Resolved)
             {
-                result.Warnings.Add($"Connection from '{fromObj.Name}' ({connection.From.ParamName}) to '{toObj.Name}' ({connection.To.ParamName}) lost: parameter not found.");
+                var reason = !sourceResolution.Resolved ? sourceResolution.Error : targetResolution.Error;
+                result.Warnings.Add($"Connection from '{fromObj.Name}' ({connection.From.ParamName}) to '{toObj.Name}' ({connection.To.ParamName}) lost: {reason}");
                 return false;
             }
+
+            var sourceParam = sourceResolution.Param!;
+            var targetParam = targetResolution.Param!;
 
             if (targetParam.Sources.Contains(sourceParam))
             {
@@ -478,18 +633,18 @@ namespace GhJSON.Grasshopper.PutOperations
         /// <param name="document">The GhJSON document.</param>
         /// <param name="ghDoc">The Grasshopper document.</param>
         /// <param name="options">Placement options, including automatic offset for missing pivots.</param>
-        /// <param name="placed">Freshly instantiated (not yet added) objects, measured for real bounds.</param>
+        /// <param name="entries">Prepared entries; prototypes are measured for real bounds.</param>
         /// <param name="replacedPivots">Preserved pivots of objects being replaced in place.</param>
         /// <returns>Dictionary mapping instance GUID to calculated position.</returns>
         private static Dictionary<Guid, PointF> CalculateLayoutPositions(
             GhJsonDocument document,
             GH_Document ghDoc,
             PutOptions options,
-            IReadOnlyList<(GhJsonComponent Component, IGH_DocumentObject Obj, IGH_DocumentObject? Replaces)> placed,
+            IReadOnlyList<PreparedPut.Entry> entries,
             IReadOnlyDictionary<Guid, PointF?> replacedPivots)
         {
-            var unpositioned = placed
-                .Where(entry => entry.Component.Pivot == null && entry.Replaces == null)
+            var unpositioned = entries
+                .Where(entry => entry.Prototype != null && entry.Component.Pivot == null && entry.Existing == null)
                 .Select(entry => entry.Component)
                 .ToList();
             if (unpositioned.Count == 0)
@@ -497,29 +652,34 @@ namespace GhJSON.Grasshopper.PutOperations
                 return new Dictionary<Guid, PointF>();
             }
 
-            // Real bounds come from the freshly instantiated objects first; anything not
-            // measurable there falls back to a live canvas lookup (e.g. objects sharing
-            // instance GUIDs with the incoming document).
-            var measuredByKey = new Dictionary<Guid, IGH_DocumentObject>(placed.Count);
-            foreach (var (component, obj, _) in placed)
+            // Real bounds come from the freshly instantiated prototypes first; anything
+            // not measurable there falls back to a live canvas lookup (e.g. objects
+            // sharing instance GUIDs with the incoming document).
+            var measuredByKey = new Dictionary<Guid, IGH_DocumentObject>(entries.Count);
+            foreach (var entry in entries)
             {
-                var key = Core.GhJson.GetLayoutKey(component);
+                if (entry.Prototype == null)
+                {
+                    continue;
+                }
+
+                var key = Core.GhJson.GetLayoutKey(entry.Component);
                 if (key != Guid.Empty)
                 {
-                    measuredByKey[key] = obj;
+                    measuredByKey[key] = entry.Prototype;
                 }
             }
 
-            // Mirror the declared wiring on the placed (not yet added) objects so
+            // Mirror the declared wiring on the placed (not yet added) prototypes so
             // measured bounds reflect the connected state — a wired floating
             // parameter renders taller than an unwired one. The real wiring pass
             // deduplicates already-linked sources.
-            var placedById = new Dictionary<int, IGH_DocumentObject>(placed.Count);
-            foreach (var (component, obj, _) in placed)
+            var placedById = new Dictionary<int, IGH_DocumentObject>(entries.Count);
+            foreach (var entry in entries)
             {
-                if (component.Id.HasValue)
+                if (entry.Prototype != null && entry.Component.Id.HasValue)
                 {
-                    placedById[component.Id.Value] = obj;
+                    placedById[entry.Component.Id.Value] = entry.Prototype;
                 }
             }
 
@@ -548,9 +708,9 @@ namespace GhJSON.Grasshopper.PutOperations
 
             // Placement grows wired panels to fit streamed data rows; apply the same
             // reservation so measured bounds match the placed result.
-            foreach (var (_, obj, _) in placed)
+            foreach (var entry in entries)
             {
-                if (obj is GH_Panel panel)
+                if (entry.Prototype is GH_Panel panel)
                 {
                     PanelHandler.ReserveDataRows(panel);
                 }
@@ -593,9 +753,9 @@ namespace GhJSON.Grasshopper.PutOperations
                 }
             }
 
-            var startY = options.AutoOffset
-                ? CanvasBoundsCalculator.CalculateBottomStartY(ghDoc.ActiveObjects(), options.AutoOffsetSpacing)
-                : 0f;
+            var unanchoredTarget = options.AutoOffset
+                ? CanvasBoundsCalculator.UnanchoredTargetTopLeft(ghDoc.ActiveObjects(), options.AutoOffsetSpacing)
+                : null;
             return GhJsonGrasshopper.ComputeLayout(document, new CanvasLayoutOptions
             {
                 NodeSizeProvider = sizeProvider,
@@ -603,7 +763,7 @@ namespace GhJSON.Grasshopper.PutOperations
                 Refinements = new LayoutRefinementOptions
                 {
                     FixedPositions = fixedPositions,
-                    UnanchoredOffset = new PointF(0f, startY),
+                    UnanchoredTargetTopLeft = unanchoredTarget,
                 },
             });
         }

@@ -100,12 +100,42 @@ namespace GhJSON.Core.LayoutRefinements
 
             if (unanchored.Count > 0)
             {
-                var minTop = unanchored.Min(id => positions[id].Y - (Size(id, options).Height / 2f));
-                foreach (var id in unanchored)
+                if (options.UnanchoredTargetTopLeft.HasValue)
                 {
-                    result[id] = new PointF(
-                        positions[id].X + options.UnanchoredOffset.X,
-                        positions[id].Y + options.UnanchoredOffset.Y - minTop);
+                    // The whole unanchored set moves as one compact pack: translate by
+                    // the vector that puts the pack's rendered top-left corner at the
+                    // requested target, preserving every island's internal spacing.
+                    // Nonfinite geometry never propagates: the pack bounds are
+                    // measured over finite nodes only and a nonfinite target falls
+                    // back to the additive offset path.
+                    var target = options.UnanchoredTargetTopLeft.Value;
+                    var minLeft = unanchored
+                        .Select(id => positions[id].X - (Size(id, options).Width / 2f))
+                        .Where(IsFinite)
+                        .DefaultIfEmpty(float.NaN)
+                        .Min();
+                    var minTop = unanchored
+                        .Select(id => positions[id].Y - (Size(id, options).Height / 2f))
+                        .Where(IsFinite)
+                        .DefaultIfEmpty(float.NaN)
+                        .Min();
+                    var dx = target.X - minLeft;
+                    var dy = target.Y - minTop;
+                    if (IsFinite(target.X) && IsFinite(target.Y) && IsFinite(dx) && IsFinite(dy))
+                    {
+                        foreach (var id in unanchored)
+                        {
+                            result[id] = new PointF(positions[id].X + dx, positions[id].Y + dy);
+                        }
+                    }
+                    else
+                    {
+                        ApplyAdditiveUnanchoredOffset(unanchored, positions, result, options);
+                    }
+                }
+                else
+                {
+                    ApplyAdditiveUnanchoredOffset(unanchored, positions, result, options);
                 }
             }
 
@@ -205,6 +235,31 @@ namespace GhJSON.Core.LayoutRefinements
         private static RectangleF Bounds(PointF center, SizeF size)
         {
             return new RectangleF(center.X - (size.Width / 2f), center.Y - (size.Height / 2f), size.Width, size.Height);
+        }
+
+        /// <summary>
+        /// Applies the additive <see cref="LayoutRefinementOptions.UnanchoredOffset"/>
+        /// semantics: X shifts every unanchored node, Y is the pack's target top edge.
+        /// </summary>
+        private static void ApplyAdditiveUnanchoredOffset(
+            List<Guid> unanchored,
+            IReadOnlyDictionary<Guid, PointF> positions,
+            Dictionary<Guid, PointF> result,
+            LayoutRefinementOptions options)
+        {
+            var minTop = unanchored.Min(id => positions[id].Y - (Size(id, options).Height / 2f));
+            foreach (var id in unanchored)
+            {
+                result[id] = new PointF(
+                    positions[id].X + options.UnanchoredOffset.X,
+                    positions[id].Y + options.UnanchoredOffset.Y - minTop);
+            }
+        }
+
+        /// <summary>True when the value is neither NaN nor infinite (netstandard2.0).</summary>
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }

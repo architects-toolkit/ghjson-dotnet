@@ -386,6 +386,47 @@ namespace GhJSON.Grasshopper
             return CanvasPlacer.Put(document, options);
         }
 
+        /// <summary>
+        /// Prepares a placement against a specific document without mutating the
+        /// canvas: update targets resolve, off-document prototypes instantiate,
+        /// real bounds are measured, and layout positions are computed. The returned
+        /// <see cref="PreparedPut"/> is bound to <paramref name="document"/> — a
+        /// switched active document never retargets it. Dispose the handle when the
+        /// plan is refused, or pass it to <see cref="ApplyPreparedPut"/>.
+        /// Must run on the UI thread.
+        /// </summary>
+        /// <param name="document">The document to place.</param>
+        /// <param name="options">Optional put options.</param>
+        /// <param name="target">The Grasshopper document the plan binds to.</param>
+        /// <returns>The prepared placement handle, or <c>null</c> when there is no document.</returns>
+        public static PreparedPut? PreparePut(
+            GhJsonDocument document,
+            PutOptions? options,
+            GH_Document? target)
+        {
+            if (target == null)
+            {
+                return null;
+            }
+
+            return CanvasPlacer.Prepare(document, options, target);
+        }
+
+        /// <summary>
+        /// Applies a <see cref="PreparedPut"/> to its bound document in one pass:
+        /// bound targets are revalidated, updates/removals/placements run under one
+        /// commit, undo records seal, and a solution is requested only when the
+        /// options ask for it (<see cref="PutOptions.RequestSolution"/>). The handle
+        /// is consumed by the call and cannot apply twice.
+        /// Must run on the UI thread.
+        /// </summary>
+        /// <param name="prepared">The prepared placement handle.</param>
+        /// <returns>The put result.</returns>
+        public static PutResult ApplyPreparedPut(PreparedPut prepared)
+        {
+            return CanvasPlacer.Apply(prepared);
+        }
+
         #endregion
 
         #region Delete (remove from canvas)
@@ -434,6 +475,31 @@ namespace GhJSON.Grasshopper
             string? targetParamName = null)
         {
             return CanvasConnector.Connect(sourceGuid, targetGuid, sourceParamName, targetParamName);
+        }
+
+        /// <summary>
+        /// Strictly resolves a parameter endpoint on a document object. Returns a typed
+        /// <see cref="EndpointResolution"/> so callers requiring an unambiguous port can
+        /// reject a plan with the precise reason instead of silently skipping the wire.
+        /// Must run on the UI thread when <paramref name="obj"/> is live.
+        /// </summary>
+        /// <param name="obj">The document object owning the parameter.</param>
+        /// <param name="paramName">Optional parameter nickname or name.</param>
+        /// <param name="paramIndex">Optional zero-based parameter index.</param>
+        /// <param name="input">True to resolve an input parameter; false for output.</param>
+        /// <returns>The typed resolution result.</returns>
+        public static EndpointResolution TryResolveEndpoint(
+            IGH_DocumentObject obj,
+            string? paramName,
+            int? paramIndex,
+            bool input)
+        {
+            var endpoint = new GhJsonConnectionEndpoint
+            {
+                ParamName = paramName,
+                ParamIndex = paramIndex,
+            };
+            return ConnectionHelper.TryResolveEndpointParam(obj, endpoint, input);
         }
 
         /// <summary>

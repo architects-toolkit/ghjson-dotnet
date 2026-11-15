@@ -84,5 +84,15 @@ namespace GhJSON.Grasshopper.PutOperations
         /// and new components when AutoOffset is enabled.
         /// </summary>
         public float AutoOffsetSpacing { get; set; } = 100f;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether a document solution is requested
+        /// after placement. When <c>true</c> (default) <c>NewSolution(true)</c> runs
+        /// synchronously before the call returns — preserving standalone behavior.
+        /// When <c>false</c>, no solution is requested: the caller owns scheduling
+        /// (e.g. <c>GH_Document.ScheduleSolution</c>) so the placement acknowledgement
+        /// does not wait for arbitrary downstream computation.
+        /// </summary>
+        public bool RequestSolution { get; set; } = true;
     }
 }

@@ -119,5 +119,30 @@ namespace GhJSON.Grasshopper.PutOperations
             var bounds = CalculateBounds(objects);
             return bounds.IsEmpty ? 0 : bounds.LowestY + spacing;
         }
+
+        /// <summary>
+        /// Computes the rendered top-left corner the whole unanchored pack should be
+        /// translated to: the pack's left edge aligns with the existing content's
+        /// <see cref="CanvasBounds.LeftmostX"/> and its top edge lands
+        /// <paramref name="spacing"/> below the existing <see cref="CanvasBounds.LowestY"/>.
+        /// Returns <c>null</c> when the canvas has no finite rendered bounds, so an
+        /// empty or degenerate canvas keeps the natural compact layout origin
+        /// instead of propagating empty-bounds sentinels.
+        /// </summary>
+        /// <param name="objects">Existing canvas objects treated as obstacles.</param>
+        /// <param name="spacing">Vertical spacing below existing content.</param>
+        /// <returns>The shared unanchored target corner, or <c>null</c>.</returns>
+        public static PointF? UnanchoredTargetTopLeft(IEnumerable<IGH_DocumentObject> objects, float spacing)
+        {
+            var bounds = CalculateBounds(objects);
+            if (bounds.IsEmpty ||
+                float.IsNaN(bounds.LeftmostX) || float.IsInfinity(bounds.LeftmostX) ||
+                float.IsNaN(bounds.LowestY) || float.IsInfinity(bounds.LowestY))
+            {
+                return null;
+            }
+
+            return new PointF(bounds.LeftmostX, bounds.LowestY + spacing);
+        }
     }
 }

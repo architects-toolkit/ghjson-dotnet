@@ -159,26 +159,44 @@ namespace GhJSON.Grasshopper.ConnectionOperations
         /// <returns>The resolved parameter, or null when it cannot be identified.</returns>
         public static IGH_Param? ResolveEndpointParam(IGH_DocumentObject obj, GhJsonConnectionEndpoint endpoint, bool input)
         {
+            var resolution = TryResolveEndpointParam(obj, endpoint, input);
+            return resolution.Resolved ? resolution.Param : null;
+        }
+
+        /// <summary>
+        /// Strict variant of <see cref="ResolveEndpointParam"/>: returns a typed
+        /// <see cref="EndpointResolution"/> whose <see cref="EndpointResolution.Error"/>
+        /// names why the endpoint could not be resolved, so callers that require an
+        /// unambiguous port can reject the plan instead of silently skipping a wire.
+        /// </summary>
+        /// <param name="obj">The document object owning the parameter.</param>
+        /// <param name="endpoint">The connection endpoint carrying index and/or name.</param>
+        /// <param name="input">True to resolve an input parameter; false for output.</param>
+        /// <returns>The typed resolution result.</returns>
+        public static EndpointResolution TryResolveEndpointParam(IGH_DocumentObject obj, GhJsonConnectionEndpoint endpoint, bool input)
+        {
             if (obj is IGH_Param param)
             {
-                return param;
+                return EndpointResolution.OfResolved(param);
             }
 
             if (obj is not IGH_Component comp)
             {
-                return null;
+                return EndpointResolution.OfUnresolved(
+                    $"Object '{obj?.Name}' is neither a component nor a standalone parameter.");
             }
 
             var parameters = input ? comp.Params.Input : comp.Params.Output;
             if (parameters == null || parameters.Count == 0)
             {
-                return null;
+                return EndpointResolution.OfUnresolved(
+                    $"Component '{comp.Name}' exposes no {(input ? "input" : "output")} parameters.");
             }
 
             var matched = FindParamByIndexNameOrNickName(parameters, endpoint.ParamName, endpoint.ParamIndex);
             if (matched != null)
             {
-                return matched;
+                return EndpointResolution.OfResolved(matched);
             }
 
             if (!string.IsNullOrEmpty(endpoint.ParamName))
@@ -186,12 +204,24 @@ namespace GhJSON.Grasshopper.ConnectionOperations
                 var resolved = ParameterNameResolver.Resolve(endpoint.ParamName, parameters.Select(p => p.Name));
                 if (resolved != null)
                 {
-                    return parameters.FirstOrDefault(p =>
+                    var fuzzy = parameters.FirstOrDefault(p =>
                         p.Name.Equals(resolved, StringComparison.OrdinalIgnoreCase));
+                    if (fuzzy != null)
+                    {
+                        return EndpointResolution.OfResolved(fuzzy);
+                    }
                 }
+
+                return EndpointResolution.OfUnresolved(
+                    $"Component '{comp.Name}' has no {(input ? "input" : "output")} parameter matching '{endpoint.ParamName}'" +
+                    (endpoint.ParamIndex.HasValue ? $" or index {endpoint.ParamIndex.Value}" : string.Empty) +
+                    $" (available: {string.Join(", ", parameters.Select(p => p.NickName))}).");
             }
 
-            return null;
+            return EndpointResolution.OfUnresolved(
+                endpoint.ParamIndex.HasValue
+                    ? $"Component '{comp.Name}' has no {(input ? "input" : "output")} parameter at index {endpoint.ParamIndex.Value} ({parameters.Count} available)."
+                    : $"Component '{comp.Name}' has no identifiable {(input ? "input" : "output")} parameter.");
         }
 
         /// <summary>

@@ -190,6 +190,79 @@ namespace GhJSON.Core.Tests.LayoutRefinements
             Assert.Equal(new PointF(1010f, 400f), result[b]);
         }
 
+        /// <summary>A target top-left moves the whole unanchored pack's rendered corner.</summary>
+        [Fact]
+        public void UnanchoredTarget_AlignsRenderedTopLeftOfWholePack()
+        {
+            var original = Fixture();
+            var document = new GhJsonDocument("1.0", null, new[]
+            {
+                original.Components[0],
+                new GhJsonComponent { Id = 4, Name = "Disconnected" },
+            }, null, null);
+            var a = GhJson.GetLayoutKey(document.Components[0]);
+            var isolated = GhJson.GetLayoutKey(document.Components[1]);
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [a] = new PointF(30f, 20f),
+                [isolated] = new PointF(118f, 300f),
+            };
+            var options = Options(new Dictionary<Guid, PointF>());
+            options.UnanchoredTargetTopLeft = new PointF(1000f, 400f);
+
+            var result = AnchoredPlacement.Apply(positions, document, options);
+
+            // Pack rendered bounds before the move: left = 30-30 = 0, top = 20-20 = 0.
+            // dx = 1000, dy = 400 — both nodes translate together as one pack.
+            Assert.Equal(new PointF(1030f, 420f), result[a]);
+            Assert.Equal(new PointF(1118f, 700f), result[isolated]);
+        }
+
+        /// <summary>The target keeps every island's internal spacing intact.</summary>
+        [Fact]
+        public void UnanchoredTarget_PreservesInternalIslandSpacing()
+        {
+            var document = Fixture();
+            var positions = Positions(document);
+            var a = GhJson.GetLayoutKey(document.Components[0]);
+            var b = GhJson.GetLayoutKey(document.Components[1]);
+            var c = GhJson.GetLayoutKey(document.Components[2]);
+            var options = Options(new Dictionary<Guid, PointF>());
+            options.UnanchoredTargetTopLeft = new PointF(500f, 600f);
+
+            var result = AnchoredPlacement.Apply(positions, document, options);
+
+            Assert.Equal(positions[b].X - positions[a].X, result[b].X - result[a].X);
+            Assert.Equal(positions[c].X - positions[b].X, result[c].X - result[b].X);
+            Assert.Equal(positions[b].Y - positions[a].Y, result[b].Y - result[a].Y);
+            Assert.Equal(positions[c].Y - positions[b].Y, result[c].Y - result[b].Y);
+            // Rendered left of the leftmost node lands on the target X.
+            Assert.Equal(500f, result[a].X - 30f);
+        }
+
+        /// <summary>A nonfinite target falls back to the additive offset path.</summary>
+        [Fact]
+        public void UnanchoredTarget_NonfiniteFallsBackToAdditiveOffset()
+        {
+            var original = Fixture();
+            var document = new GhJsonDocument("1.0", null, new[]
+            {
+                new GhJsonComponent { Id = 4, Name = "Disconnected" },
+            }, null, null);
+            var isolated = GhJson.GetLayoutKey(document.Components[0]);
+            var positions = new Dictionary<Guid, PointF>
+            {
+                [isolated] = new PointF(30f, 300f),
+            };
+            var options = Options(new Dictionary<Guid, PointF>());
+            options.UnanchoredTargetTopLeft = new PointF(float.NaN, 400f);
+
+            var result = AnchoredPlacement.Apply(positions, document, options);
+
+            // Additive path: X shifts by offset.X, top edge lands on offset.Y (3000).
+            Assert.Equal(new PointF(30f, 3020f), result[isolated]);
+        }
+
         /// <summary>Creates an id-only three-node chain.</summary>
         private static GhJsonDocument Fixture()
         {

@@ -7,17 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-11-16
+
 ### Added
-- New host-independent `GhJSON.Core.Hosting.BoundedUiPost` primitive: asynchronous UI-thread posts with an explicit queued → started ownership contract. An expired queued callback becomes a no-op (late UI passes can never mutate after a reported failure), a started callback owns its outcome, and cancellation reaches only pre-start posts
-- New `UiThreadDispatcher.PostAsync` adapter exposing bounded posts on `RhinoApp.InvokeOnUiThread`
-- New `GhJsonGrasshopper` facade methods for active-document/object lookup, node-size providers, layout computation, and bounded UI posting so hosts reuse the same ownership contract instead of reimplementing it
-- New `CanvasPlacer.Prepare`/`CanvasPlacer.Apply` split behind a `PreparedPut` handle: preparation resolves update targets, instantiates off-document prototypes, and measures real bounds without mutating the canvas; apply runs updates, replacements, placements, wire restore, connections and groups in one commit. `GhJsonGrasshopper.PreparePut`/`ApplyPreparedPut` expose the split so a host can refuse a plan before any canvas change
-- New `PutOptions.RequestSolution`: when `false`, apply skips the synchronous `NewSolution` so callers schedule the downstream solve themselves; when a put runs inside an active solution the request is deferred via `ScheduleSolution` instead of re-entering
-- New `ConnectionHelper.TryResolveEndpointParam` and `GhJsonGrasshopper.TryResolveEndpoint` returning a typed `EndpointResolution` that names why an endpoint could not be resolved; canvas wire creation surfaces that reason in placement warnings instead of reporting a bare "parameter not found"
-- New `LayoutRefinementOptions.UnanchoredTargetTopLeft`: disconnected unanchored parts are translated so their bounds' top-left aligns to the shared target (leftmost existing X, below lowest existing content) instead of receiving an additive offset that depended on each part's original position
+- New `BoundedUiPost` primitive for async UI-thread operations with explicit ownership and cancellation
+- New `UiThreadDispatcher.PostAsync` adapter for `RhinoApp.InvokeOnUiThread`
+- New `GhJsonGrasshopper` facade methods for document/object lookup, node sizing, layout, and bounded UI posting
+- New `CanvasPlacer.Prepare`/`Apply` split with `PreparedPut` handle for non-mutating preparation and atomic canvas updates
+- New `PutOptions.RequestSolution` to control synchronous `NewSolution` execution or defer via `ScheduleSolution`
+- New `ConnectionHelper.TryResolveEndpointParam` and `GhJsonGrasshopper.TryResolveEndpoint` with typed resolution feedback for wire creation warnings
+- New `LayoutRefinementOptions.UnanchoredTargetTopLeft` to align disconnected parts to a shared target
 
 ### Changed
-- `CanvasPlacer` update undo records are sealed before remove/add records so undo order mirrors apply order
+- `CanvasPlacer` undo records now mirror apply order for consistent undo behavior
 
 ## [1.3.6] - 2026-11-15
 

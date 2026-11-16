@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- CI: the Mistral model used by AI-assisted workflows (changelog review, release notes) is now configurable through the `MISTRAL_MODEL` repository variable, defaulting to `mistral-large-4-0` (was `mistral-medium-latest`)
+
 ## [1.3.7] - 2026-11-16
 
 ### Added
